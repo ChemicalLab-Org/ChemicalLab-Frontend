@@ -1,0 +1,439 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+}
+
+.login {
+  display: grid;
+  grid-template-columns: 45% 55%;
+  min-height: 100vh;
+  background: #ffffff;
+
+  @media (max-width: 960px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Panel izquierdo — branding
+// ──────────────────────────────────────────────────────────────
+.login__brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 3rem;
+  background: linear-gradient(165deg, var(--color-primary-800), var(--color-primary-600) 60%, var(--color-primary-500));
+  color: #ffffff;
+  overflow: hidden;
+
+  @media (max-width: 960px) {
+    min-height: 280px;
+    padding: 2rem;
+  }
+}
+
+.brand-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+
+  &__bubble {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+
+    &--lg {
+      width: 380px;
+      height: 380px;
+      top: -120px;
+      right: -120px;
+      filter: blur(2px);
+    }
+    &--md {
+      width: 220px;
+      height: 220px;
+      bottom: -60px;
+      left: -60px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    &--sm {
+      width: 140px;
+      height: 140px;
+      bottom: 80px;
+      right: 60px;
+    }
+  }
+
+  &__ring {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 2px dashed rgba(255, 255, 255, 0.08);
+    top: 30%;
+    left: 55%;
+  }
+}
+
+.brand-logo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    display: grid;
+    place-items: center;
+    backdrop-filter: blur(8px);
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  &__sub {
+    margin: 0;
+    font-size: 11px;
+    opacity: 0.75;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+}
+
+.brand-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 460px;
+
+  &__headline {
+    margin: 0;
+    font-size: 44px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+
+    @media (max-width: 1200px) {
+      font-size: 36px;
+    }
+  }
+
+  &__desc {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.5;
+    opacity: 0.9;
+    max-width: 420px;
+  }
+}
+
+.brand-card {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+
+  &__icon {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.15);
+    display: grid;
+    place-items: center;
+  }
+
+  &__title {
+    margin: 0 0 2px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  &__desc {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.85;
+    line-height: 1.4;
+  }
+}
+
+.brand-footer {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  opacity: 0.7;
+
+  &__links {
+    display: flex;
+    gap: 18px;
+
+    a {
+      color: #ffffff;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Panel derecho — formulario
+// ──────────────────────────────────────────────────────────────
+.login__form-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  background: #ffffff;
+}
+
+.login__form {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.login__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  h1 {
+    margin: 0;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    color: var(--color-neutral-900);
+  }
+
+  p {
+    margin: 0;
+    color: var(--color-neutral-600);
+    font-size: 16px;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Alerta de error
+// ──────────────────────────────────────────────────────────────
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fef2f2;
+  border-left: 3px solid #ef4444;
+  border-radius: var(--radius-md);
+  color: #991b1b;
+
+  &__icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: #ef4444;
+    color: #ffffff;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    font-weight: 800;
+    margin-top: 1px;
+  }
+
+  &__title {
+    margin: 0 0 2px;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  &__msg {
+    margin: 0;
+    font-size: 13px;
+    opacity: 0.9;
+    line-height: 1.4;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Formulario
+// ──────────────────────────────────────────────────────────────
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  &__label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-neutral-700);
+  }
+
+  &__link {
+    font-size: 13px;
+    color: var(--color-primary-700);
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__control {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  &__icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-neutral-400);
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+  }
+
+  &__input {
+    width: 100%;
+    height: 44px;
+    border: 1px solid var(--color-neutral-200);
+    border-radius: var(--radius-md);
+    padding: 0 12px 0 40px;
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--color-neutral-900);
+    background: #ffffff;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+
+    &::placeholder {
+      color: var(--color-neutral-400);
+    }
+
+    &:focus {
+      border-color: var(--color-primary-500);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.15);
+    }
+
+    &--with-action {
+      padding-right: 44px;
+    }
+  }
+
+  &__action {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    background: transparent;
+    border: none;
+    color: var(--color-neutral-500);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background var(--transition-base), color var(--transition-base);
+
+    &:hover {
+      background: var(--color-neutral-100);
+      color: var(--color-neutral-700);
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Botón primario
+// ──────────────────────────────────────────────────────────────
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-500);
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition-base), transform var(--transition-base);
+  margin-top: 8px;
+
+  &:hover:not(:disabled) {
+    background: var(--color-primary-600);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Texto de ayuda
+// ──────────────────────────────────────────────────────────────
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-neutral-50);
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: 12px;
+  color: var(--color-neutral-600);
+  font-size: 13px;
+  line-height: 1.45;
+
+  &__icon {
+    flex-shrink: 0;
+    color: var(--color-neutral-500);
+    margin-top: 1px;
+    display: grid;
+    place-items: center;
+  }
+}
