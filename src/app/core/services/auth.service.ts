@@ -1,8 +1,6 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Router } from '@angular/router';
-import { tap } from 'rxjs/operators';
-import { Observable } from 'rxjs';
+import { Observable, catchError, tap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   AuthResponse,
@@ -12,75 +10,77 @@ import {
   UserRole,
 } from '../../shared/models';
 
-interface AuthState {
-  token: string | null;
-  role: UserRole | null;
-  requiresPasswordChange: boolean;
-}
-
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly _state = signal<AuthState>(this.loadInitialState());
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = `${environment.apiUrl}/auth`;
 
-  readonly isAuthenticated = computed(() => this._state().token !== null);
-  readonly currentRole = computed(() => this._state().role);
-  readonly requiresPasswordChange = computed(() => this._state().requiresPasswordChange);
+  private readonly _currentUser = signal<AuthResponse | null>(null);
+  private readonly _isLoading = signal<boolean>(false);
 
-  constructor(private readonly http: HttpClient, private readonly router: Router) {}
+  readonly isAuthenticated = computed(() => this._currentUser() !== null);
+  readonly currentRole = computed<UserRole | null>(() => this._currentUser()?.role ?? null);
+  readonly requiresPasswordChange = computed<boolean>(
+    () => this._currentUser()?.temporaryPassword ?? false
+  );
+
+  constructor() {
+    this.loadUserFromStorage();
+  }
 
   login(request: LoginRequest): Observable<AuthResponse> {
-    return this.http
-      .post<AuthResponse>(`${environment.apiUrl}/auth/login`, request)
-      .pipe(tap((response) => this.applyAuthResponse(response)));
+    this._isLoading.set(true);
+    return this.http.post<AuthResponse>(`${this.baseUrl}/login`, request).pipe(
+      tap((response) => {
+        localStorage.setItem('auth_token', response.token);
+        localStorage.setItem('auth_user', JSON.stringify(response));
+        this._currentUser.set(response);
+        this._isLoading.set(false);
+      }),
+      catchError((error: unknown) => {
+        this._isLoading.set(false);
+        return throwError(() => error);
+      })
+    );
   }
 
   changePassword(request: ChangePasswordRequest): Observable<PasswordChangeResponse> {
+    this._isLoading.set(true);
     return this.http
-      .post<PasswordChangeResponse>(`${environment.apiUrl}/auth/change-password`, request)
+      .patch<PasswordChangeResponse>(`${this.baseUrl}/change-temporary-password`, request)
       .pipe(
-        tap((response) => {
-          this._state.update((s) => ({
-            ...s,
-            requiresPasswordChange: response.temporaryPassword,
-          }));
-          if (!response.temporaryPassword) {
-            localStorage.setItem('requires_password_change', 'false');
+        tap(() => {
+          const current = this._currentUser();
+          if (current !== null) {
+            const updated: AuthResponse = { ...current, temporaryPassword: false };
+            this._currentUser.set(updated);
+            localStorage.setItem('auth_user', JSON.stringify(updated));
           }
+          this._isLoading.set(false);
+        }),
+        catchError((error: unknown) => {
+          this._isLoading.set(false);
+          return throwError(() => error);
         })
       );
   }
 
   logout(): void {
     localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_role');
-    localStorage.removeItem('requires_password_change');
-    this._state.set({ token: null, role: null, requiresPasswordChange: false });
-    this.router.navigate(['/auth/login']);
+    localStorage.removeItem('auth_user');
+    this._currentUser.set(null);
   }
 
-  getToken(): string | null {
-    return this._state().token;
-  }
-
-  private applyAuthResponse(response: AuthResponse): void {
-    localStorage.setItem('auth_token', response.token);
-    localStorage.setItem('auth_role', response.role);
-    localStorage.setItem(
-      'requires_password_change',
-      String(response.temporaryPassword)
-    );
-    this._state.set({
-      token: response.token,
-      role: response.role,
-      requiresPasswordChange: response.temporaryPassword,
-    });
-  }
-
-  private loadInitialState(): AuthState {
-    const token = localStorage.getItem('auth_token');
-    const role = localStorage.getItem('auth_role') as UserRole | null;
-    const requiresPasswordChange =
-      localStorage.getItem('requires_password_change') === 'true';
-    return { token, role, requiresPasswordChange };
+  private loadUserFromStorage(): void {
+    const raw = localStorage.getItem('auth_user');
+    if (raw !== null) {
+      try {
+        const parsed = JSON.parse(raw) as AuthResponse;
+        this._currentUser.set(parsed);
+      } catch {
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('auth_token');
+      }
+    }
   }
 }
