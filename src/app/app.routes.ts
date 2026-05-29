@@ -8,6 +8,7 @@ import { StudentDashboardComponent } from './features/student-dashboard/student-
 import { TeacherDashboardComponent } from './features/teacher-dashboard/teacher-dashboard.component';
 import { AdminDashboardComponent } from './features/admin-dashboard/admin-dashboard.component';
 import { TeacherStudentsComponent } from './features/teacher/students/teacher-students.component';
+import { TeacherPasswordsComponent } from './features/teacher/passwords/teacher-passwords.component';
 import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
 
 export const routes: Routes = [
@@ -42,6 +43,12 @@ export const routes: Routes = [
   {
     path: 'teacher/students',
     component: TeacherStudentsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/passwords',
+    component: TeacherPasswordsComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },

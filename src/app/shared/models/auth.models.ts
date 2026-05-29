@@ -31,3 +31,12 @@ export interface PasswordChangeResponse {
   readonly message: string;
   readonly temporaryPassword: boolean;
 }
+
+/**
+ * Payload para restablecer la contraseña temporal de otro usuario.
+ * Lo usan el docente (sobre sus estudiantes) y el administrador (sobre docentes).
+ */
+export interface ResetPasswordRequest {
+  readonly newTemporaryPassword: string;
+  readonly confirmTemporaryPassword: string;
+}

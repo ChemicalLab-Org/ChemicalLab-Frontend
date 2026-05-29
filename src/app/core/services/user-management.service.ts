@@ -5,6 +5,8 @@ import { environment } from '../../../environments/environment';
 import {
   CreateStudentRequest,
   CreateTeacherRequest,
+  PasswordChangeResponse,
+  ResetPasswordRequest,
   StudentResponse,
   TeacherResponse,
   UpdateStudentRequest,
@@ -39,6 +41,17 @@ export class UserManagementService {
     return this.http.patch<TeacherResponse>(
       `${this.baseUrl}/teachers/${teacherUserId}/deactivate`,
       {}
+    );
+  }
+
+  /** Restablece la contraseña temporal de un docente (acción del administrador). */
+  resetTeacherPassword(
+    teacherUserId: number,
+    request: ResetPasswordRequest
+  ): Observable<PasswordChangeResponse> {
+    return this.http.patch<PasswordChangeResponse>(
+      `${this.baseUrl}/teachers/${teacherUserId}/reset-password`,
+      request
     );
   }
 
@@ -84,6 +97,18 @@ export class UserManagementService {
     return this.http.patch<StudentResponse>(
       `${this.baseUrl}/teachers/${teacherUserId}/students/${studentId}/deactivate`,
       {}
+    );
+  }
+
+  /** Restablece la contraseña temporal de un estudiante propio (acción del docente). */
+  resetStudentPassword(
+    teacherUserId: number,
+    studentId: number,
+    request: ResetPasswordRequest
+  ): Observable<PasswordChangeResponse> {
+    return this.http.patch<PasswordChangeResponse>(
+      `${this.baseUrl}/teachers/${teacherUserId}/students/${studentId}/reset-password`,
+      request
     );
   }
 }

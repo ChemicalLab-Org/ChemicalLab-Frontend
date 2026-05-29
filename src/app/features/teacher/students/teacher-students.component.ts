@@ -345,7 +345,7 @@ export class TeacherStudentsComponent {
     { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
     { label: 'Evaluaciones', icon: 'quiz', route: '/teacher-dashboard/evaluations', disabled: true },
     { label: 'Resultados', icon: 'analytics', route: '/teacher-dashboard/results', disabled: true },
-    { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher-dashboard/passwords', disabled: true },
+    { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
   ];
 
   readonly userRole = 'Docente';
