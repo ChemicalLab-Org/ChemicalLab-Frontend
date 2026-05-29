@@ -18,6 +18,7 @@ export class AuthService {
   private readonly _currentUser = signal<AuthResponse | null>(null);
   private readonly _isLoading = signal<boolean>(false);
 
+  readonly currentUser = computed<AuthResponse | null>(() => this._currentUser());
   readonly isAuthenticated = computed(() => this._currentUser() !== null);
   readonly currentRole = computed<UserRole | null>(() => this._currentUser()?.role ?? null);
   readonly requiresPasswordChange = computed<boolean>(
