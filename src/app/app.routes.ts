@@ -8,6 +8,7 @@ import { StudentDashboardComponent } from './features/student-dashboard/student-
 import { TeacherDashboardComponent } from './features/teacher-dashboard/teacher-dashboard.component';
 import { AdminDashboardComponent } from './features/admin-dashboard/admin-dashboard.component';
 import { TeacherStudentsComponent } from './features/teacher/students/teacher-students.component';
+import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
@@ -47,6 +48,12 @@ export const routes: Routes = [
   {
     path: 'admin-dashboard',
     component: AdminDashboardComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
+    path: 'admin/teachers',
+    component: TeacherManagementComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },

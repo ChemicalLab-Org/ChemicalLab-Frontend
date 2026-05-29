@@ -4,12 +4,14 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   CreateStudentRequest,
+  CreateTeacherRequest,
   StudentResponse,
+  TeacherResponse,
   UpdateStudentRequest,
 } from '../../shared/models';
 
 /**
- * Servicio para la gestión de estudiantes del docente.
+ * Servicio para la gestión de usuarios (docentes y estudiantes).
  * Consume los endpoints existentes del backend. El token JWT lo agrega el authInterceptor,
  * por lo que aquí no se manipula el token.
  */
@@ -17,6 +19,32 @@ import {
 export class UserManagementService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/users`;
+
+  // ===========================================================================
+  // DOCENTES (rol ADMINISTRADOR)
+  // ===========================================================================
+
+  /** Lista todos los docentes registrados en el sistema. */
+  listTeachers(): Observable<TeacherResponse[]> {
+    return this.http.get<TeacherResponse[]>(`${this.baseUrl}/teachers`);
+  }
+
+  /** Registra un nuevo docente. */
+  createTeacher(request: CreateTeacherRequest): Observable<TeacherResponse> {
+    return this.http.post<TeacherResponse>(`${this.baseUrl}/teachers`, request);
+  }
+
+  /** Desactiva un docente (no lo elimina). Recibe el userId del docente. */
+  deactivateTeacher(teacherUserId: number): Observable<TeacherResponse> {
+    return this.http.patch<TeacherResponse>(
+      `${this.baseUrl}/teachers/${teacherUserId}/deactivate`,
+      {}
+    );
+  }
+
+  // ===========================================================================
+  // ESTUDIANTES (rol DOCENTE)
+  // ===========================================================================
 
   /** Lista los estudiantes asociados a un docente. */
   listStudentsByTeacher(teacherUserId: number): Observable<StudentResponse[]> {
