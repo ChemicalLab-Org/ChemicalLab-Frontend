@@ -70,11 +70,11 @@ export class StudentDashboardComponent {
 
   readonly navItems: readonly SidebarNavItem[] = [
     { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
-    { label: 'Tabla periódica', icon: 'science', route: '/student-dashboard/periodic-table' },
-    { label: 'Conceptos químicos', icon: 'menu_book', route: '/student-dashboard/concepts' },
-    { label: 'Formar compuestos', icon: 'biotech', route: '/student-dashboard/compounds' },
-    { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations' },
-    { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results' },
+    { label: 'Tabla periódica', icon: 'science', route: '/student-dashboard/periodic-table', disabled: true },
+    { label: 'Conceptos químicos', icon: 'menu_book', route: '/student-dashboard/concepts', disabled: true },
+    { label: 'Formar compuestos', icon: 'biotech', route: '/student-dashboard/compounds', disabled: true },
+    { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations', disabled: true },
+    { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
   ];
 
   readonly userRole = 'Estudiante';

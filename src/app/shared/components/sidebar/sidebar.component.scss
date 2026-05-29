@@ -109,6 +109,17 @@
         color: var(--color-primary-700);
       }
     }
+
+    &--disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: auto;
+
+      &:hover {
+        background: transparent;
+        color: var(--color-neutral-700);
+      }
+    }
   }
 
   &__nav-indicator {

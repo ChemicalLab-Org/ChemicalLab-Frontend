@@ -6,6 +6,7 @@ export interface SidebarNavItem {
   readonly label: string;
   readonly icon: string;
   readonly route: string;
+  readonly disabled?: boolean;
 }
 
 @Component({
@@ -31,8 +32,10 @@ export interface SidebarNavItem {
           <a
             class="sidebar__nav-item"
             [class.sidebar__nav-item--active]="isActive(item.route)"
-            [href]="item.route"
-            (click)="onNavClick($event, item.route)"
+            [class.sidebar__nav-item--disabled]="item.disabled"
+            [attr.href]="item.disabled ? null : item.route"
+            [attr.title]="item.disabled ? 'Próximamente' : null"
+            (click)="onNavClick($event, item.route, item.disabled)"
           >
             @if (isActive(item.route)) {
               <span class="sidebar__nav-indicator"></span>
@@ -89,8 +92,11 @@ export class SidebarComponent {
     return current === route || current.startsWith(route + '/');
   }
 
-  onNavClick(event: MouseEvent, route: string): void {
+  onNavClick(event: MouseEvent, route: string, disabled?: boolean): void {
     event.preventDefault();
+    if (disabled) {
+      return;
+    }
     void this.router.navigateByUrl(route);
   }
 
