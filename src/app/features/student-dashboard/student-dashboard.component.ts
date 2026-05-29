@@ -1,0 +1,170 @@
+import { Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { AuthService } from '../../core/services/auth.service';
+import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
+import { AuthResponse } from '../../shared/models';
+
+interface DashboardCard {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly icon: string;
+  readonly tone: 'mint' | 'blue' | 'violet' | 'amber' | 'green';
+  readonly badge?: string;
+}
+
+@Component({
+  selector: 'app-student-dashboard',
+  standalone: true,
+  imports: [SidebarComponent],
+  styleUrls: ['./student-dashboard.component.scss'],
+  template: `
+    <div class="layout">
+      <app-sidebar
+        [navItems]="navItems"
+        [userName]="userName()"
+        [userRole]="userRole"
+        [userInitials]="userInitials()"
+        (onLogout)="handleLogout()"
+      />
+
+      <main class="main">
+        <header class="main__header">
+          <div>
+            <h1 class="main__title">Hola, {{ firstName() }} <span class="main__wave">👋</span></h1>
+            <p class="main__subtitle">¿Qué quieres explorar hoy?</p>
+          </div>
+          <div class="role-chip">
+            <span class="role-chip__dot"></span>
+            Estudiante
+          </div>
+        </header>
+
+        <section class="cards-grid">
+          @for (card of cards; track card.id) {
+            <article class="card" [attr.data-tone]="card.tone">
+              <div class="card__icon" [attr.data-tone]="card.tone">
+                <span class="material-icons">{{ card.icon }}</span>
+              </div>
+              <div class="card__head">
+                <h3 class="card__title">{{ card.title }}</h3>
+                @if (card.badge) {
+                  <span class="card__badge">{{ card.badge }}</span>
+                }
+              </div>
+              <p class="card__desc">{{ card.description }}</p>
+              <div class="card__cta">
+                Abrir
+                <span class="material-icons card__cta-arrow">arrow_forward</span>
+              </div>
+            </article>
+          }
+        </section>
+      </main>
+    </div>
+  `,
+})
+export class StudentDashboardComponent {
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
+
+  readonly navItems: readonly SidebarNavItem[] = [
+    { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
+    { label: 'Tabla periódica', icon: 'science', route: '/student-dashboard/periodic-table', disabled: true },
+    { label: 'Conceptos químicos', icon: 'menu_book', route: '/student-dashboard/concepts', disabled: true },
+    { label: 'Formar compuestos', icon: 'biotech', route: '/student-dashboard/compounds', disabled: true },
+    { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations', disabled: true },
+    { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
+  ];
+
+  readonly userRole = 'Estudiante';
+
+  private readonly storedUser = signal<AuthResponse | null>(this.readStoredUser());
+
+  readonly userName = computed<string>(() => {
+    const user = this.storedUser();
+    return user?.username ?? 'Estudiante';
+  });
+
+  readonly firstName = computed<string>(() => {
+    const name = this.userName();
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      return 'Estudiante';
+    }
+    const space = trimmed.indexOf(' ');
+    return space === -1 ? trimmed : trimmed.substring(0, space);
+  });
+
+  readonly userInitials = computed<string>(() => buildInitials(this.userName()));
+
+  readonly cards: readonly DashboardCard[] = [
+    {
+      id: 'periodic',
+      title: 'Tabla periódica',
+      description: 'Consulta los 118 elementos.',
+      icon: 'science',
+      tone: 'mint',
+    },
+    {
+      id: 'concepts',
+      title: 'Conceptos químicos',
+      description: 'Aprende sobre óxidos, hidróxidos, sales y oxisales.',
+      icon: 'menu_book',
+      tone: 'blue',
+    },
+    {
+      id: 'compounds',
+      title: 'Formar compuestos',
+      description: 'Combina elementos y genera fórmulas químicas.',
+      icon: 'biotech',
+      tone: 'violet',
+    },
+    {
+      id: 'evaluations',
+      title: 'Mis evaluaciones',
+      description: 'Tienes evaluaciones pendientes.',
+      icon: 'quiz',
+      tone: 'amber',
+      badge: 'Pendientes',
+    },
+    {
+      id: 'results',
+      title: 'Mis resultados',
+      description: 'Revisa tus calificaciones.',
+      icon: 'bar_chart',
+      tone: 'green',
+    },
+  ];
+
+  handleLogout(): void {
+    this.authService.logout();
+    void this.router.navigateByUrl('/auth/login');
+  }
+
+  private readStoredUser(): AuthResponse | null {
+    if (typeof localStorage === 'undefined') {
+      return null;
+    }
+    const raw = localStorage.getItem('auth_user');
+    if (raw === null) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw) as AuthResponse;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter((p) => p.length > 0);
+  if (parts.length === 0) {
+    return '??';
+  }
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}

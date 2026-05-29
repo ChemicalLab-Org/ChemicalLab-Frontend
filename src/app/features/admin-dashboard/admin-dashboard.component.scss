@@ -1,0 +1,241 @@
+:host {
+  display: block;
+  height: 100vh;
+}
+
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--color-neutral-50);
+}
+
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem 2.5rem;
+  background: var(--color-neutral-50);
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 2rem;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    color: var(--color-neutral-900);
+  }
+
+  &__wave {
+    display: inline-block;
+    transform: translateY(-2px);
+  }
+
+  &__subtitle {
+    margin: 8px 0 0;
+    font-size: 17px;
+    color: var(--color-neutral-600);
+  }
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: white;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-neutral-700);
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-primary-500);
+  }
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 2rem;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.metric {
+  background: white;
+  border: 1px solid var(--color-neutral-100);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  &__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--color-primary-50);
+    color: var(--color-primary-700);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+
+    svg {
+      width: 22px;
+      height: 22px;
+    }
+  }
+
+  &__label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-neutral-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  &__value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--color-primary-600);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+}
+
+.shortcuts {
+  &__header {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-neutral-500);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+  }
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background: white;
+  border: 1px solid var(--color-neutral-100);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 180px;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base), transform var(--transition-base);
+
+  // Solo las cards con destino navegable se sienten interactivas.
+  &--clickable {
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--color-primary-300);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      transform: translateY(-1px);
+    }
+  }
+
+  &__icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 4px;
+
+    svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    &[data-tone='mint'] {
+      background: var(--color-primary-100);
+      color: var(--color-primary-700);
+    }
+    &[data-tone='violet'] {
+      background: #ede9fe;
+      color: #6d28d9;
+    }
+    &[data-tone='blue'] {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+    &[data-tone='amber'] {
+      background: var(--color-accent-100);
+      color: var(--color-accent-700);
+    }
+    &[data-tone='teal'] {
+      background: #ccfbf1;
+      color: #0f766e;
+    }
+    &[data-tone='green'] {
+      background: var(--color-success-light);
+      color: var(--color-success-text);
+    }
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--color-neutral-900);
+    letter-spacing: -0.01em;
+  }
+
+  &__desc {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-neutral-500);
+    line-height: 1.5;
+  }
+
+  &__cta {
+    margin-top: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-primary-700);
+
+    svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+}
