@@ -16,6 +16,7 @@ import {
 import {
   ApiError,
   CreateTeacherRequest,
+  ResetPasswordRequest,
   TeacherResponse,
 } from '../../../shared/models';
 
@@ -132,6 +133,15 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                     </td>
                     <td>
                       <div class="row-actions">
+                        <button
+                          type="button"
+                          class="row-action"
+                          title="Restablecer contraseña"
+                          aria-label="Restablecer contraseña"
+                          (click)="openReset(t)"
+                        >
+                          <span class="material-icons">lock_reset</span>
+                        </button>
                         <button
                           type="button"
                           class="row-action row-action--danger"
@@ -276,6 +286,70 @@ type StatusFilter = 'all' | 'active' | 'inactive';
         </div>
       </div>
     }
+
+    <!-- Modal: restablecer contraseña del docente -->
+    @if (resetTarget(); as target) {
+      <div class="modal-overlay" (click)="closeReset()">
+        <div class="modal modal--form" (click)="$event.stopPropagation()">
+          <header class="modal__header">
+            <h2 class="modal__title">Restablecer contraseña</h2>
+            <button type="button" class="modal__close" aria-label="Cerrar" (click)="closeReset()">
+              <span class="material-icons">close</span>
+            </button>
+          </header>
+
+          <form [formGroup]="resetForm" (ngSubmit)="submitReset()" class="modal__body">
+            <p class="modal__text" style="margin-bottom: 1rem;">
+              Asigna una nueva contraseña temporal para
+              <strong>{{ target.names }} {{ target.lastNames }}</strong> ({{ target.username }}).
+            </p>
+
+            <div class="form-grid">
+              <div class="form-group form-group--full">
+                <label class="form-label" for="resetPassword">Nueva contraseña temporal</label>
+                <input id="resetPassword" class="input" type="text" formControlName="newTemporaryPassword"
+                  placeholder="Mín. 6 caracteres" [class.input-error]="isResetInvalid('newTemporaryPassword')" />
+                @if (isResetInvalid('newTemporaryPassword')) {
+                  <span class="form-error">La contraseña debe tener entre 6 y 100 caracteres.</span>
+                }
+              </div>
+
+              <div class="form-group form-group--full">
+                <label class="form-label" for="resetConfirm">Confirmar contraseña</label>
+                <input id="resetConfirm" class="input" type="text" formControlName="confirmTemporaryPassword"
+                  placeholder="Repite la contraseña" [class.input-error]="isResetInvalid('confirmTemporaryPassword') || resetMismatch()" />
+                @if (isResetInvalid('confirmTemporaryPassword')) {
+                  <span class="form-error">Confirma la contraseña (entre 6 y 100 caracteres).</span>
+                } @else if (resetMismatch()) {
+                  <span class="form-error">La contraseña y su confirmación no coinciden.</span>
+                }
+              </div>
+            </div>
+
+            <div class="alert alert-info modal__note">
+              <span class="material-icons">info</span>
+              El docente deberá cambiar esta contraseña al iniciar sesión. Comunícasela personalmente.
+            </div>
+
+            @if (resetError()) {
+              <div class="alert alert-danger modal__note">
+                <span class="material-icons">error_outline</span>
+                {{ resetError() }}
+              </div>
+            }
+
+            <div class="modal__actions">
+              <button type="button" class="btn btn-secondary" (click)="closeReset()" [disabled]="resetSaving()">
+                Cancelar
+              </button>
+              <button type="submit" class="btn btn-primary" [disabled]="resetSaving()">
+                {{ resetSaving() ? 'Restableciendo…' : 'Confirmar restablecimiento' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
   `,
 })
 export class TeacherManagementComponent {
@@ -316,12 +390,22 @@ export class TeacherManagementComponent {
   readonly deactivateTarget = signal<TeacherResponse | null>(null);
   readonly deactivating = signal<boolean>(false);
 
+  // Restablecimiento de contraseña
+  readonly resetTarget = signal<TeacherResponse | null>(null);
+  readonly resetSaving = signal<boolean>(false);
+  readonly resetError = signal<string | null>(null);
+
   readonly form: FormGroup = this.fb.group({
     names: ['', [Validators.required, Validators.maxLength(100)]],
     lastNames: ['', [Validators.required, Validators.maxLength(100)]],
     username: ['', [Validators.required, Validators.minLength(4), Validators.maxLength(50)]],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(100)]],
     temporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
+  });
+
+  readonly resetForm: FormGroup = this.fb.group({
+    newTemporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
+    confirmTemporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
   });
 
   // Usuario autenticado
@@ -450,6 +534,68 @@ export class TeacherManagementComponent {
         this.formError.set(this.extractError(err, 'No se pudo desactivar el docente.'));
       },
     });
+  }
+
+  openReset(teacher: TeacherResponse): void {
+    this.resetError.set(null);
+    this.resetForm.reset({ newTemporaryPassword: '', confirmTemporaryPassword: '' });
+    this.resetTarget.set(teacher);
+  }
+
+  closeReset(): void {
+    this.resetTarget.set(null);
+    this.resetError.set(null);
+  }
+
+  submitReset(): void {
+    const target = this.resetTarget();
+    if (target === null) {
+      return;
+    }
+
+    if (this.resetForm.invalid || this.resetMismatch()) {
+      this.resetForm.markAllAsTouched();
+      return;
+    }
+
+    this.resetSaving.set(true);
+    this.resetError.set(null);
+    const raw = this.resetForm.getRawValue();
+    const request: ResetPasswordRequest = {
+      newTemporaryPassword: raw.newTemporaryPassword,
+      confirmTemporaryPassword: raw.confirmTemporaryPassword,
+    };
+
+    this.userManagementService.resetTeacherPassword(target.userId, request).subscribe({
+      next: () => {
+        this.resetSaving.set(false);
+        this.resetTarget.set(null);
+        this.flashSuccess(
+          `Contraseña de ${target.names} ${target.lastNames} restablecida. ` +
+            'Deberá cambiarla al iniciar sesión.'
+        );
+        this.loadTeachers();
+      },
+      error: (err: unknown) => {
+        this.resetSaving.set(false);
+        this.resetError.set(this.extractError(err, 'No se pudo restablecer la contraseña.'));
+      },
+    });
+  }
+
+  isResetInvalid(controlName: string): boolean {
+    const control = this.resetForm.controls[controlName];
+    return control.invalid && (control.touched || control.dirty);
+  }
+
+  resetMismatch(): boolean {
+    const pwd = this.resetForm.controls['newTemporaryPassword'];
+    const confirm = this.resetForm.controls['confirmTemporaryPassword'];
+    return (
+      confirm.value !== '' &&
+      pwd.value !== confirm.value &&
+      (confirm.touched || confirm.dirty)
+    );
   }
 
   handleLogout(): void {
