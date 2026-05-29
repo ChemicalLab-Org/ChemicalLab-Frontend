@@ -1,6 +1,8 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { UserManagementService } from '../../core/services/user-management.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { AuthResponse } from '../../shared/models';
 
@@ -18,6 +20,8 @@ interface ShortcutCard {
   readonly icon: string;
   readonly tone: 'mint' | 'blue' | 'green' | 'amber';
   readonly cta: string;
+  /** Ruta a la que navega el acceso rápido. Si no se define, el card no navega. */
+  readonly route?: string;
 }
 
 @Component({
@@ -50,7 +54,7 @@ interface ShortcutCard {
         </header>
 
         <section class="metrics-grid">
-          @for (m of metrics; track m.id) {
+          @for (m of metrics(); track m.id) {
             <div class="metric">
               <div class="metric__icon">
                 <span class="material-icons">{{ m.icon }}</span>
@@ -67,7 +71,14 @@ interface ShortcutCard {
           <div class="shortcuts__header">Accesos rápidos</div>
           <div class="shortcuts-grid">
             @for (s of shortcuts; track s.id) {
-              <article class="card" [attr.data-tone]="s.tone">
+              <article
+                class="card"
+                [attr.data-tone]="s.tone"
+                [attr.role]="s.route ? 'button' : null"
+                [attr.tabindex]="s.route ? 0 : null"
+                (click)="onShortcut(s)"
+                (keydown.enter)="onShortcut(s)"
+              >
                 <div class="card__icon" [attr.data-tone]="s.tone">
                   <span class="material-icons">{{ s.icon }}</span>
                 </div>
@@ -87,6 +98,7 @@ interface ShortcutCard {
 })
 export class TeacherDashboardComponent {
   private readonly authService = inject(AuthService);
+  private readonly userManagementService = inject(UserManagementService);
   private readonly router = inject(Router);
 
   readonly navItems: readonly SidebarNavItem[] = [
@@ -114,11 +126,14 @@ export class TeacherDashboardComponent {
 
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
-  readonly metrics: readonly MetricCard[] = [
-    { id: 'students', label: 'Estudiantes registrados', value: 0, icon: 'group' },
+  // Cantidad real de estudiantes del docente autenticado.
+  private readonly studentCount = signal<number>(0);
+
+  readonly metrics = computed<MetricCard[]>(() => [
+    { id: 'students', label: 'Estudiantes registrados', value: this.studentCount(), icon: 'group' },
     { id: 'created', label: 'Evaluaciones creadas', value: 0, icon: 'quiz' },
     { id: 'active', label: 'Evaluaciones activas', value: 0, icon: 'analytics' },
-  ];
+  ]);
 
   readonly shortcuts: readonly ShortcutCard[] = [
     {
@@ -128,6 +143,7 @@ export class TeacherDashboardComponent {
       icon: 'group',
       tone: 'mint',
       cta: 'Ir a estudiantes',
+      route: '/teacher/students',
     },
     {
       id: 'create-eval',
@@ -155,9 +171,36 @@ export class TeacherDashboardComponent {
     },
   ];
 
+  constructor() {
+    this.loadStudentCount();
+  }
+
+  onShortcut(shortcut: ShortcutCard): void {
+    if (shortcut.route) {
+      void this.router.navigateByUrl(shortcut.route);
+    }
+  }
+
   handleLogout(): void {
     this.authService.logout();
     void this.router.navigateByUrl('/auth/login');
+  }
+
+  private loadStudentCount(): void {
+    const teacherUserId = this.authService.currentUser()?.userId ?? null;
+    if (teacherUserId === null) {
+      return;
+    }
+
+    this.userManagementService.listStudentsByTeacher(teacherUserId).subscribe({
+      next: (students) => this.studentCount.set(students.length),
+      error: (err: unknown) => {
+        // Si falla, la métrica se mantiene en 0 y dejamos registro controlado en consola.
+        const status = err instanceof HttpErrorResponse ? err.status : 'desconocido';
+        console.error(`No se pudo cargar el número de estudiantes (estado: ${status}).`);
+        this.studentCount.set(0);
+      },
+    });
   }
 
   private readStoredUser(): AuthResponse | null {
