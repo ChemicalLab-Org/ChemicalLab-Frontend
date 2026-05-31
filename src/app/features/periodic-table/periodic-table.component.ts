@@ -80,7 +80,11 @@ interface FilterOption {
           <div class="periodic-table-card card">
             @if (visibleElements().length > 0) {
               <div class="periodic-grid-wrap">
-                <div class="periodic-grid" aria-label="Tabla periódica interactiva">
+                <div
+                  class="periodic-grid"
+                  [class.periodic-grid--compact]="selectedElement() !== null"
+                  aria-label="Tabla periódica interactiva"
+                >
                   @for (element of elements; track element.atomicNumber) {
                     <button
                       type="button"
