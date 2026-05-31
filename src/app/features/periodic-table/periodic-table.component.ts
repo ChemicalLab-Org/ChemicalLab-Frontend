@@ -129,38 +129,54 @@ interface FilterOption {
                 <span class="material-icons">close</span>
               </button>
 
-              <div class="element-detail-card__head">
-                <span class="element-detail-card__number">{{ element.atomicNumber }}</span>
-                <div>
-                  <h2 class="element-detail-card__symbol">{{ element.symbol }}</h2>
-                  <p class="element-detail-card__name">{{ element.name }}</p>
-                </div>
+              <div [attr.class]="detailTileClasses(element)">
+                <span class="detail-element-tile__number">{{ element.atomicNumber }}</span>
+                <span class="detail-element-tile__symbol">{{ element.symbol }}</span>
+                <span class="detail-element-tile__name">{{ element.name }}</span>
               </div>
 
-              <span class="badge badge-primary">{{ categoryLabel(element.category) }}</span>
+              <span [attr.class]="categoryBadgeClasses(element)">
+                <span class="detail-category-badge__dot"></span>
+                {{ categoryLabel(element.category) }}
+              </span>
 
-              <dl class="element-detail-card__list">
-                <div>
-                  <dt>Número atómico</dt>
-                  <dd>{{ element.atomicNumber }}</dd>
+              <section class="detail-section">
+                <h3 class="detail-section__title">MODELO ATÓMICO</h3>
+                <div class="detail-preview">
+                  <span class="preview-orb" aria-hidden="true">{{ element.symbol }}</span>
+                  <p>Modelo de Bohr — representación esquemática</p>
                 </div>
-                <div>
-                  <dt>Símbolo</dt>
-                  <dd>{{ element.symbol }}</dd>
+              </section>
+
+              <section class="detail-section">
+                <h3 class="detail-section__title">VISUALIZACIÓN 3D</h3>
+                <div class="detail-preview">
+                  <span class="preview-orb preview-orb--muted" aria-hidden="true"></span>
+                  <p>Visualización 3D — próximamente</p>
                 </div>
-                <div>
-                  <dt>Categoría</dt>
-                  <dd>{{ categoryLabel(element.category) }}</dd>
-                </div>
-                <div>
-                  <dt>Grupo</dt>
-                  <dd>{{ element.group }}</dd>
-                </div>
-                <div>
-                  <dt>Periodo</dt>
-                  <dd>{{ periodLabel(element.period) }}</dd>
-                </div>
-              </dl>
+              </section>
+
+              <section class="detail-section">
+                <h3 class="detail-section__title">PROPIEDADES</h3>
+                <dl class="detail-properties">
+                  @for (property of detailProperties(element); track property.label) {
+                    <div>
+                      <dt>{{ property.label }}</dt>
+                      <dd>{{ property.value }}</dd>
+                    </div>
+                  }
+                </dl>
+              </section>
+
+              <section class="detail-section">
+                <h3 class="detail-section__title">DESCRIPCIÓN</h3>
+                <p class="detail-description">Información descriptiva pendiente para este elemento.</p>
+              </section>
+
+              <div class="detail-actions">
+                <button type="button" class="btn btn-primary" disabled>Usar en formación de compuestos</button>
+                <button type="button" class="btn btn-secondary" (click)="clearSelection()">Ver en tabla completa</button>
+              </div>
             </aside>
           }
         </section>
@@ -260,8 +276,29 @@ export class PeriodicTableComponent {
     return classes.join(' ');
   }
 
+  detailTileClasses(element: PeriodicElement): string {
+    return `detail-element-tile ${this.categoryClass(element.category)}`;
+  }
+
+  categoryBadgeClasses(element: PeriodicElement): string {
+    return `detail-category-badge ${this.categoryClass(element.category)}`;
+  }
+
   categoryLabel(category: PeriodicElementCategory): string {
     return this.categories.find((item) => item.id === category)?.label ?? category;
+  }
+
+  detailProperties(element: PeriodicElement): readonly { label: string; value: string }[] {
+    return [
+      { label: 'N° atómico', value: String(element.atomicNumber) },
+      { label: 'Masa atómica', value: 'No disponible' },
+      { label: 'Grupo', value: String(element.group) },
+      { label: 'Periodo', value: this.periodLabel(element.period) },
+      { label: 'Tipo', value: this.categoryLabel(element.category) },
+      { label: 'Estado', value: 'No disponible' },
+      { label: 'Valencia', value: 'No disponible' },
+      { label: 'Electronegatividad', value: 'No disponible' },
+    ];
   }
 
   periodLabel(period: PeriodicElement['period']): string {
