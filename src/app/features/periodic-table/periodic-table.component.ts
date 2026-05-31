@@ -82,7 +82,6 @@ interface FilterOption {
               <div class="periodic-grid-wrap">
                 <div
                   class="periodic-grid"
-                  [class.periodic-grid--compact]="selectedElement() !== null"
                   aria-label="Tabla periódica interactiva"
                 >
                   @for (element of elements; track element.atomicNumber) {
@@ -133,49 +132,51 @@ interface FilterOption {
                 <span class="material-icons">close</span>
               </button>
 
-              <div [attr.class]="detailTileClasses(element)">
-                <span class="detail-element-tile__number">{{ element.atomicNumber }}</span>
-                <span class="detail-element-tile__symbol">{{ element.symbol }}</span>
-                <span class="detail-element-tile__name">{{ element.name }}</span>
+              <div class="detail-panel-body">
+                <div [attr.class]="detailTileClasses(element)">
+                  <span class="detail-element-tile__number">{{ element.atomicNumber }}</span>
+                  <span class="detail-element-tile__symbol">{{ element.symbol }}</span>
+                  <span class="detail-element-tile__name">{{ element.name }}</span>
+                </div>
+
+                <span [attr.class]="categoryBadgeClasses(element)">
+                  <span class="detail-category-badge__dot"></span>
+                  {{ categoryLabel(element.category) }}
+                </span>
+
+                <section class="detail-section">
+                  <h3 class="detail-section__title">MODELO ATÓMICO</h3>
+                  <div class="detail-preview">
+                    <span class="preview-orb" aria-hidden="true">{{ element.symbol }}</span>
+                    <p>Modelo de Bohr — representación esquemática</p>
+                  </div>
+                </section>
+
+                <section class="detail-section">
+                  <h3 class="detail-section__title">VISUALIZACIÓN 3D</h3>
+                  <div class="detail-preview">
+                    <span class="preview-orb preview-orb--muted" aria-hidden="true"></span>
+                    <p>Visualización 3D — próximamente</p>
+                  </div>
+                </section>
+
+                <section class="detail-section">
+                  <h3 class="detail-section__title">PROPIEDADES</h3>
+                  <dl class="detail-properties">
+                    @for (property of detailProperties(element); track property.label) {
+                      <div>
+                        <dt>{{ property.label }}</dt>
+                        <dd>{{ property.value }}</dd>
+                      </div>
+                    }
+                  </dl>
+                </section>
+
+                <section class="detail-section">
+                  <h3 class="detail-section__title">DESCRIPCIÓN</h3>
+                  <p class="detail-description">Información descriptiva pendiente para este elemento.</p>
+                </section>
               </div>
-
-              <span [attr.class]="categoryBadgeClasses(element)">
-                <span class="detail-category-badge__dot"></span>
-                {{ categoryLabel(element.category) }}
-              </span>
-
-              <section class="detail-section">
-                <h3 class="detail-section__title">MODELO ATÓMICO</h3>
-                <div class="detail-preview">
-                  <span class="preview-orb" aria-hidden="true">{{ element.symbol }}</span>
-                  <p>Modelo de Bohr — representación esquemática</p>
-                </div>
-              </section>
-
-              <section class="detail-section">
-                <h3 class="detail-section__title">VISUALIZACIÓN 3D</h3>
-                <div class="detail-preview">
-                  <span class="preview-orb preview-orb--muted" aria-hidden="true"></span>
-                  <p>Visualización 3D — próximamente</p>
-                </div>
-              </section>
-
-              <section class="detail-section">
-                <h3 class="detail-section__title">PROPIEDADES</h3>
-                <dl class="detail-properties">
-                  @for (property of detailProperties(element); track property.label) {
-                    <div>
-                      <dt>{{ property.label }}</dt>
-                      <dd>{{ property.value }}</dd>
-                    </div>
-                  }
-                </dl>
-              </section>
-
-              <section class="detail-section">
-                <h3 class="detail-section__title">DESCRIPCIÓN</h3>
-                <p class="detail-description">Información descriptiva pendiente para este elemento.</p>
-              </section>
 
               <div class="detail-actions">
                 <button type="button" class="btn btn-primary" disabled>Usar en formación de compuestos</button>

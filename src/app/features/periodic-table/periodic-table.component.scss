@@ -35,16 +35,9 @@
 }
 
 .periodic-content {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: start;
+  position: relative;
   min-width: 0;
   max-width: 100%;
-
-  &--with-detail {
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 360px);
-  }
 }
 
 .periodic-table-card {
@@ -95,29 +88,6 @@
   grid-template-rows: repeat(7, 49px) 10px repeat(2, 49px);
   gap: 3px;
   min-width: 880px;
-
-  &--compact {
-    grid-template-columns: repeat(18, minmax(34px, 1fr));
-    grid-template-rows: repeat(7, 42px) 8px repeat(2, 42px);
-    gap: 2px;
-    min-width: 700px;
-  }
-}
-
-.periodic-grid--compact .periodic-element {
-  padding: 2px 3px;
-}
-
-.periodic-grid--compact .element-number {
-  font-size: 7px;
-}
-
-.periodic-grid--compact .element-symbol {
-  font-size: 13px;
-}
-
-.periodic-grid--compact .element-name {
-  font-size: 6px;
 }
 
 .periodic-element {
@@ -189,18 +159,19 @@
 }
 
 .element-detail-card {
-  position: sticky;
-  top: 2rem;
-  justify-self: end;
-  width: 100%;
-  max-width: 380px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  width: min(360px, calc(100% - var(--space-4)));
+  max-width: 360px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
   max-height: calc(100vh - 120px);
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: hidden;
   box-shadow: var(--shadow-sm);
+  padding: 0;
 
   &__close {
     position: absolute;
@@ -215,8 +186,19 @@
     background: transparent;
     color: var(--color-neutral-500);
     cursor: pointer;
+    z-index: 2;
   }
+}
 
+.detail-panel-body {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+  padding: var(--space-6);
+  padding-top: var(--space-7);
 }
 
 .detail-element-tile {
@@ -351,8 +333,13 @@
 }
 
 .detail-actions {
+  position: sticky;
+  bottom: 0;
   display: grid;
   gap: var(--space-2);
+  padding: var(--space-5);
+  border-top: 1.5px solid var(--color-neutral-200);
+  background: var(--color-neutral-0);
 }
 
 .category-metal {
@@ -396,15 +383,11 @@
 }
 
 @media (max-width: 1200px) {
-  .periodic-content,
-  .periodic-content--with-detail {
-    grid-template-columns: 1fr;
-  }
-
   .element-detail-card {
     position: static;
-    justify-self: stretch;
+    width: 100%;
     max-width: none;
+    margin-top: var(--space-4);
   }
 }
 
