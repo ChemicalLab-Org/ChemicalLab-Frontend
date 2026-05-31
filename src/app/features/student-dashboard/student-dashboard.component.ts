@@ -10,6 +10,7 @@ interface DashboardCard {
   readonly description: string;
   readonly icon: string;
   readonly tone: 'mint' | 'blue' | 'violet' | 'amber' | 'green';
+  readonly route?: string;
   readonly badge?: string;
 }
 
@@ -42,7 +43,14 @@ interface DashboardCard {
 
         <section class="cards-grid">
           @for (card of cards; track card.id) {
-            <article class="card" [attr.data-tone]="card.tone">
+            <article
+              class="card"
+              [attr.data-tone]="card.tone"
+              [attr.role]="card.route ? 'button' : null"
+              [attr.tabindex]="card.route ? 0 : null"
+              (click)="openCard(card)"
+              (keyup.enter)="openCard(card)"
+            >
               <div class="card__icon" [attr.data-tone]="card.tone">
                 <span class="material-icons">{{ card.icon }}</span>
               </div>
@@ -70,7 +78,7 @@ export class StudentDashboardComponent {
 
   readonly navItems: readonly SidebarNavItem[] = [
     { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
-    { label: 'Tabla periódica', icon: 'science', route: '/student-dashboard/periodic-table', disabled: true },
+    { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
     { label: 'Conceptos químicos', icon: 'menu_book', route: '/student-dashboard/concepts', disabled: true },
     { label: 'Formar compuestos', icon: 'biotech', route: '/student-dashboard/compounds', disabled: true },
     { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations', disabled: true },
@@ -105,6 +113,7 @@ export class StudentDashboardComponent {
       description: 'Consulta los 118 elementos.',
       icon: 'science',
       tone: 'mint',
+      route: '/periodic-table',
     },
     {
       id: 'concepts',
@@ -136,6 +145,12 @@ export class StudentDashboardComponent {
       tone: 'green',
     },
   ];
+
+  openCard(card: DashboardCard): void {
+    if (card.route) {
+      void this.router.navigateByUrl(card.route);
+    }
+  }
 
   handleLogout(): void {
     this.authService.logout();

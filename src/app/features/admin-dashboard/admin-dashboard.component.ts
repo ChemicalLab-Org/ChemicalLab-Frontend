@@ -108,7 +108,7 @@ export class AdminDashboardComponent {
     { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
     { label: 'Usuarios y roles', icon: 'manage_accounts', route: '/admin-dashboard/users', disabled: true },
     { label: 'Contenidos químicos', icon: 'auto_stories', route: '/admin-dashboard/content', disabled: true },
-    { label: 'Elementos químicos', icon: 'table_chart', route: '/admin-dashboard/elements', disabled: true },
+    { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
     { label: 'Grupos químicos', icon: 'hub', route: '/admin-dashboard/groups', disabled: true },
     { label: 'Logs del sistema', icon: 'terminal', route: '/admin-dashboard/logs', disabled: true },
     { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin-dashboard/system', disabled: true },
@@ -173,10 +173,11 @@ export class AdminDashboardComponent {
     {
       id: 'elements',
       title: 'Elementos químicos',
-      description: 'Consulta y edita los datos de los 118 elementos.',
+      description: 'Consulta los datos de los 118 elementos.',
       icon: 'table_chart',
       tone: 'teal',
       cta: 'Ver elementos',
+      route: '/periodic-table',
     },
     {
       id: 'system',
