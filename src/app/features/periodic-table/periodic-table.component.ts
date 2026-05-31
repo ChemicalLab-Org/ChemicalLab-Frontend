@@ -39,52 +39,45 @@ interface FilterOption {
               Explora los elementos químicos por símbolo, nombre, número atómico y categoría.
             </p>
           </div>
-        </header>
 
-        <section class="card controls-card" aria-label="Búsqueda y filtros">
-          <div class="controls-card__search form-group">
-            <label class="form-label" for="periodic-search">Buscar elemento</label>
+          <div class="input-group periodic-search">
+            <span class="material-icons input-group__icon">search</span>
             <input
               id="periodic-search"
               class="input"
               type="search"
               [value]="query()"
-              placeholder="Nombre, símbolo o número atómico"
+              placeholder="Buscar por nombre, símbolo o número atómico"
               (input)="updateQuery($event)"
             />
           </div>
+        </header>
 
-          <div class="form-group">
-            <label class="form-label" for="periodic-category">Categoría</label>
-            <select
-              id="periodic-category"
-              class="select"
-              [value]="activeFilter()"
-              (change)="updateFilter($event)"
+        <section class="periodic-filters" aria-label="Filtros por categoría">
+          @for (filter of filters; track filter.id) {
+            <button
+              type="button"
+              class="filter-pill"
+              [class.filter-pill--active]="activeFilter() === filter.id"
+              (click)="setFilter(filter.id)"
             >
-              @for (filter of filters; track filter.id) {
-                <option [value]="filter.id">{{ filter.label }}</option>
-              }
-            </select>
-          </div>
-
-          <button type="button" class="btn btn-secondary controls-card__clear" (click)="clearFilters()">
-            Limpiar filtros
-          </button>
+              {{ filter.label }}
+            </button>
+          }
         </section>
 
-        <section class="periodic-content">
-          <div class="periodic-table-card card">
-            <div class="periodic-legend" aria-label="Leyenda de categorías">
-              <span class="periodic-legend__title">Leyenda</span>
-              @for (category of categories; track category.id) {
-                <span class="periodic-legend__item">
-                  <span [attr.class]="legendSwatchClasses(category.className)"></span>
-                  {{ category.label }}
-                </span>
-              }
-            </div>
+        <section class="periodic-legend card" aria-label="Leyenda de categorías">
+          <span class="periodic-legend__title">LEYENDA</span>
+          @for (category of categories; track category.id) {
+            <span class="periodic-legend__item">
+              <span [attr.class]="legendSwatchClasses(category.className)"></span>
+              {{ category.label }}
+            </span>
+          }
+        </section>
 
+        <section class="periodic-content" [class.periodic-content--with-detail]="selectedElement() !== null">
+          <div class="periodic-table-card card">
             @if (visibleElements().length > 0) {
               <div class="periodic-grid-wrap">
                 <div class="periodic-grid" aria-label="Tabla periódica interactiva">
@@ -120,13 +113,22 @@ interface FilterOption {
                   <span class="material-icons">search_off</span>
                 </div>
                 <h2 class="empty-state__title">No se encontraron elementos</h2>
-                <p class="empty-state__desc">Ajusta la búsqueda o limpia los filtros para ver la tabla completa.</p>
+                <p class="empty-state__desc">Ajusta la búsqueda o elige Todos para ver la tabla completa.</p>
               </div>
             }
           </div>
 
-          <aside class="element-detail-card card" aria-label="Detalle básico del elemento">
-            @if (selectedElement(); as element) {
+          @if (selectedElement(); as element) {
+            <aside class="element-detail-card card" aria-label="Detalle básico del elemento">
+              <button
+                type="button"
+                class="element-detail-card__close"
+                aria-label="Cerrar detalle"
+                (click)="clearSelection()"
+              >
+                <span class="material-icons">close</span>
+              </button>
+
               <div class="element-detail-card__head">
                 <span class="element-detail-card__number">{{ element.atomicNumber }}</span>
                 <div>
@@ -159,18 +161,8 @@ interface FilterOption {
                   <dd>{{ periodLabel(element.period) }}</dd>
                 </div>
               </dl>
-            } @else {
-              <div class="empty-state element-detail-card__empty">
-                <div class="empty-state__icon">
-                  <span class="material-icons">ads_click</span>
-                </div>
-                <h2 class="empty-state__title">Selecciona un elemento</h2>
-                <p class="empty-state__desc">
-                  Haz clic en una celda de la tabla para consultar su información básica.
-                </p>
-              </div>
-            }
-          </aside>
+            </aside>
+          }
         </section>
       </main>
     </div>
@@ -209,18 +201,16 @@ export class PeriodicTableComponent {
     this.query.set(input.value);
   }
 
-  updateFilter(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    this.activeFilter.set(select.value as FilterOption['id']);
-  }
-
-  clearFilters(): void {
-    this.query.set('');
-    this.activeFilter.set('all');
+  setFilter(filter: FilterOption['id']): void {
+    this.activeFilter.set(filter);
   }
 
   selectElement(element: PeriodicElement): void {
     this.selectedElement.set(element);
+  }
+
+  clearSelection(): void {
+    this.selectedElement.set(null);
   }
 
   matchesElement(element: PeriodicElement): boolean {
