@@ -97,6 +97,20 @@
     transform: translateY(-1px);
   }
 
+  &--disabled {
+    cursor: default;
+
+    &:hover {
+      border-color: var(--color-neutral-100);
+      box-shadow: none;
+      transform: none;
+    }
+
+    .card__cta {
+      color: var(--color-neutral-400);
+    }
+  }
+
   &__icon {
     padding: 12px;
     border-radius: var(--radius-md);

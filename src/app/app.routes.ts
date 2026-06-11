@@ -10,6 +10,7 @@ import { AdminDashboardComponent } from './features/admin-dashboard/admin-dashbo
 import { TeacherStudentsComponent } from './features/teacher/students/teacher-students.component';
 import { TeacherPasswordsComponent } from './features/teacher/passwords/teacher-passwords.component';
 import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
+import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
@@ -63,6 +64,12 @@ export const routes: Routes = [
     component: TeacherManagementComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
+    path: 'periodic-table',
+    component: PeriodicTableComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
   },
 
   { path: '**', redirectTo: 'auth/login' },
