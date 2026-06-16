@@ -32,6 +32,8 @@ export interface AnionOption extends BinaryAnionOption {
 
 /** Grupo oxácido (radical poliatómico) para formar oxisales. */
 export interface OxacidGroupOption {
+  /** Símbolo del elemento central del grupo (p. ej. "S" en "SO4"). */
+  readonly central: string;
   /** Fórmula del grupo (p. ej. "SO4"). */
   readonly formula: string;
   /** Nombre del grupo usado en el nombre del compuesto (p. ej. "sulfato"). */
@@ -70,22 +72,26 @@ export const BINARY_ANION_OPTIONS: readonly BinaryAnionOption[] = [
   { symbol: 'C', anionName: 'carburo', charge: 4 },
 ];
 
-/** Grupos oxácidos (oxisales) de uso escolar habitual. */
+/**
+ * Grupos oxácidos (oxisales) de uso escolar habitual. El orden de aparición de
+ * los elementos centrales (S, N, C, P, Cl, Br, I, Mn, Cr) define el orden del
+ * selector de elemento central en la pantalla.
+ */
 export const OXACID_GROUP_OPTIONS: readonly OxacidGroupOption[] = [
-  { formula: 'SO4', name: 'sulfato', charge: 2 },
-  { formula: 'SO3', name: 'sulfito', charge: 2 },
-  { formula: 'NO3', name: 'nitrato', charge: 1 },
-  { formula: 'NO2', name: 'nitrito', charge: 1 },
-  { formula: 'CO3', name: 'carbonato', charge: 2 },
-  { formula: 'PO4', name: 'fosfato', charge: 3 },
-  { formula: 'PO3', name: 'fosfito', charge: 3 },
-  { formula: 'ClO3', name: 'clorato', charge: 1 },
-  { formula: 'ClO2', name: 'clorito', charge: 1 },
-  { formula: 'ClO', name: 'hipoclorito', charge: 1 },
-  { formula: 'ClO4', name: 'perclorato', charge: 1 },
-  { formula: 'BrO3', name: 'bromato', charge: 1 },
-  { formula: 'IO3', name: 'yodato', charge: 1 },
-  { formula: 'MnO4', name: 'permanganato', charge: 1 },
-  { formula: 'CrO4', name: 'cromato', charge: 2 },
-  { formula: 'Cr2O7', name: 'dicromato', charge: 2 },
+  { central: 'S', formula: 'SO4', name: 'sulfato', charge: 2 },
+  { central: 'S', formula: 'SO3', name: 'sulfito', charge: 2 },
+  { central: 'N', formula: 'NO3', name: 'nitrato', charge: 1 },
+  { central: 'N', formula: 'NO2', name: 'nitrito', charge: 1 },
+  { central: 'C', formula: 'CO3', name: 'carbonato', charge: 2 },
+  { central: 'P', formula: 'PO4', name: 'fosfato', charge: 3 },
+  { central: 'P', formula: 'PO3', name: 'fosfito', charge: 3 },
+  { central: 'Cl', formula: 'ClO', name: 'hipoclorito', charge: 1 },
+  { central: 'Cl', formula: 'ClO2', name: 'clorito', charge: 1 },
+  { central: 'Cl', formula: 'ClO3', name: 'clorato', charge: 1 },
+  { central: 'Cl', formula: 'ClO4', name: 'perclorato', charge: 1 },
+  { central: 'Br', formula: 'BrO3', name: 'bromato', charge: 1 },
+  { central: 'I', formula: 'IO3', name: 'yodato', charge: 1 },
+  { central: 'Mn', formula: 'MnO4', name: 'permanganato', charge: 1 },
+  { central: 'Cr', formula: 'CrO4', name: 'cromato', charge: 2 },
+  { central: 'Cr', formula: 'Cr2O7', name: 'dicromato', charge: 2 },
 ];

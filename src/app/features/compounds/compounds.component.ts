@@ -146,12 +146,10 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
               }
             }
 
-            <!-- Anión (ácidos y sales binarias) -->
-            @if (needsAnion()) {
+            <!-- Anión / no metal (ácidos) -->
+            @if (selectedType() === 'acids') {
               <div class="field">
-                <label class="form-label" for="anion-select">
-                  {{ selectedType() === 'acids' ? 'No metal' : 'No metal / Anión' }}
-                </label>
+                <label class="form-label" for="anion-select">No metal</label>
                 <select
                   id="anion-select"
                   class="select"
@@ -159,7 +157,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                   (change)="onAnionChange($event)"
                 >
                   <option value="">Selecciona un anión</option>
-                  @for (a of currentAnions(); track a.symbol; let i = $index) {
+                  @for (a of acidAnions; track a.symbol; let i = $index) {
                     <option [value]="i">
                       {{ a.anionName | titlecase }} ({{ a.symbol }}) — carga -{{ a.charge }}
                     </option>
@@ -168,24 +166,77 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
               </div>
             }
 
-            <!-- Grupo oxácido (oxisales) -->
-            @if (needsGroup()) {
+            <!-- No metal + carga (sales binarias) -->
+            @if (selectedType() === 'salts' && selectedElement() && valence()) {
               <div class="field">
-                <label class="form-label" for="group-select">Grupo oxácido</label>
+                <label class="form-label" for="nonmetal-select">No metal</label>
                 <select
-                  id="group-select"
+                  id="nonmetal-select"
                   class="select"
-                  [value]="groupIndex() ?? ''"
-                  (change)="onGroupChange($event)"
+                  [value]="nonMetalSymbol()"
+                  (change)="onNonMetalChange($event)"
                 >
-                  <option value="">Selecciona un grupo</option>
-                  @for (g of groups; track g.formula; let i = $index) {
-                    <option [value]="i">
-                      {{ g.name | titlecase }} ({{ g.formula }}) — carga -{{ g.charge }}
-                    </option>
+                  <option value="">Selecciona un no metal</option>
+                  @for (nm of binaryNonMetals; track nm.symbol) {
+                    <option [value]="nm.symbol">{{ nm.symbol }} — {{ elementNameOf(nm.symbol) | titlecase }}</option>
                   }
                 </select>
               </div>
+
+              @if (selectedNonMetal(); as nm) {
+                <div class="field">
+                  <label class="form-label">Carga del no metal</label>
+                  <div class="valence-pills" role="group" aria-label="Carga del no metal">
+                    @for (c of nonMetalCharges(); track c) {
+                      <button
+                        type="button"
+                        class="valence-pill"
+                        [class.valence-pill--active]="nonMetalCharge() === c"
+                        (click)="selectNonMetalCharge(c)"
+                      >
+                        -{{ c }}
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
+            }
+
+            <!-- Elemento central + grupo oxácido (oxisales) -->
+            @if (selectedType() === 'oxisalts' && selectedElement() && valence()) {
+              <div class="field">
+                <label class="form-label" for="central-select">Elemento central del grupo oxácido</label>
+                <select
+                  id="central-select"
+                  class="select"
+                  [value]="centralSymbol()"
+                  (change)="onCentralChange($event)"
+                >
+                  <option value="">Selecciona un elemento central</option>
+                  @for (c of centralOptions(); track c.symbol) {
+                    <option [value]="c.symbol">{{ c.symbol }} — {{ c.name | titlecase }}</option>
+                  }
+                </select>
+              </div>
+
+              @if (centralSymbol() !== '') {
+                <div class="field">
+                  <label class="form-label" for="group-select">Grupo oxácido</label>
+                  <select
+                    id="group-select"
+                    class="select"
+                    [value]="groupFormula()"
+                    (change)="onGroupChange($event)"
+                  >
+                    <option value="">Selecciona un grupo</option>
+                    @for (g of groupsForCentral(); track g.formula) {
+                      <option [value]="g.formula">
+                        {{ g.name | titlecase }} ({{ g.formula }}) — carga -{{ g.charge }}
+                      </option>
+                    }
+                  </select>
+                </div>
+              }
             }
 
             @if (formError()) {
@@ -276,6 +327,8 @@ export class CompoundsComponent {
   readonly acidAnions: readonly AnionOption[] = ANION_OPTIONS;
   /** Aniones monoatómicos para sales binarias (catálogo ampliado). */
   readonly binaryAnions: readonly BinaryAnionOption[] = BINARY_ANION_OPTIONS;
+  /** No metales seleccionables en sales binarias (mismo catálogo de aniones). */
+  readonly binaryNonMetals: readonly BinaryAnionOption[] = BINARY_ANION_OPTIONS;
   readonly groups: readonly OxacidGroupOption[] = OXACID_GROUP_OPTIONS;
 
   // ===== Estado del formulario =====
@@ -283,8 +336,16 @@ export class CompoundsComponent {
   readonly elementSymbol = signal<string>('');
   /** Valencia seleccionada (de pill o ingresada manualmente), o null. */
   readonly valence = signal<ValenceOption | null>(null);
+  /** Anión del selector de ácidos (índice en `acidAnions`), o null. */
   readonly anionIndex = signal<number | null>(null);
-  readonly groupIndex = signal<number | null>(null);
+  /** No metal elegido para sales binarias (símbolo), o cadena vacía. */
+  readonly nonMetalSymbol = signal<string>('');
+  /** Carga negativa elegida del no metal de sales binarias, o null. */
+  readonly nonMetalCharge = signal<number | null>(null);
+  /** Elemento central elegido para oxisales (símbolo), o cadena vacía. */
+  readonly centralSymbol = signal<string>('');
+  /** Grupo oxácido elegido para oxisales (fórmula), o cadena vacía. */
+  readonly groupFormula = signal<string>('');
 
   readonly formError = signal<string>('');
   readonly status = signal<FormStatus>('idle');
@@ -312,20 +373,41 @@ export class CompoundsComponent {
     return element === null ? [] : valenceOptionsFor(element.symbol, element.atomicNumber);
   });
 
-  /**
-   * Aniones que muestra el selector según el tipo: los formadores de hidrácido
-   * para ácidos y el catálogo ampliado de aniones monoatómicos para sales.
-   */
-  readonly currentAnions = computed<readonly BinaryAnionOption[]>(() =>
-    this.selectedType() === 'acids' ? this.acidAnions : this.binaryAnions
+  // ===== Sales binarias: no metal + carga =====
+  /** No metal seleccionado del catálogo de sales binarias (o null). */
+  readonly selectedNonMetal = computed<BinaryAnionOption | null>(
+    () => this.binaryAnions.find((a) => a.symbol === this.nonMetalSymbol()) ?? null
+  );
+  /** Cargas negativas disponibles del no metal (una por no metal en el MVP). */
+  readonly nonMetalCharges = computed<readonly number[]>(() => {
+    const nonMetal = this.selectedNonMetal();
+    return nonMetal === null ? [] : [nonMetal.charge];
+  });
+
+  // ===== Oxisales: elemento central + grupo oxácido =====
+  /** Elementos centrales disponibles, en el orden del catálogo, con su nombre. */
+  readonly centralOptions = computed<readonly { symbol: string; name: string }[]>(() => {
+    const seen = new Set<string>();
+    const options: { symbol: string; name: string }[] = [];
+    for (const group of this.groups) {
+      if (!seen.has(group.central)) {
+        seen.add(group.central);
+        options.push({ symbol: group.central, name: this.elementNameOf(group.central) });
+      }
+    }
+    return options;
+  });
+  /** Grupos oxácidos del elemento central seleccionado. */
+  readonly groupsForCentral = computed<readonly OxacidGroupOption[]>(() =>
+    this.groups.filter((g) => g.central === this.centralSymbol())
+  );
+  /** Grupo oxácido seleccionado por su fórmula (o null). */
+  readonly selectedGroup = computed<OxacidGroupOption | null>(
+    () => this.groups.find((g) => g.formula === this.groupFormula()) ?? null
   );
 
   // ===== Campos requeridos según el tipo =====
   readonly needsElement = computed<boolean>(() => this.selectedType() !== 'acids');
-  readonly needsAnion = computed<boolean>(
-    () => this.selectedType() === 'acids' || this.selectedType() === 'salts'
-  );
-  readonly needsGroup = computed<boolean>(() => this.selectedType() === 'oxisalts');
 
   readonly elementLabel = computed<string>(() =>
     this.selectedType() === 'oxides' ? 'Elemento' : 'Metal'
@@ -387,16 +469,38 @@ export class CompoundsComponent {
     this.anionIndex.set(raw === '' ? null : Number(raw));
   }
 
+  onNonMetalChange(event: Event): void {
+    const symbol = (event.target as HTMLSelectElement).value;
+    this.nonMetalSymbol.set(symbol);
+    // Cada no metal tiene una sola carga negativa para sal binaria: se selecciona sola.
+    const nonMetal = this.binaryAnions.find((a) => a.symbol === symbol) ?? null;
+    this.nonMetalCharge.set(nonMetal === null ? null : nonMetal.charge);
+  }
+
+  selectNonMetalCharge(charge: number): void {
+    this.nonMetalCharge.set(charge);
+  }
+
+  onCentralChange(event: Event): void {
+    const central = (event.target as HTMLSelectElement).value;
+    this.centralSymbol.set(central);
+    // Si el elemento central tiene un único grupo, se selecciona solo.
+    const groups = this.groups.filter((g) => g.central === central);
+    this.groupFormula.set(groups.length === 1 ? groups[0].formula : '');
+  }
+
   onGroupChange(event: Event): void {
-    const raw = (event.target as HTMLSelectElement).value;
-    this.groupIndex.set(raw === '' ? null : Number(raw));
+    this.groupFormula.set((event.target as HTMLSelectElement).value);
   }
 
   resetForm(): void {
     this.elementSymbol.set('');
     this.valence.set(null);
     this.anionIndex.set(null);
-    this.groupIndex.set(null);
+    this.nonMetalSymbol.set('');
+    this.nonMetalCharge.set(null);
+    this.centralSymbol.set('');
+    this.groupFormula.set('');
     this.formError.set('');
     this.status.set('idle');
     this.result.set(null);
@@ -465,11 +569,21 @@ export class CompoundsComponent {
         : 'Ingresa una valencia para el elemento.';
     }
 
-    if (type === 'salts' && this.selectedBinaryAnion() === null) {
-      return 'Selecciona el anión o no metal.';
+    if (type === 'salts') {
+      if (this.selectedNonMetal() === null) {
+        return 'Selecciona un no metal.';
+      }
+      if (this.nonMetalCharge() === null) {
+        return 'Selecciona la carga del no metal.';
+      }
     }
-    if (type === 'oxisalts' && this.selectedGroup() === null) {
-      return 'Selecciona un grupo oxácido.';
+    if (type === 'oxisalts') {
+      if (this.centralSymbol() === '') {
+        return 'Selecciona el elemento central del grupo oxácido.';
+      }
+      if (this.selectedGroup() === null) {
+        return 'Selecciona un grupo oxácido.';
+      }
     }
 
     return null;
@@ -511,17 +625,24 @@ export class CompoundsComponent {
     if (type === 'salts') {
       const element = this.selectedElement();
       const valence = this.valence();
-      const anion = this.selectedBinaryAnion();
-      if (element === null || valence === null || valence.value < 1 || anion === null) {
+      const nonMetal = this.selectedNonMetal();
+      const nonMetalCharge = this.nonMetalCharge();
+      if (
+        element === null ||
+        valence === null ||
+        valence.value < 1 ||
+        nonMetal === null ||
+        nonMetalCharge === null
+      ) {
         return null;
       }
       return this.engine.generateSalt({
         metalSymbol: element.symbol,
         metalName: element.name.toLowerCase(),
         metalValence: valence.value,
-        nonMetalSymbol: anion.symbol,
-        anionName: anion.anionName,
-        anionCharge: anion.charge,
+        nonMetalSymbol: nonMetal.symbol,
+        anionName: nonMetal.anionName,
+        anionCharge: nonMetalCharge,
       });
     }
 
@@ -547,14 +668,9 @@ export class CompoundsComponent {
     return i === null ? null : this.acidAnions[i] ?? null;
   }
 
-  private selectedBinaryAnion(): BinaryAnionOption | null {
-    const i = this.anionIndex();
-    return i === null ? null : this.binaryAnions[i] ?? null;
-  }
-
-  private selectedGroup(): OxacidGroupOption | null {
-    const i = this.groupIndex();
-    return i === null ? null : this.groups[i] ?? null;
+  /** Nombre en español del elemento por su símbolo, o el símbolo si no se encuentra. */
+  elementNameOf(symbol: string): string {
+    return this.elements.find((el) => el.symbol === symbol)?.name ?? symbol;
   }
 
   /** Traduce un error HTTP a un mensaje claro para el estudiante. */
