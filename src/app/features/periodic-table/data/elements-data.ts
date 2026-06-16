@@ -234,6 +234,8 @@ export interface ElementDetail {
   readonly valence?: string;
   readonly electronegativity?: string;
   readonly description?: string;
+  /** Distribución de electrones por capa (p. ej. [2, 8, 1] para el sodio). */
+  readonly shells?: readonly number[];
 }
 
 /**
@@ -249,10 +251,37 @@ export const ELEMENT_DETAILS: Readonly<Record<number, ElementDetail>> = {
     state: 'Sólido',
     valence: '+1',
     electronegativity: '0.93',
+    shells: [2, 8, 1],
     description:
       'El sodio es un metal alcalino muy reactivo, suave y de color plateado. Se encuentra en la sal común (NaCl) y es esencial para la vida. En el laboratorio se conserva sumergido en aceite porque reacciona con el agua y el aire.',
   },
 };
+
+/**
+ * Capacidad máxima de electrones por nivel de energía (regla 2n²): K, L, M…
+ * Se usa solo para una representación visual esquemática del átomo.
+ */
+const SHELL_CAPACITY: readonly number[] = [2, 8, 18, 32, 32, 18, 8];
+
+/**
+ * Distribución esquemática de electrones por capa a partir del número
+ * atómico, llenando cada nivel hasta su capacidad. No es la configuración
+ * electrónica real (no contempla subniveles ni excepciones); sirve únicamente
+ * como apoyo visual para el modelo atómico.
+ */
+export function schematicShells(atomicNumber: number): readonly number[] {
+  const shells: number[] = [];
+  let remaining = atomicNumber;
+  for (const capacity of SHELL_CAPACITY) {
+    if (remaining <= 0) {
+      break;
+    }
+    const electrons = Math.min(capacity, remaining);
+    shells.push(electrons);
+    remaining -= electrons;
+  }
+  return shells;
+}
 
 /** Período visual (1-7) derivado de la fila. Las series se ubican en 6 y 7. */
 export function periodOf(element: PeriodicElement): number {
