@@ -85,7 +85,7 @@ export class StudentDashboardComponent {
     { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
     { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
     { label: 'Conceptos químicos', icon: 'menu_book', route: '/student-dashboard/concepts', disabled: true },
-    { label: 'Formar compuestos', icon: 'biotech', route: '/student-dashboard/compounds', disabled: true },
+    { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
     { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations', disabled: true },
     { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
   ];
@@ -129,10 +129,11 @@ export class StudentDashboardComponent {
     },
     {
       id: 'compounds',
-      title: 'Formar compuestos',
+      title: 'Formación de compuestos',
       description: 'Combina elementos y genera fórmulas químicas.',
       icon: 'biotech',
       tone: 'violet',
+      route: '/compounds',
     },
     {
       id: 'evaluations',

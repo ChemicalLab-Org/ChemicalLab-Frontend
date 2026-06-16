@@ -423,11 +423,9 @@ const ORBIT_3D_ROTATIONS: readonly number[] = [-22, 18, -8, 26, -16, 10, -24];
                 <button
                   type="button"
                   class="btn btn-primary btn-lg detail-panel-actions__primary"
-                  disabled
-                  title="Próximamente"
+                  (click)="goToCompounds()"
                 >
                   Usar en formación de compuestos
-                  <span class="detail-panel-actions__soon">Próximamente</span>
                 </button>
                 <button type="button" class="btn btn-secondary" (click)="closePanel()">
                   Ver en tabla completa
@@ -660,6 +658,10 @@ export class PeriodicTableComponent {
     this.selectedAtomicNumber.set(null);
   }
 
+  goToCompounds(): void {
+    void this.router.navigateByUrl('/compounds');
+  }
+
   handleLogout(): void {
     this.authService.logout();
     void this.router.navigateByUrl('/auth/login');
@@ -686,6 +688,7 @@ function buildNavItems(role: UserRole | null): readonly SidebarNavItem[] {
         { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
         { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
         { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
+        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
         { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
       ];
     case 'ADMINISTRADOR':
@@ -693,13 +696,14 @@ function buildNavItems(role: UserRole | null): readonly SidebarNavItem[] {
         { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
         { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
         { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
+        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
       ];
     default:
       return [
         { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
         { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
         { label: 'Conceptos químicos', icon: 'menu_book', route: '/student-dashboard/concepts', disabled: true },
-        { label: 'Formar compuestos', icon: 'biotech', route: '/student-dashboard/compounds', disabled: true },
+        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
         { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations', disabled: true },
         { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
       ];
