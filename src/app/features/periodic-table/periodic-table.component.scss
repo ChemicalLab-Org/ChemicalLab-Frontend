@@ -421,28 +421,24 @@ $categories: (
   letter-spacing: 0.08em;
 }
 
-// Placeholder visual oscuro (modelo atómico / 3D).
-.detail-visual {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 150px;
-  padding: 20px 16px;
+// Lienzo oscuro de las visualizaciones atómicas (modelo de Bohr / 3D).
+.atom-stage {
+  padding: 16px;
   border-radius: var(--radius-lg);
-  background: linear-gradient(160deg, #1f2733, #12161f);
-  border: 1.5px solid #2c3543;
+  background: linear-gradient(160deg, oklch(0.2 0.02 250), oklch(0.14 0.02 260));
+  border: 1.5px solid oklch(0.3 0.02 250);
+  overflow: hidden;
 
-  &__icon {
-    font-size: 44px;
-    color: var(--color-primary-300);
-    opacity: 0.85;
+  &__canvas {
+    display: block;
+    width: 100%;
+    height: auto;
   }
 
   &__caption {
+    margin: 6px 0 0;
     font-size: 11px;
-    color: #aeb6c2;
+    color: oklch(0.75 0.02 250);
     text-align: center;
     letter-spacing: 0.02em;
   }

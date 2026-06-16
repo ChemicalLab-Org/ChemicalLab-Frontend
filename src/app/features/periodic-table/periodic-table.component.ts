@@ -15,6 +15,7 @@ import {
   PeriodicElement,
   groupOf,
   periodOf,
+  schematicShells,
 } from './data/elements-data';
 
 interface PropertyRow {
@@ -22,6 +23,56 @@ interface PropertyRow {
   readonly value: string;
   readonly mono: boolean;
 }
+
+/** Punto 2D dentro del lienzo SVG. */
+interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Órbita elíptica del modelo de Bohr. */
+interface BohrOrbit {
+  readonly rx: number;
+  readonly ry: number;
+}
+
+/** Etiqueta de capa ("8e⁻") situada junto a una órbita. */
+interface ShellLabel extends Point {
+  readonly text: string;
+}
+
+/** Geometría completa del modelo de Bohr esquemático. */
+interface BohrGeometry {
+  readonly orbits: readonly BohrOrbit[];
+  readonly electrons: readonly Point[];
+  readonly labels: readonly ShellLabel[];
+}
+
+/** Órbita inclinada para la vista 3D, con sus dos mitades dibujadas como path. */
+interface Orbit3D {
+  readonly transform: string;
+  readonly backPath: string;
+  readonly frontPath: string;
+}
+
+/** Electrón con profundidad simulada para la vista 3D. */
+interface Electron3D extends Point {
+  readonly r: number;
+  readonly opacity: number;
+}
+
+/** Geometría completa de la visualización 3D esquemática. */
+interface Atom3DGeometry {
+  readonly orbits: readonly Orbit3D[];
+  readonly electronsBack: readonly Electron3D[];
+  readonly electronsFront: readonly Electron3D[];
+}
+
+/** Dimensiones del lienzo de las visualizaciones atómicas. */
+const ATOM_VIEW = { width: 320, height: 200, cx: 160, cy: 100 } as const;
+
+/** Inclinaciones (en grados) reutilizadas por las órbitas de la vista 3D. */
+const ORBIT_3D_ROTATIONS: readonly number[] = [-22, 18, -8, 26, -16, 10, -24];
 
 @Component({
   selector: 'app-periodic-table',
@@ -168,21 +219,182 @@ interface PropertyRow {
                   </span>
                 </div>
 
-                <!-- Modelo atómico (placeholder) -->
+                <!-- Modelo atómico (SVG esquemático tipo Bohr) -->
                 <section class="detail-section">
                   <h2 class="detail-section__title">Modelo atómico</h2>
-                  <div class="detail-visual">
-                    <span class="material-icons detail-visual__icon">blur_circular</span>
-                    <span class="detail-visual__caption">Modelo de Bohr — representación esquemática</span>
+                  <div class="atom-stage">
+                    @if (bohrGeometry(); as bohr) {
+                      <svg
+                        class="atom-stage__canvas"
+                        viewBox="0 0 320 200"
+                        role="img"
+                        [attr.aria-label]="'Modelo atómico esquemático de ' + el.name"
+                      >
+                        <defs>
+                          <radialGradient id="bohr-nucleus" cx="0.4" cy="0.35">
+                            <stop offset="0%" stop-color="oklch(0.85 0.115 168)" />
+                            <stop offset="60%" stop-color="oklch(0.64 0.120 168)" />
+                            <stop offset="100%" stop-color="oklch(0.47 0.100 172)" />
+                          </radialGradient>
+                          <radialGradient id="bohr-electron" cx="0.35" cy="0.35">
+                            <stop offset="0%" stop-color="oklch(1 0 0)" />
+                            <stop offset="100%" stop-color="oklch(0.85 0.020 250)" />
+                          </radialGradient>
+                          <filter id="bohr-glow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="1.2" />
+                          </filter>
+                        </defs>
+
+                        @for (orbit of bohr.orbits; track $index) {
+                          <ellipse
+                            cx="160"
+                            cy="100"
+                            [attr.rx]="orbit.rx"
+                            [attr.ry]="orbit.ry"
+                            fill="none"
+                            stroke="oklch(1 0 0 / 0.28)"
+                            stroke-width="1"
+                            [attr.stroke-dasharray]="$index === 0 ? '0' : '2 4'"
+                          />
+                        }
+
+                        <circle cx="160" cy="100" r="14" fill="url(#bohr-nucleus)" filter="url(#bohr-glow)" />
+                        <circle
+                          cx="160"
+                          cy="100"
+                          r="14"
+                          fill="url(#bohr-nucleus)"
+                          stroke="oklch(1 0 0 / 0.35)"
+                          stroke-width="1"
+                        />
+                        <text
+                          x="160"
+                          y="104"
+                          text-anchor="middle"
+                          font-size="10"
+                          font-weight="800"
+                          fill="#ffffff"
+                          font-family="var(--font-mono)"
+                        >
+                          {{ nucleusSymbol() }}
+                        </text>
+
+                        @for (electron of bohr.electrons; track $index) {
+                          <circle
+                            [attr.cx]="electron.x"
+                            [attr.cy]="electron.y"
+                            r="5"
+                            fill="oklch(1 0 0 / 0.20)"
+                            filter="url(#bohr-glow)"
+                          />
+                          <circle [attr.cx]="electron.x" [attr.cy]="electron.y" r="3" fill="url(#bohr-electron)" />
+                        }
+
+                        @for (label of bohr.labels; track $index) {
+                          <text
+                            [attr.x]="label.x"
+                            [attr.y]="label.y"
+                            text-anchor="middle"
+                            font-size="9"
+                            fill="oklch(0.85 0.020 250 / 0.7)"
+                            font-family="var(--font-mono)"
+                            font-weight="600"
+                          >
+                            {{ label.text }}
+                          </text>
+                        }
+                      </svg>
+                    }
+                    <p class="atom-stage__caption">Representación esquemática del modelo atómico.</p>
                   </div>
                 </section>
 
-                <!-- Visualización 3D (placeholder) -->
+                <!-- Visualización 3D (SVG estilizado, sin librerías externas) -->
                 <section class="detail-section">
                   <h2 class="detail-section__title">Visualización 3D</h2>
-                  <div class="detail-visual">
-                    <span class="material-icons detail-visual__icon">3d_rotation</span>
-                    <span class="detail-visual__caption">Visualización 3D — próximamente</span>
+                  <div class="atom-stage">
+                    @if (atom3dGeometry(); as atom) {
+                      <svg
+                        class="atom-stage__canvas"
+                        viewBox="0 0 320 200"
+                        role="img"
+                        [attr.aria-label]="'Visualización 3D referencial de ' + el.name"
+                      >
+                        <defs>
+                          <radialGradient id="atom-sphere" cx="0.32" cy="0.28" r="0.85">
+                            <stop offset="0%" stop-color="oklch(0.97 0.030 168)" />
+                            <stop offset="18%" stop-color="oklch(0.85 0.085 168)" />
+                            <stop offset="55%" stop-color="oklch(0.60 0.115 170)" />
+                            <stop offset="100%" stop-color="oklch(0.30 0.065 175)" />
+                          </radialGradient>
+                          <radialGradient id="atom-specular" cx="0.30" cy="0.25" r="0.18">
+                            <stop offset="0%" stop-color="oklch(1 0 0 / 0.95)" />
+                            <stop offset="60%" stop-color="oklch(1 0 0 / 0.20)" />
+                            <stop offset="100%" stop-color="oklch(1 0 0 / 0)" />
+                          </radialGradient>
+                          <radialGradient id="atom-halo" cx="0.5" cy="0.5" r="0.5">
+                            <stop offset="0%" stop-color="oklch(0.85 0.115 168 / 0.55)" />
+                            <stop offset="50%" stop-color="oklch(0.70 0.120 168 / 0.20)" />
+                            <stop offset="100%" stop-color="oklch(0.70 0.120 168 / 0)" />
+                          </radialGradient>
+                          <radialGradient id="atom-e3d" cx="0.30" cy="0.28" r="0.85">
+                            <stop offset="0%" stop-color="oklch(1 0 0)" />
+                            <stop offset="40%" stop-color="oklch(0.92 0.030 250)" />
+                            <stop offset="100%" stop-color="oklch(0.55 0.060 250)" />
+                          </radialGradient>
+                          <radialGradient id="atom-shadow" cx="0.5" cy="0.5" r="0.5">
+                            <stop offset="0%" stop-color="oklch(0 0 0 / 0.55)" />
+                            <stop offset="100%" stop-color="oklch(0 0 0 / 0)" />
+                          </radialGradient>
+                        </defs>
+
+                        <ellipse cx="160" cy="100" rx="80" ry="80" fill="url(#atom-halo)" />
+
+                        @for (orbit of atom.orbits; track $index) {
+                          <g [attr.transform]="orbit.transform">
+                            <path [attr.d]="orbit.backPath" fill="none" stroke="oklch(0.65 0.020 250 / 0.30)" stroke-width="1" />
+                          </g>
+                        }
+
+                        @for (electron of atom.electronsBack; track $index) {
+                          <g [attr.opacity]="electron.opacity">
+                            <circle [attr.cx]="electron.x" [attr.cy]="electron.y" [attr.r]="electron.r + 1" fill="oklch(0.85 0.025 250 / 0.25)" />
+                            <circle [attr.cx]="electron.x" [attr.cy]="electron.y" [attr.r]="electron.r" fill="url(#atom-e3d)" />
+                          </g>
+                        }
+
+                        <ellipse cx="164" cy="130" rx="28" ry="6" fill="url(#atom-shadow)" />
+
+                        <circle cx="160" cy="100" r="28" fill="url(#atom-sphere)" />
+                        <circle cx="160" cy="100" r="28" fill="url(#atom-specular)" />
+                        <circle cx="160" cy="100" r="28" fill="none" stroke="oklch(1 0 0 / 0.12)" stroke-width="0.8" />
+                        <text
+                          x="160"
+                          y="105"
+                          text-anchor="middle"
+                          font-size="14"
+                          font-weight="800"
+                          fill="#ffffff"
+                          font-family="system-ui, sans-serif"
+                        >
+                          {{ nucleusSymbol() }}
+                        </text>
+
+                        @for (orbit of atom.orbits; track $index) {
+                          <g [attr.transform]="orbit.transform">
+                            <path [attr.d]="orbit.frontPath" fill="none" stroke="oklch(0.85 0.025 250 / 0.55)" stroke-width="1" />
+                          </g>
+                        }
+
+                        @for (electron of atom.electronsFront; track $index) {
+                          <g [attr.opacity]="electron.opacity">
+                            <circle [attr.cx]="electron.x" [attr.cy]="electron.y" [attr.r]="electron.r + 1" fill="oklch(0.85 0.025 250 / 0.25)" />
+                            <circle [attr.cx]="electron.x" [attr.cy]="electron.y" [attr.r]="electron.r" fill="url(#atom-e3d)" />
+                          </g>
+                        }
+                      </svg>
+                    }
+                    <p class="atom-stage__caption">Visualización 3D referencial.</p>
                   </div>
                 </section>
 
@@ -293,6 +505,95 @@ export class PeriodicTableComponent {
     return this.detailFor(el).description ?? 'Información descriptiva pendiente para este elemento.';
   });
 
+  /** Símbolo que se dibuja en el núcleo de las visualizaciones. */
+  readonly nucleusSymbol = computed<string>(() => this.selectedElement()?.symbol ?? '');
+
+  /** Geometría del modelo de Bohr (órbitas, electrones y etiquetas de capa). */
+  readonly bohrGeometry = computed<BohrGeometry>(() => {
+    const el = this.selectedElement();
+    if (el === null) {
+      return { orbits: [], electrons: [], labels: [] };
+    }
+    const shells = this.shellsFor(el);
+    const { cx, cy } = ATOM_VIEW;
+    const count = shells.length;
+    const rxMin = 32;
+    const rxMax = 132;
+
+    const orbits: BohrOrbit[] = shells.map((_, i) => {
+      const rx = count <= 1 ? rxMin : rxMin + ((rxMax - rxMin) * i) / (count - 1);
+      return { rx, ry: rx * 0.64 };
+    });
+
+    const electrons: Point[] = [];
+    const labels: ShellLabel[] = [];
+    shells.forEach((electronCount, i) => {
+      const orbit = orbits[i];
+      for (let j = 0; j < electronCount; j++) {
+        const t = (j / electronCount) * Math.PI * 2 + i * 0.3;
+        electrons.push({
+          x: cx + orbit.rx * Math.cos(t),
+          y: cy + orbit.ry * Math.sin(t),
+        });
+      }
+      labels.push({ x: cx, y: cy - orbit.ry - 5, text: `${electronCount}e⁻` });
+    });
+
+    return { orbits, electrons, labels };
+  });
+
+  /** Geometría de la vista 3D esquemática (órbitas inclinadas con profundidad). */
+  readonly atom3dGeometry = computed<Atom3DGeometry>(() => {
+    const el = this.selectedElement();
+    if (el === null) {
+      return { orbits: [], electronsBack: [], electronsFront: [] };
+    }
+    const shells = this.shellsFor(el);
+    const { cx, cy } = ATOM_VIEW;
+    const count = shells.length;
+    const rxMin = 56;
+    const rxMax = 124;
+
+    const orbits: Orbit3D[] = [];
+    const electronsBack: Electron3D[] = [];
+    const electronsFront: Electron3D[] = [];
+
+    shells.forEach((electronCount, i) => {
+      const rx = count <= 1 ? rxMin : rxMin + ((rxMax - rxMin) * i) / (count - 1);
+      const ry = 14 + (i % 3) * 8;
+      const rotate = ORBIT_3D_ROTATIONS[i % ORBIT_3D_ROTATIONS.length];
+      const angle = (rotate * Math.PI) / 180;
+
+      orbits.push({
+        transform: `rotate(${rotate} ${cx} ${cy})`,
+        backPath: `M ${cx - rx} ${cy} A ${rx} ${ry} 0 0 1 ${cx + rx} ${cy}`,
+        frontPath: `M ${cx - rx} ${cy} A ${rx} ${ry} 0 0 0 ${cx + rx} ${cy}`,
+      });
+
+      for (let j = 0; j < electronCount; j++) {
+        const t = (j / electronCount) * Math.PI * 2 + i * 0.45;
+        const lx = rx * Math.cos(t);
+        const ly = ry * Math.sin(t);
+        const x = cx + lx * Math.cos(angle) - ly * Math.sin(angle);
+        const y = cy + lx * Math.sin(angle) + ly * Math.cos(angle);
+        const depth = Math.sin(t + angle);
+        const electron: Electron3D = {
+          x,
+          y,
+          r: 4 + depth * 1.2,
+          opacity: 0.55 + (depth + 1) * 0.225,
+        };
+        if (depth < 0) {
+          electronsBack.push(electron);
+        } else {
+          electronsFront.push(electron);
+        }
+      }
+    });
+
+    return { orbits, electronsBack, electronsFront };
+  });
+
   // ===== Sidebar dependiente del rol =====
   private readonly currentUser = computed(() => this.authService.currentUser());
 
@@ -366,6 +667,15 @@ export class PeriodicTableComponent {
 
   private detailFor(element: PeriodicElement): ElementDetail {
     return ELEMENT_DETAILS[element.atomicNumber] ?? {};
+  }
+
+  /**
+   * Capas de electrones para las visualizaciones: usa el dato real si existe
+   * en el detalle del elemento; si no, una distribución esquemática derivada
+   * del número atómico.
+   */
+  private shellsFor(element: PeriodicElement): readonly number[] {
+    return this.detailFor(element).shells ?? schematicShells(element.atomicNumber);
   }
 }
 
