@@ -27,13 +27,19 @@ export interface OxacidGroupOption {
   readonly charge: number;
 }
 
-/** Aniones de no metales habituales (sales binarias e hidrácidos). */
+/**
+ * Aniones de no metales habituales para sales binarias e hidrácidos.
+ * Son no metales que forman hidrácidos válidos (halógenos con carga -1 y
+ * anfígenos con carga -2), por lo que sirven tanto para el selector de ácidos
+ * como para el de sales binarias.
+ */
 export const ANION_OPTIONS: readonly AnionOption[] = [
   { symbol: 'Cl', anionName: 'cloruro', charge: 1, acidName: 'ácido clorhídrico' },
   { symbol: 'F', anionName: 'fluoruro', charge: 1, acidName: 'ácido fluorhídrico' },
   { symbol: 'Br', anionName: 'bromuro', charge: 1, acidName: 'ácido bromhídrico' },
   { symbol: 'I', anionName: 'yoduro', charge: 1, acidName: 'ácido yodhídrico' },
   { symbol: 'S', anionName: 'sulfuro', charge: 2, acidName: 'ácido sulfhídrico' },
+  { symbol: 'Se', anionName: 'seleniuro', charge: 2, acidName: 'ácido selenhídrico' },
 ];
 
 /** Grupos oxácidos habituales (oxisales). */

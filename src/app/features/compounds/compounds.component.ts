@@ -7,6 +7,7 @@ import { SidebarComponent, SidebarNavItem } from '../../shared/components/sideba
 import { UserRole } from '../../shared/models';
 import { PERIODIC_ELEMENTS, PeriodicElement } from '../periodic-table/data/elements-data';
 import { ValenceOption, valenceOptionsFor } from './data/common-valences';
+import { allowedElementSymbols } from './data/compound-element-rules';
 import { ChemicalEngineService } from './services/chemical-engine.service';
 import { CompoundResponse, CompoundType } from './models/chemistry.models';
 import {
@@ -82,7 +83,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
         <!-- Formulario + resultado -->
         <section class="cmp-grid">
           <!-- ===== Formulario ===== -->
-          <form class="cmp-card" (ngSubmit)="onSubmit()">
+          <form class="cmp-card" (submit)="onSubmit($event)">
             <div class="cmp-card__head">
               <h2 class="cmp-card__title">Configura el compuesto</h2>
               <p class="cmp-card__desc">
@@ -101,7 +102,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                   (change)="onElementChange($event)"
                 >
                   <option value="">Selecciona un elemento</option>
-                  @for (el of elements; track el.atomicNumber) {
+                  @for (el of availableElements(); track el.atomicNumber) {
                     <option [value]="el.symbol">{{ el.symbol }} — {{ el.name }}</option>
                   }
                 </select>
@@ -285,6 +286,12 @@ export class CompoundsComponent {
   readonly result = signal<CompoundResponse | null>(null);
   readonly errorMessage = signal<string>('');
 
+  /** Elementos disponibles en el selector según el tipo de compuesto. */
+  readonly availableElements = computed<readonly PeriodicElement[]>(() => {
+    const allowed = new Set(allowedElementSymbols(this.selectedType()));
+    return this.elements.filter((el) => allowed.has(el.symbol));
+  });
+
   /** Elemento seleccionado actualmente (o null). */
   readonly selectedElement = computed<PeriodicElement | null>(() => {
     const symbol = this.elementSymbol();
@@ -383,7 +390,9 @@ export class CompoundsComponent {
     this.errorMessage.set('');
   }
 
-  onSubmit(): void {
+  onSubmit(event?: Event): void {
+    // Evita el envío nativo del formulario (que recargaría la página).
+    event?.preventDefault();
     this.formError.set('');
 
     const validationMessage = this.validateForm();
