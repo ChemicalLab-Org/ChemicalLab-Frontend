@@ -13,6 +13,8 @@ import { CompoundResponse, CompoundType } from './models/chemistry.models';
 import {
   ANION_OPTIONS,
   AnionOption,
+  BINARY_ANION_OPTIONS,
+  BinaryAnionOption,
   OXACID_GROUP_OPTIONS,
   OxacidGroupOption,
 } from './data/compound-options';
@@ -157,7 +159,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                   (change)="onAnionChange($event)"
                 >
                   <option value="">Selecciona un anión</option>
-                  @for (a of anions; track a.symbol; let i = $index) {
+                  @for (a of currentAnions(); track a.symbol; let i = $index) {
                     <option [value]="i">
                       {{ a.anionName | titlecase }} ({{ a.symbol }}) — carga -{{ a.charge }}
                     </option>
@@ -270,7 +272,10 @@ export class CompoundsComponent {
 
   readonly compoundTypes = COMPOUND_TYPES;
   readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
-  readonly anions: readonly AnionOption[] = ANION_OPTIONS;
+  /** Aniones que forman hidrácido (selector de ácidos). */
+  readonly acidAnions: readonly AnionOption[] = ANION_OPTIONS;
+  /** Aniones monoatómicos para sales binarias (catálogo ampliado). */
+  readonly binaryAnions: readonly BinaryAnionOption[] = BINARY_ANION_OPTIONS;
   readonly groups: readonly OxacidGroupOption[] = OXACID_GROUP_OPTIONS;
 
   // ===== Estado del formulario =====
@@ -306,6 +311,14 @@ export class CompoundsComponent {
     const element = this.selectedElement();
     return element === null ? [] : valenceOptionsFor(element.symbol, element.atomicNumber);
   });
+
+  /**
+   * Aniones que muestra el selector según el tipo: los formadores de hidrácido
+   * para ácidos y el catálogo ampliado de aniones monoatómicos para sales.
+   */
+  readonly currentAnions = computed<readonly BinaryAnionOption[]>(() =>
+    this.selectedType() === 'acids' ? this.acidAnions : this.binaryAnions
+  );
 
   // ===== Campos requeridos según el tipo =====
   readonly needsElement = computed<boolean>(() => this.selectedType() !== 'acids');
@@ -438,7 +451,7 @@ export class CompoundsComponent {
     const type = this.selectedType();
 
     if (type === 'acids') {
-      return this.selectedAnion() === null ? 'Selecciona el anión o no metal.' : null;
+      return this.selectedAcidAnion() === null ? 'Selecciona el anión o no metal.' : null;
     }
 
     // Resto de tipos requieren elemento + valencia
@@ -452,7 +465,7 @@ export class CompoundsComponent {
         : 'Ingresa una valencia para el elemento.';
     }
 
-    if (type === 'salts' && this.selectedAnion() === null) {
+    if (type === 'salts' && this.selectedBinaryAnion() === null) {
       return 'Selecciona el anión o no metal.';
     }
     if (type === 'oxisalts' && this.selectedGroup() === null) {
@@ -483,7 +496,7 @@ export class CompoundsComponent {
     }
 
     if (type === 'acids') {
-      const anion = this.selectedAnion();
+      const anion = this.selectedAcidAnion();
       if (anion === null) {
         return null;
       }
@@ -498,7 +511,7 @@ export class CompoundsComponent {
     if (type === 'salts') {
       const element = this.selectedElement();
       const valence = this.valence();
-      const anion = this.selectedAnion();
+      const anion = this.selectedBinaryAnion();
       if (element === null || valence === null || valence.value < 1 || anion === null) {
         return null;
       }
@@ -529,9 +542,14 @@ export class CompoundsComponent {
     });
   }
 
-  private selectedAnion(): AnionOption | null {
+  private selectedAcidAnion(): AnionOption | null {
     const i = this.anionIndex();
-    return i === null ? null : this.anions[i] ?? null;
+    return i === null ? null : this.acidAnions[i] ?? null;
+  }
+
+  private selectedBinaryAnion(): BinaryAnionOption | null {
+    const i = this.anionIndex();
+    return i === null ? null : this.binaryAnions[i] ?? null;
   }
 
   private selectedGroup(): OxacidGroupOption | null {
