@@ -257,6 +257,38 @@ export const ELEMENT_DETAILS: Readonly<Record<number, ElementDetail>> = {
   },
 };
 
+/** Valencia disponible de un elemento, lista para mostrarse y enviarse. */
+export interface ValenceOption {
+  /** Etiqueta tal como aparece en los datos (p. ej. "+1", "-2"). */
+  readonly label: string;
+  /** Valor absoluto numérico que espera el motor químico (p. ej. 1, 2). */
+  readonly value: number;
+}
+
+/**
+ * Valencias registradas para un elemento, derivadas del campo `valence` de
+ * `ELEMENT_DETAILS`. El campo es un texto como "+1" o "+2,+3"; aquí se separa
+ * en opciones individuales. Si el elemento no tiene valencias registradas
+ * devuelve una lista vacía. No se inventan valencias: solo se usan los datos
+ * existentes.
+ */
+export function valencesForElement(atomicNumber: number): readonly ValenceOption[] {
+  const raw = ELEMENT_DETAILS[atomicNumber]?.valence;
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(',')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+    .map((token) => {
+      const digits = token.replace(/[^0-9]/g, '');
+      const value = digits === '' ? 0 : Number.parseInt(digits, 10);
+      return { label: token, value } satisfies ValenceOption;
+    })
+    .filter((option) => option.value > 0);
+}
+
 /**
  * Capacidad máxima de electrones por nivel de energía (regla 2n²): K, L, M…
  * Se usa solo para una representación visual esquemática del átomo.

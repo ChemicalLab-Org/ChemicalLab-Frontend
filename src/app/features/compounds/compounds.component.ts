@@ -5,7 +5,12 @@ import { TitleCasePipe } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { UserRole } from '../../shared/models';
-import { PERIODIC_ELEMENTS, PeriodicElement } from '../periodic-table/data/elements-data';
+import {
+  PERIODIC_ELEMENTS,
+  PeriodicElement,
+  ValenceOption,
+  valencesForElement,
+} from '../periodic-table/data/elements-data';
 import { ChemicalEngineService } from './services/chemical-engine.service';
 import { CompoundResponse, CompoundType } from './models/chemistry.models';
 import {
@@ -106,19 +111,40 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                 </select>
               </div>
 
-              <div class="field">
-                <label class="form-label" for="valence-input">{{ valenceLabel() }}</label>
-                <input
-                  id="valence-input"
-                  class="input"
-                  type="number"
-                  min="1"
-                  max="7"
-                  placeholder="Ej. 2"
-                  [value]="valence() ?? ''"
-                  (input)="onValenceInput($event)"
-                />
-              </div>
+              @if (selectedElement()) {
+                <div class="field">
+                  <label class="form-label">{{ valenceLabel() }}</label>
+                  @if (availableValences().length > 0) {
+                    <div class="valence-pills" role="group" [attr.aria-label]="valenceLabel()">
+                      @for (v of availableValences(); track v.label) {
+                        <button
+                          type="button"
+                          class="valence-pill"
+                          [class.valence-pill--active]="valence() === v.value"
+                          (click)="selectValence(v.value)"
+                        >
+                          {{ v.label }}
+                        </button>
+                      }
+                    </div>
+                  } @else {
+                    <input
+                      id="valence-input"
+                      class="input"
+                      type="number"
+                      min="1"
+                      max="7"
+                      placeholder="Ej. 2"
+                      [value]="valence() ?? ''"
+                      (input)="onValenceInput($event)"
+                    />
+                    <p class="form-hint">
+                      No hay valencias registradas para este elemento. Ingresa una valencia
+                      manualmente.
+                    </p>
+                  }
+                </div>
+              }
             }
 
             <!-- Anión (ácidos y sales binarias) -->
@@ -262,6 +288,21 @@ export class CompoundsComponent {
   readonly result = signal<CompoundResponse | null>(null);
   readonly errorMessage = signal<string>('');
 
+  /** Elemento seleccionado actualmente (o null). */
+  readonly selectedElement = computed<PeriodicElement | null>(() => {
+    const symbol = this.elementSymbol();
+    if (symbol === '') {
+      return null;
+    }
+    return this.elements.find((el) => el.symbol === symbol) ?? null;
+  });
+
+  /** Valencias registradas del elemento seleccionado (vacío si no hay datos). */
+  readonly availableValences = computed<readonly ValenceOption[]>(() => {
+    const element = this.selectedElement();
+    return element === null ? [] : valencesForElement(element.atomicNumber);
+  });
+
   // ===== Campos requeridos según el tipo =====
   readonly needsElement = computed<boolean>(() => this.selectedType() !== 'acids');
   readonly needsAnion = computed<boolean>(
@@ -304,6 +345,13 @@ export class CompoundsComponent {
 
   onElementChange(event: Event): void {
     this.elementSymbol.set((event.target as HTMLSelectElement).value);
+    // Si el elemento tiene una única valencia registrada, se selecciona sola.
+    const valences = this.availableValences();
+    this.valence.set(valences.length === 1 ? valences[0].value : null);
+  }
+
+  selectValence(value: number): void {
+    this.valence.set(value);
   }
 
   onValenceInput(event: Event): void {
@@ -335,6 +383,12 @@ export class CompoundsComponent {
   onSubmit(): void {
     this.formError.set('');
 
+    const validationMessage = this.validateForm();
+    if (validationMessage !== null) {
+      this.formError.set(validationMessage);
+      return;
+    }
+
     const request$ = this.buildRequest();
     if (request$ === null) {
       this.formError.set('Completa los datos necesarios para formar el compuesto.');
@@ -362,6 +416,36 @@ export class CompoundsComponent {
         this.errorMessage.set(this.extractError(error));
       },
     });
+  }
+
+  /**
+   * Valida los datos del formulario según el tipo de compuesto y devuelve un
+   * mensaje claro si falta algo, o null si todo está completo.
+   */
+  private validateForm(): string | null {
+    const type = this.selectedType();
+
+    if (type === 'acids') {
+      return this.selectedAnion() === null ? 'Selecciona el anión o no metal.' : null;
+    }
+
+    // Resto de tipos requieren elemento + valencia
+    if (this.selectedElement() === null) {
+      return 'Selecciona un elemento.';
+    }
+    const valence = this.valence();
+    if (valence === null || valence < 1) {
+      return 'Selecciona una valencia para el elemento.';
+    }
+
+    if (type === 'salts' && this.selectedAnion() === null) {
+      return 'Selecciona el anión o no metal.';
+    }
+    if (type === 'oxisalts' && this.selectedGroup() === null) {
+      return 'Selecciona un grupo oxácido.';
+    }
+
+    return null;
   }
 
   /** Construye y devuelve la llamada al motor químico, o null si faltan datos. */
@@ -429,14 +513,6 @@ export class CompoundsComponent {
       groupName: group.name,
       groupCharge: group.charge,
     });
-  }
-
-  private selectedElement(): PeriodicElement | null {
-    const symbol = this.elementSymbol();
-    if (symbol === '') {
-      return null;
-    }
-    return this.elements.find((el) => el.symbol === symbol) ?? null;
   }
 
   private selectedAnion(): AnionOption | null {

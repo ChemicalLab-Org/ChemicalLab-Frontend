@@ -146,6 +146,37 @@
   gap: 6px;
 }
 
+.valence-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.valence-pill {
+  min-width: 48px;
+  padding: 8px 16px;
+  border: 1.5px solid var(--color-neutral-300);
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-0);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-neutral-700);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base),
+    color var(--transition-base);
+
+  &:hover {
+    border-color: var(--color-primary-400, var(--color-primary-500));
+  }
+
+  &--active {
+    border-color: var(--color-primary-600);
+    background: var(--color-primary-600);
+    color: var(--color-neutral-0);
+  }
+}
+
 .cmp-actions {
   display: flex;
   flex-direction: column;
