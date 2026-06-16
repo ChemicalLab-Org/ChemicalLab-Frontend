@@ -5,12 +5,8 @@ import { TitleCasePipe } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { UserRole } from '../../shared/models';
-import {
-  PERIODIC_ELEMENTS,
-  PeriodicElement,
-  ValenceOption,
-  valencesForElement,
-} from '../periodic-table/data/elements-data';
+import { PERIODIC_ELEMENTS, PeriodicElement } from '../periodic-table/data/elements-data';
+import { ValenceOption, valenceOptionsFor } from './data/common-valences';
 import { ChemicalEngineService } from './services/chemical-engine.service';
 import { CompoundResponse, CompoundType } from './models/chemistry.models';
 import {
@@ -120,8 +116,8 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                         <button
                           type="button"
                           class="valence-pill"
-                          [class.valence-pill--active]="valence() === v.value"
-                          (click)="selectValence(v.value)"
+                          [class.valence-pill--active]="valence()?.label === v.label"
+                          (click)="selectValence(v)"
                         >
                           {{ v.label }}
                         </button>
@@ -135,7 +131,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                       min="1"
                       max="7"
                       placeholder="Ej. 2"
-                      [value]="valence() ?? ''"
+                      [value]="valence()?.value ?? ''"
                       (input)="onValenceInput($event)"
                     />
                     <p class="form-hint">
@@ -279,7 +275,8 @@ export class CompoundsComponent {
   // ===== Estado del formulario =====
   readonly selectedType = signal<CompoundType>('oxides');
   readonly elementSymbol = signal<string>('');
-  readonly valence = signal<number | null>(null);
+  /** Valencia seleccionada (de pill o ingresada manualmente), o null. */
+  readonly valence = signal<ValenceOption | null>(null);
   readonly anionIndex = signal<number | null>(null);
   readonly groupIndex = signal<number | null>(null);
 
@@ -297,10 +294,10 @@ export class CompoundsComponent {
     return this.elements.find((el) => el.symbol === symbol) ?? null;
   });
 
-  /** Valencias registradas del elemento seleccionado (vacío si no hay datos). */
+  /** Valencias disponibles del elemento seleccionado (vacío si no hay datos). */
   readonly availableValences = computed<readonly ValenceOption[]>(() => {
     const element = this.selectedElement();
-    return element === null ? [] : valencesForElement(element.atomicNumber);
+    return element === null ? [] : valenceOptionsFor(element.symbol, element.atomicNumber);
   });
 
   // ===== Campos requeridos según el tipo =====
@@ -345,18 +342,24 @@ export class CompoundsComponent {
 
   onElementChange(event: Event): void {
     this.elementSymbol.set((event.target as HTMLSelectElement).value);
-    // Si el elemento tiene una única valencia registrada, se selecciona sola.
+    // Si el elemento tiene una única valencia disponible, se selecciona sola.
     const valences = this.availableValences();
-    this.valence.set(valences.length === 1 ? valences[0].value : null);
+    this.valence.set(valences.length === 1 ? valences[0] : null);
   }
 
-  selectValence(value: number): void {
-    this.valence.set(value);
+  selectValence(option: ValenceOption): void {
+    this.valence.set(option);
   }
 
   onValenceInput(event: Event): void {
     const raw = (event.target as HTMLInputElement).value;
-    this.valence.set(raw === '' ? null : Number(raw));
+    if (raw === '') {
+      this.valence.set(null);
+      return;
+    }
+    const value = Number(raw);
+    // El backend exige un entero positivo; se guarda el valor absoluto.
+    this.valence.set({ label: raw, value, signedValue: value });
   }
 
   onAnionChange(event: Event): void {
@@ -434,8 +437,10 @@ export class CompoundsComponent {
       return 'Selecciona un elemento.';
     }
     const valence = this.valence();
-    if (valence === null || valence < 1) {
-      return 'Selecciona una valencia para el elemento.';
+    if (valence === null || valence.value < 1) {
+      return this.availableValences().length > 0
+        ? 'Selecciona una valencia para el elemento.'
+        : 'Ingresa una valencia para el elemento.';
     }
 
     if (type === 'salts' && this.selectedAnion() === null) {
@@ -455,13 +460,13 @@ export class CompoundsComponent {
     if (type === 'oxides' || type === 'hydroxides') {
       const element = this.selectedElement();
       const valence = this.valence();
-      if (element === null || valence === null || valence < 1) {
+      if (element === null || valence === null || valence.value < 1) {
         return null;
       }
       const request = {
         elementSymbol: element.symbol,
         elementName: element.name.toLowerCase(),
-        valence,
+        valence: valence.value,
       };
       return type === 'oxides'
         ? this.engine.generateOxide(request)
@@ -485,13 +490,13 @@ export class CompoundsComponent {
       const element = this.selectedElement();
       const valence = this.valence();
       const anion = this.selectedAnion();
-      if (element === null || valence === null || valence < 1 || anion === null) {
+      if (element === null || valence === null || valence.value < 1 || anion === null) {
         return null;
       }
       return this.engine.generateSalt({
         metalSymbol: element.symbol,
         metalName: element.name.toLowerCase(),
-        metalValence: valence,
+        metalValence: valence.value,
         nonMetalSymbol: anion.symbol,
         anionName: anion.anionName,
         anionCharge: anion.charge,
@@ -502,13 +507,13 @@ export class CompoundsComponent {
     const element = this.selectedElement();
     const valence = this.valence();
     const group = this.selectedGroup();
-    if (element === null || valence === null || valence < 1 || group === null) {
+    if (element === null || valence === null || valence.value < 1 || group === null) {
       return null;
     }
     return this.engine.generateOxisalt({
       metalSymbol: element.symbol,
       metalName: element.name.toLowerCase(),
-      metalValence: valence,
+      metalValence: valence.value,
       groupFormula: group.formula,
       groupName: group.name,
       groupCharge: group.charge,
