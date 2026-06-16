@@ -297,6 +297,18 @@
   }
 }
 
+// Botón de texto para reintentar la carga de catálogos dentro de una alerta.
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 @keyframes cmp-spin {
   to {
     transform: rotate(360deg);

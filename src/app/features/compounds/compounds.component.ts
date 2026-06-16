@@ -2,22 +2,25 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TitleCasePipe } from '@angular/common';
+import { forkJoin } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { UserRole } from '../../shared/models';
 import { PERIODIC_ELEMENTS, PeriodicElement } from '../periodic-table/data/elements-data';
-import { ValenceOption, valenceOptionsFor } from './data/common-valences';
+import { valenceOptionsFor } from './data/common-valences';
 import { allowedElementSymbols } from './data/compound-element-rules';
 import { ChemicalEngineService } from './services/chemical-engine.service';
-import { CompoundResponse, CompoundType } from './models/chemistry.models';
+import { ChemistryCatalogService } from './services/chemistry-catalog.service';
 import {
-  ANION_OPTIONS,
-  AnionOption,
-  BINARY_ANION_OPTIONS,
-  BinaryAnionOption,
-  OXACID_GROUP_OPTIONS,
-  OxacidGroupOption,
-} from './data/compound-options';
+  AcidNonMetalItem,
+  AcidType,
+  BinaryNonMetalItem,
+  CentralElementItem,
+  CompoundResponse,
+  CompoundType,
+  MetalCatalogItem,
+  OxoanionItem,
+} from './models/chemistry.models';
 
 /** Metadatos visuales de cada tipo de compuesto (orden del diseño). */
 interface CompoundTypeMeta {
@@ -38,6 +41,13 @@ const COMPOUND_TYPES: readonly CompoundTypeMeta[] = [
 ];
 
 type FormStatus = 'idle' | 'loading' | 'success' | 'error';
+type CatalogStatus = 'loading' | 'ready' | 'error';
+
+/** Opción simple de elemento para el selector (símbolo + nombre). */
+interface ElementChoice {
+  readonly symbol: string;
+  readonly name: string;
+}
 
 @Component({
   selector: 'app-compounds',
@@ -93,10 +103,50 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
               </p>
             </div>
 
+            @if (catalogStatus() === 'loading') {
+              <div class="alert" role="status">
+                <span class="material-icons">cloud_download</span>
+                <span>Cargando catálogos del motor químico…</span>
+              </div>
+            } @else if (catalogStatus() === 'error') {
+              <div class="alert alert-danger" role="alert">
+                <span class="material-icons">error_outline</span>
+                <span>
+                  No se pudieron cargar los catálogos del motor químico.
+                  <button type="button" class="link-btn" (click)="loadCatalogs()">Reintentar</button>
+                </span>
+              </div>
+            } @else {
+
+            <!-- Tipo de ácido (hidrácido / oxácido) -->
+            @if (selectedType() === 'acids') {
+              <div class="field">
+                <label class="form-label">Tipo de ácido</label>
+                <div class="valence-pills" role="group" aria-label="Tipo de ácido">
+                  <button
+                    type="button"
+                    class="valence-pill"
+                    [class.valence-pill--active]="acidType() === 'HYDRACID'"
+                    (click)="selectAcidType('HYDRACID')"
+                  >
+                    Hidrácido
+                  </button>
+                  <button
+                    type="button"
+                    class="valence-pill"
+                    [class.valence-pill--active]="acidType() === 'OXOACID'"
+                    (click)="selectAcidType('OXOACID')"
+                  >
+                    Oxácido
+                  </button>
+                </div>
+              </div>
+            }
+
             <!-- Elemento / metal (óxidos, hidróxidos, sales, oxisales) -->
             @if (needsElement()) {
               <div class="field">
-                <label class="form-label" [attr.for]="'element-select'">{{ elementLabel() }}</label>
+                <label class="form-label" for="element-select">{{ elementLabel() }}</label>
                 <select
                   id="element-select"
                   class="select"
@@ -104,25 +154,25 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                   (change)="onElementChange($event)"
                 >
                   <option value="">Selecciona un elemento</option>
-                  @for (el of availableElements(); track el.atomicNumber) {
-                    <option [value]="el.symbol">{{ el.symbol }} — {{ el.name }}</option>
+                  @for (el of availableElements(); track el.symbol) {
+                    <option [value]="el.symbol">{{ el.symbol }} — {{ el.name | titlecase }}</option>
                   }
                 </select>
               </div>
 
-              @if (selectedElement()) {
+              @if (elementSymbol() !== '') {
                 <div class="field">
                   <label class="form-label">{{ valenceLabel() }}</label>
                   @if (availableValences().length > 0) {
                     <div class="valence-pills" role="group" [attr.aria-label]="valenceLabel()">
-                      @for (v of availableValences(); track v.label) {
+                      @for (v of availableValences(); track v) {
                         <button
                           type="button"
                           class="valence-pill"
-                          [class.valence-pill--active]="valence()?.label === v.label"
+                          [class.valence-pill--active]="valence() === v"
                           (click)="selectValence(v)"
                         >
-                          {{ v.label }}
+                          +{{ v }}
                         </button>
                       }
                     </div>
@@ -134,7 +184,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                       min="1"
                       max="7"
                       placeholder="Ej. 2"
-                      [value]="valence()?.value ?? ''"
+                      [value]="valence() ?? ''"
                       (input)="onValenceInput($event)"
                     />
                     <p class="form-hint">
@@ -146,8 +196,8 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
               }
             }
 
-            <!-- No metal + carga (ácidos hidrácidos: Hidrógeno + No metal) -->
-            @if (selectedType() === 'acids') {
+            <!-- No metal + carga (ácidos hidrácidos) -->
+            @if (selectedType() === 'acids' && acidType() === 'HYDRACID') {
               <div class="field">
                 <label class="form-label" for="acid-nonmetal-select">No metal</label>
                 <select
@@ -157,33 +207,26 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                   (change)="onAcidNonMetalChange($event)"
                 >
                   <option value="">Selecciona un no metal</option>
-                  @for (a of acidAnions; track a.symbol) {
-                    <option [value]="a.symbol">{{ a.symbol }} — {{ elementNameOf(a.symbol) | titlecase }}</option>
+                  @for (a of acidNonMetals(); track a.symbol) {
+                    <option [value]="a.symbol">{{ a.symbol }} — {{ a.name | titlecase }}</option>
                   }
                 </select>
               </div>
 
-              @if (selectedAcidAnion(); as a) {
+              @if (selectedAcidNonMetal(); as a) {
                 <div class="field">
                   <label class="form-label">Carga del no metal</label>
                   <div class="valence-pills" role="group" aria-label="Carga del no metal">
-                    @for (c of acidNonMetalCharges(); track c) {
-                      <button
-                        type="button"
-                        class="valence-pill"
-                        [class.valence-pill--active]="acidNonMetalCharge() === c"
-                        (click)="selectAcidNonMetalCharge(c)"
-                      >
-                        -{{ c }}
-                      </button>
-                    }
+                    <button type="button" class="valence-pill valence-pill--active" disabled>
+                      -{{ a.charge }}
+                    </button>
                   </div>
                 </div>
               }
             }
 
             <!-- No metal + carga (sales binarias) -->
-            @if (selectedType() === 'salts' && selectedElement() && valence()) {
+            @if (selectedType() === 'salts' && elementSymbol() !== '' && valence() !== null) {
               <div class="field">
                 <label class="form-label" for="nonmetal-select">No metal</label>
                 <select
@@ -193,8 +236,8 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                   (change)="onNonMetalChange($event)"
                 >
                   <option value="">Selecciona un no metal</option>
-                  @for (nm of binaryNonMetals; track nm.symbol) {
-                    <option [value]="nm.symbol">{{ nm.symbol }} — {{ elementNameOf(nm.symbol) | titlecase }}</option>
+                  @for (nm of binaryNonMetals(); track nm.symbol) {
+                    <option [value]="nm.symbol">{{ nm.symbol }} — {{ nm.name | titlecase }}</option>
                   }
                 </select>
               </div>
@@ -203,23 +246,16 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                 <div class="field">
                   <label class="form-label">Carga del no metal</label>
                   <div class="valence-pills" role="group" aria-label="Carga del no metal">
-                    @for (c of nonMetalCharges(); track c) {
-                      <button
-                        type="button"
-                        class="valence-pill"
-                        [class.valence-pill--active]="nonMetalCharge() === c"
-                        (click)="selectNonMetalCharge(c)"
-                      >
-                        -{{ c }}
-                      </button>
-                    }
+                    <button type="button" class="valence-pill valence-pill--active" disabled>
+                      -{{ nm.charge }}
+                    </button>
                   </div>
                 </div>
               }
             }
 
-            <!-- Elemento central + grupo oxácido (oxisales) -->
-            @if (selectedType() === 'oxisalts' && selectedElement() && valence()) {
+            <!-- Elemento central + grupo oxácido (oxisales y oxácidos) -->
+            @if (needsOxoanion()) {
               <div class="field">
                 <label class="form-label" for="central-select">Elemento central del grupo oxácido</label>
                 <select
@@ -229,7 +265,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                   (change)="onCentralChange($event)"
                 >
                   <option value="">Selecciona un elemento central</option>
-                  @for (c of centralOptions(); track c.symbol) {
+                  @for (c of centralElements(); track c.symbol) {
                     <option [value]="c.symbol">{{ c.symbol }} — {{ c.name | titlecase }}</option>
                   }
                 </select>
@@ -241,12 +277,12 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                   <select
                     id="group-select"
                     class="select"
-                    [value]="groupFormula()"
+                    [value]="oxoanionKey()"
                     (change)="onGroupChange($event)"
                   >
                     <option value="">Selecciona un grupo</option>
-                    @for (g of groupsForCentral(); track g.formula) {
-                      <option [value]="g.formula">
+                    @for (g of groupsForCentral(); track g.key) {
+                      <option [value]="g.key">
                         {{ g.name | titlecase }} ({{ g.formula }}) — carga -{{ g.charge }}
                       </option>
                     }
@@ -266,7 +302,7 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
               <button
                 type="submit"
                 class="btn btn-primary btn-lg cmp-actions__primary"
-                [disabled]="status() === 'loading'"
+                [disabled]="status() === 'loading' || catalogStatus() !== 'ready'"
               >
                 @if (status() === 'loading') {
                   Formando…
@@ -278,6 +314,8 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
                 Nuevo intento
               </button>
             </div>
+
+            }
           </form>
 
           <!-- ===== Resultado ===== -->
@@ -336,103 +374,153 @@ export class CompoundsComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly engine = inject(ChemicalEngineService);
+  private readonly catalog = inject(ChemistryCatalogService);
 
   readonly compoundTypes = COMPOUND_TYPES;
-  readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
-  /** Aniones que forman hidrácido (selector de ácidos). */
-  readonly acidAnions: readonly AnionOption[] = ANION_OPTIONS;
-  /** Aniones monoatómicos para sales binarias (catálogo ampliado). */
-  readonly binaryAnions: readonly BinaryAnionOption[] = BINARY_ANION_OPTIONS;
-  /** No metales seleccionables en sales binarias (mismo catálogo de aniones). */
-  readonly binaryNonMetals: readonly BinaryAnionOption[] = BINARY_ANION_OPTIONS;
-  readonly groups: readonly OxacidGroupOption[] = OXACID_GROUP_OPTIONS;
+  private readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
+
+  // ===== Catálogos del backend (fuente de verdad) =====
+  readonly catalogStatus = signal<CatalogStatus>('loading');
+  readonly metals = signal<readonly MetalCatalogItem[]>([]);
+  readonly binaryNonMetals = signal<readonly BinaryNonMetalItem[]>([]);
+  readonly acidNonMetals = signal<readonly AcidNonMetalItem[]>([]);
+  readonly centralElements = signal<readonly CentralElementItem[]>([]);
+  readonly oxoanions = signal<readonly OxoanionItem[]>([]);
 
   // ===== Estado del formulario =====
   readonly selectedType = signal<CompoundType>('oxides');
   readonly elementSymbol = signal<string>('');
-  /** Valencia seleccionada (de pill o ingresada manualmente), o null. */
-  readonly valence = signal<ValenceOption | null>(null);
+  /** Valencia positiva seleccionada (o ingresada manualmente en óxidos), o null. */
+  readonly valence = signal<number | null>(null);
+  /** Tipo de ácido elegido (solo aplica al tipo «acids»). */
+  readonly acidType = signal<AcidType>('HYDRACID');
   /** No metal elegido para ácidos hidrácidos (símbolo), o cadena vacía. */
   readonly acidNonMetalSymbol = signal<string>('');
-  /** Carga negativa elegida del no metal del ácido, o null. */
-  readonly acidNonMetalCharge = signal<number | null>(null);
   /** No metal elegido para sales binarias (símbolo), o cadena vacía. */
   readonly nonMetalSymbol = signal<string>('');
-  /** Carga negativa elegida del no metal de sales binarias, o null. */
-  readonly nonMetalCharge = signal<number | null>(null);
-  /** Elemento central elegido para oxisales (símbolo), o cadena vacía. */
+  /** Elemento central elegido para oxisales/oxácidos (símbolo), o cadena vacía. */
   readonly centralSymbol = signal<string>('');
-  /** Grupo oxácido elegido para oxisales (fórmula), o cadena vacía. */
-  readonly groupFormula = signal<string>('');
+  /** Clave del oxoanión elegido para oxisales/oxácidos, o cadena vacía. */
+  readonly oxoanionKey = signal<string>('');
 
   readonly formError = signal<string>('');
   readonly status = signal<FormStatus>('idle');
   readonly result = signal<CompoundResponse | null>(null);
   readonly errorMessage = signal<string>('');
 
-  /** Elementos disponibles en el selector según el tipo de compuesto. */
-  readonly availableElements = computed<readonly PeriodicElement[]>(() => {
-    const allowed = new Set(allowedElementSymbols(this.selectedType()));
-    return this.elements.filter((el) => allowed.has(el.symbol));
+  constructor() {
+    this.loadCatalogs();
+  }
+
+  /** Carga todos los catálogos del backend en paralelo. */
+  loadCatalogs(): void {
+    this.catalogStatus.set('loading');
+    forkJoin({
+      metals: this.catalog.metals(),
+      binaryNonMetals: this.catalog.binaryNonMetals(),
+      acidNonMetals: this.catalog.acidNonMetals(),
+      centralElements: this.catalog.oxoanionCentralElements(),
+      oxoanions: this.catalog.oxoanions(),
+    }).subscribe({
+      next: (data) => {
+        this.metals.set(data.metals);
+        this.binaryNonMetals.set(data.binaryNonMetals);
+        this.acidNonMetals.set(data.acidNonMetals);
+        this.centralElements.set(data.centralElements);
+        this.oxoanions.set(data.oxoanions);
+        this.catalogStatus.set('ready');
+      },
+      error: () => this.catalogStatus.set('error'),
+    });
+  }
+
+  // ===== Elemento / metal según el tipo =====
+
+  /** Indica si el tipo actual usa metales del catálogo del backend. */
+  private readonly isMetalType = computed<boolean>(() => {
+    const type = this.selectedType();
+    return type === 'hydroxides' || type === 'salts' || type === 'oxisalts';
   });
 
-  /** Elemento seleccionado actualmente (o null). */
-  readonly selectedElement = computed<PeriodicElement | null>(() => {
+  /**
+   * Elementos disponibles en el selector. Para óxidos se usan los elementos
+   * locales con valencias (incluye no metales); para hidróxidos, sales y
+   * oxisales se usan los metales del catálogo del backend.
+   */
+  readonly availableElements = computed<readonly ElementChoice[]>(() => {
+    if (this.isMetalType()) {
+      return this.metals().map((m) => ({ symbol: m.symbol, name: m.name }));
+    }
+    if (this.selectedType() === 'oxides') {
+      const allowed = new Set(allowedElementSymbols('oxides'));
+      return this.elements
+        .filter((el) => allowed.has(el.symbol))
+        .map((el) => ({ symbol: el.symbol, name: el.name }));
+    }
+    return [];
+  });
+
+  /** Nombre del elemento/metal seleccionado (del catálogo correspondiente). */
+  readonly selectedElementName = computed<string>(() => {
+    const symbol = this.elementSymbol();
+    return this.availableElements().find((el) => el.symbol === symbol)?.name ?? symbol;
+  });
+
+  /** Metal del catálogo seleccionado (solo para tipos con metal), o null. */
+  private readonly selectedMetal = computed<MetalCatalogItem | null>(
+    () => this.metals().find((m) => m.symbol === this.elementSymbol()) ?? null
+  );
+
+  /** Valencias positivas disponibles del elemento/metal seleccionado. */
+  readonly availableValences = computed<readonly number[]>(() => {
     const symbol = this.elementSymbol();
     if (symbol === '') {
-      return null;
+      return [];
     }
-    return this.elements.find((el) => el.symbol === symbol) ?? null;
-  });
-
-  /** Valencias disponibles del elemento seleccionado (vacío si no hay datos). */
-  readonly availableValences = computed<readonly ValenceOption[]>(() => {
-    const element = this.selectedElement();
-    return element === null ? [] : valenceOptionsFor(element.symbol, element.atomicNumber);
-  });
-
-  // ===== Ácidos hidrácidos: no metal + carga =====
-  /** No metal seleccionado del catálogo de ácidos (o null). */
-  readonly selectedAcidAnion = computed<AnionOption | null>(
-    () => this.acidAnions.find((a) => a.symbol === this.acidNonMetalSymbol()) ?? null
-  );
-  /** Cargas negativas disponibles del no metal del ácido (una en el MVP). */
-  readonly acidNonMetalCharges = computed<readonly number[]>(() => {
-    const anion = this.selectedAcidAnion();
-    return anion === null ? [] : [anion.charge];
-  });
-
-  // ===== Sales binarias: no metal + carga =====
-  /** No metal seleccionado del catálogo de sales binarias (o null). */
-  readonly selectedNonMetal = computed<BinaryAnionOption | null>(
-    () => this.binaryAnions.find((a) => a.symbol === this.nonMetalSymbol()) ?? null
-  );
-  /** Cargas negativas disponibles del no metal (una por no metal en el MVP). */
-  readonly nonMetalCharges = computed<readonly number[]>(() => {
-    const nonMetal = this.selectedNonMetal();
-    return nonMetal === null ? [] : [nonMetal.charge];
-  });
-
-  // ===== Oxisales: elemento central + grupo oxácido =====
-  /** Elementos centrales disponibles, en el orden del catálogo, con su nombre. */
-  readonly centralOptions = computed<readonly { symbol: string; name: string }[]>(() => {
-    const seen = new Set<string>();
-    const options: { symbol: string; name: string }[] = [];
-    for (const group of this.groups) {
-      if (!seen.has(group.central)) {
-        seen.add(group.central);
-        options.push({ symbol: group.central, name: this.elementNameOf(group.central) });
+    if (this.isMetalType()) {
+      return this.selectedMetal()?.valences ?? [];
+    }
+    // Óxidos: valencias positivas del catálogo local, sin repetir.
+    const element = this.elements.find((el) => el.symbol === symbol);
+    if (element === undefined) {
+      return [];
+    }
+    const seen = new Set<number>();
+    const values: number[] = [];
+    for (const option of valenceOptionsFor(element.symbol, element.atomicNumber)) {
+      if (option.value > 0 && !seen.has(option.value)) {
+        seen.add(option.value);
+        values.push(option.value);
       }
     }
-    return options;
+    return values;
+  });
+
+  // ===== Ácidos hidrácidos =====
+  readonly selectedAcidNonMetal = computed<AcidNonMetalItem | null>(
+    () => this.acidNonMetals().find((a) => a.symbol === this.acidNonMetalSymbol()) ?? null
+  );
+
+  // ===== Sales binarias =====
+  readonly selectedNonMetal = computed<BinaryNonMetalItem | null>(
+    () => this.binaryNonMetals().find((nm) => nm.symbol === this.nonMetalSymbol()) ?? null
+  );
+
+  // ===== Oxisales / oxácidos: elemento central + grupo =====
+  /** Indica si el flujo actual necesita elegir un oxoanión. */
+  readonly needsOxoanion = computed<boolean>(() => {
+    if (this.selectedType() === 'oxisalts') {
+      return this.elementSymbol() !== '' && this.valence() !== null;
+    }
+    return this.selectedType() === 'acids' && this.acidType() === 'OXOACID';
   });
   /** Grupos oxácidos del elemento central seleccionado. */
-  readonly groupsForCentral = computed<readonly OxacidGroupOption[]>(() =>
-    this.groups.filter((g) => g.central === this.centralSymbol())
+  readonly groupsForCentral = computed<readonly OxoanionItem[]>(() =>
+    this.oxoanions().filter((g) => g.centralElement === this.centralSymbol())
   );
-  /** Grupo oxácido seleccionado por su fórmula (o null). */
-  readonly selectedGroup = computed<OxacidGroupOption | null>(
-    () => this.groups.find((g) => g.formula === this.groupFormula()) ?? null
+  /** Oxoanión seleccionado por su clave, o null. */
+  readonly selectedOxoanion = computed<OxoanionItem | null>(
+    () => this.oxoanions().find((g) => g.key === this.oxoanionKey()) ?? null
   );
 
   // ===== Campos requeridos según el tipo =====
@@ -471,73 +559,66 @@ export class CompoundsComponent {
     this.resetForm();
   }
 
+  selectAcidType(type: AcidType): void {
+    if (type === this.acidType()) {
+      return;
+    }
+    this.acidType.set(type);
+    // Limpia las selecciones del otro sub-flujo de ácido.
+    this.acidNonMetalSymbol.set('');
+    this.centralSymbol.set('');
+    this.oxoanionKey.set('');
+    this.formError.set('');
+  }
+
   onElementChange(event: Event): void {
     this.elementSymbol.set((event.target as HTMLSelectElement).value);
     // Si el elemento tiene una única valencia disponible, se selecciona sola.
     const valences = this.availableValences();
     this.valence.set(valences.length === 1 ? valences[0] : null);
+    // Reinicia las selecciones dependientes del metal/valencia.
+    this.nonMetalSymbol.set('');
+    this.centralSymbol.set('');
+    this.oxoanionKey.set('');
   }
 
-  selectValence(option: ValenceOption): void {
-    this.valence.set(option);
+  selectValence(value: number): void {
+    this.valence.set(value);
   }
 
   onValenceInput(event: Event): void {
     const raw = (event.target as HTMLInputElement).value;
-    if (raw === '') {
-      this.valence.set(null);
-      return;
-    }
-    const value = Number(raw);
-    // El backend exige un entero positivo; se guarda el valor absoluto.
-    this.valence.set({ label: raw, value, signedValue: value });
+    this.valence.set(raw === '' ? null : Math.abs(Number(raw)));
   }
 
   onAcidNonMetalChange(event: Event): void {
-    const symbol = (event.target as HTMLSelectElement).value;
-    this.acidNonMetalSymbol.set(symbol);
-    // Cada no metal forma su hidrácido con una sola carga negativa: se selecciona sola.
-    const anion = this.acidAnions.find((a) => a.symbol === symbol) ?? null;
-    this.acidNonMetalCharge.set(anion === null ? null : anion.charge);
-  }
-
-  selectAcidNonMetalCharge(charge: number): void {
-    this.acidNonMetalCharge.set(charge);
+    this.acidNonMetalSymbol.set((event.target as HTMLSelectElement).value);
   }
 
   onNonMetalChange(event: Event): void {
-    const symbol = (event.target as HTMLSelectElement).value;
-    this.nonMetalSymbol.set(symbol);
-    // Cada no metal tiene una sola carga negativa para sal binaria: se selecciona sola.
-    const nonMetal = this.binaryAnions.find((a) => a.symbol === symbol) ?? null;
-    this.nonMetalCharge.set(nonMetal === null ? null : nonMetal.charge);
-  }
-
-  selectNonMetalCharge(charge: number): void {
-    this.nonMetalCharge.set(charge);
+    this.nonMetalSymbol.set((event.target as HTMLSelectElement).value);
   }
 
   onCentralChange(event: Event): void {
     const central = (event.target as HTMLSelectElement).value;
     this.centralSymbol.set(central);
     // Si el elemento central tiene un único grupo, se selecciona solo.
-    const groups = this.groups.filter((g) => g.central === central);
-    this.groupFormula.set(groups.length === 1 ? groups[0].formula : '');
+    const groups = this.oxoanions().filter((g) => g.centralElement === central);
+    this.oxoanionKey.set(groups.length === 1 ? groups[0].key : '');
   }
 
   onGroupChange(event: Event): void {
-    this.groupFormula.set((event.target as HTMLSelectElement).value);
+    this.oxoanionKey.set((event.target as HTMLSelectElement).value);
   }
 
   resetForm(): void {
     this.elementSymbol.set('');
     this.valence.set(null);
+    this.acidType.set('HYDRACID');
     this.acidNonMetalSymbol.set('');
-    this.acidNonMetalCharge.set(null);
     this.nonMetalSymbol.set('');
-    this.nonMetalCharge.set(null);
     this.centralSymbol.set('');
-    this.groupFormula.set('');
+    this.oxoanionKey.set('');
     this.formError.set('');
     this.status.set('idle');
     this.result.set(null);
@@ -548,6 +629,11 @@ export class CompoundsComponent {
     // Evita el envío nativo del formulario (que recargaría la página).
     event?.preventDefault();
     this.formError.set('');
+
+    if (this.catalogStatus() !== 'ready') {
+      this.formError.set('Aún se están cargando los catálogos del motor químico.');
+      return;
+    }
 
     const validationMessage = this.validateForm();
     if (validationMessage !== null) {
@@ -592,36 +678,35 @@ export class CompoundsComponent {
     const type = this.selectedType();
 
     if (type === 'acids') {
-      if (this.selectedAcidAnion() === null) {
-        return 'Selecciona un no metal.';
+      if (this.acidType() === 'HYDRACID') {
+        return this.selectedAcidNonMetal() === null ? 'Selecciona un no metal.' : null;
       }
-      return this.acidNonMetalCharge() === null ? 'Selecciona la carga del no metal.' : null;
+      // Oxácido
+      if (this.centralSymbol() === '') {
+        return 'Selecciona el elemento central del grupo oxácido.';
+      }
+      return this.selectedOxoanion() === null ? 'Selecciona un grupo oxácido.' : null;
     }
 
     // Resto de tipos requieren elemento + valencia
-    if (this.selectedElement() === null) {
+    if (this.elementSymbol() === '') {
       return 'Selecciona un elemento.';
     }
     const valence = this.valence();
-    if (valence === null || valence.value < 1) {
+    if (valence === null || valence < 1) {
       return this.availableValences().length > 0
         ? 'Selecciona una valencia para el elemento.'
         : 'Ingresa una valencia para el elemento.';
     }
 
-    if (type === 'salts') {
-      if (this.selectedNonMetal() === null) {
-        return 'Selecciona un no metal.';
-      }
-      if (this.nonMetalCharge() === null) {
-        return 'Selecciona la carga del no metal.';
-      }
+    if (type === 'salts' && this.selectedNonMetal() === null) {
+      return 'Selecciona un no metal.';
     }
     if (type === 'oxisalts') {
       if (this.centralSymbol() === '') {
         return 'Selecciona el elemento central del grupo oxácido.';
       }
-      if (this.selectedGroup() === null) {
+      if (this.selectedOxoanion() === null) {
         return 'Selecciona un grupo oxácido.';
       }
     }
@@ -634,15 +719,14 @@ export class CompoundsComponent {
     const type = this.selectedType();
 
     if (type === 'oxides' || type === 'hydroxides') {
-      const element = this.selectedElement();
       const valence = this.valence();
-      if (element === null || valence === null || valence.value < 1) {
+      if (this.elementSymbol() === '' || valence === null || valence < 1) {
         return null;
       }
       const request = {
-        elementSymbol: element.symbol,
-        elementName: element.name.toLowerCase(),
-        valence: valence.value,
+        elementSymbol: this.elementSymbol(),
+        elementName: this.selectedElementName().toLowerCase(),
+        valence,
       };
       return type === 'oxides'
         ? this.engine.generateOxide(request)
@@ -650,63 +734,44 @@ export class CompoundsComponent {
     }
 
     if (type === 'acids') {
-      const anion = this.selectedAcidAnion();
-      const charge = this.acidNonMetalCharge();
-      if (anion === null || charge === null) {
+      if (this.acidType() === 'HYDRACID') {
+        const anion = this.selectedAcidNonMetal();
+        if (anion === null) {
+          return null;
+        }
+        return this.engine.generateAcid({ acidType: 'HYDRACID', nonMetalSymbol: anion.symbol });
+      }
+      const group = this.selectedOxoanion();
+      if (group === null) {
         return null;
       }
-      return this.engine.generateAcid({
-        anionFormula: anion.symbol,
-        anionName: anion.anionName,
-        anionCharge: charge,
-        acidName: anion.acidName,
-      });
+      return this.engine.generateAcid({ acidType: 'OXOACID', oxoanionKey: group.key });
     }
 
     if (type === 'salts') {
-      const element = this.selectedElement();
       const valence = this.valence();
       const nonMetal = this.selectedNonMetal();
-      const nonMetalCharge = this.nonMetalCharge();
-      if (
-        element === null ||
-        valence === null ||
-        valence.value < 1 ||
-        nonMetal === null ||
-        nonMetalCharge === null
-      ) {
+      if (this.elementSymbol() === '' || valence === null || valence < 1 || nonMetal === null) {
         return null;
       }
       return this.engine.generateSalt({
-        metalSymbol: element.symbol,
-        metalName: element.name.toLowerCase(),
-        metalValence: valence.value,
+        metalSymbol: this.elementSymbol(),
+        metalValence: valence,
         nonMetalSymbol: nonMetal.symbol,
-        anionName: nonMetal.anionName,
-        anionCharge: nonMetalCharge,
       });
     }
 
     // oxisalts
-    const element = this.selectedElement();
     const valence = this.valence();
-    const group = this.selectedGroup();
-    if (element === null || valence === null || valence.value < 1 || group === null) {
+    const group = this.selectedOxoanion();
+    if (this.elementSymbol() === '' || valence === null || valence < 1 || group === null) {
       return null;
     }
     return this.engine.generateOxisalt({
-      metalSymbol: element.symbol,
-      metalName: element.name.toLowerCase(),
-      metalValence: valence.value,
-      groupFormula: group.formula,
-      groupName: group.name,
-      groupCharge: group.charge,
+      metalSymbol: this.elementSymbol(),
+      metalValence: valence,
+      oxoanionKey: group.key,
     });
-  }
-
-  /** Nombre en español del elemento por su símbolo, o el símbolo si no se encuentra. */
-  elementNameOf(symbol: string): string {
-    return this.elements.find((el) => el.symbol === symbol)?.name ?? symbol;
   }
 
   /** Traduce un error HTTP a un mensaje claro para el estudiante. */

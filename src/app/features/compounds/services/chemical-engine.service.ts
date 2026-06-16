@@ -32,7 +32,7 @@ export class ChemicalEngineService {
     return this.http.post<CompoundResponse>(`${this.baseUrl}/hydroxides`, request);
   }
 
-  /** Forma un ácido (hidrácido) a partir de un anión. */
+  /** Forma un ácido (hidrácido u oxácido) según el tipo indicado. */
   generateAcid(request: AcidRequest): Observable<CompoundResponse> {
     return this.http.post<CompoundResponse>(`${this.baseUrl}/acids`, request);
   }
