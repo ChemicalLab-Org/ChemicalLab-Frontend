@@ -146,24 +146,40 @@ type FormStatus = 'idle' | 'loading' | 'success' | 'error';
               }
             }
 
-            <!-- Anión / no metal (ácidos) -->
+            <!-- No metal + carga (ácidos hidrácidos: Hidrógeno + No metal) -->
             @if (selectedType() === 'acids') {
               <div class="field">
-                <label class="form-label" for="anion-select">No metal</label>
+                <label class="form-label" for="acid-nonmetal-select">No metal</label>
                 <select
-                  id="anion-select"
+                  id="acid-nonmetal-select"
                   class="select"
-                  [value]="anionIndex() ?? ''"
-                  (change)="onAnionChange($event)"
+                  [value]="acidNonMetalSymbol()"
+                  (change)="onAcidNonMetalChange($event)"
                 >
-                  <option value="">Selecciona un anión</option>
-                  @for (a of acidAnions; track a.symbol; let i = $index) {
-                    <option [value]="i">
-                      {{ a.anionName | titlecase }} ({{ a.symbol }}) — carga -{{ a.charge }}
-                    </option>
+                  <option value="">Selecciona un no metal</option>
+                  @for (a of acidAnions; track a.symbol) {
+                    <option [value]="a.symbol">{{ a.symbol }} — {{ elementNameOf(a.symbol) | titlecase }}</option>
                   }
                 </select>
               </div>
+
+              @if (selectedAcidAnion(); as a) {
+                <div class="field">
+                  <label class="form-label">Carga del no metal</label>
+                  <div class="valence-pills" role="group" aria-label="Carga del no metal">
+                    @for (c of acidNonMetalCharges(); track c) {
+                      <button
+                        type="button"
+                        class="valence-pill"
+                        [class.valence-pill--active]="acidNonMetalCharge() === c"
+                        (click)="selectAcidNonMetalCharge(c)"
+                      >
+                        -{{ c }}
+                      </button>
+                    }
+                  </div>
+                </div>
+              }
             }
 
             <!-- No metal + carga (sales binarias) -->
@@ -336,8 +352,10 @@ export class CompoundsComponent {
   readonly elementSymbol = signal<string>('');
   /** Valencia seleccionada (de pill o ingresada manualmente), o null. */
   readonly valence = signal<ValenceOption | null>(null);
-  /** Anión del selector de ácidos (índice en `acidAnions`), o null. */
-  readonly anionIndex = signal<number | null>(null);
+  /** No metal elegido para ácidos hidrácidos (símbolo), o cadena vacía. */
+  readonly acidNonMetalSymbol = signal<string>('');
+  /** Carga negativa elegida del no metal del ácido, o null. */
+  readonly acidNonMetalCharge = signal<number | null>(null);
   /** No metal elegido para sales binarias (símbolo), o cadena vacía. */
   readonly nonMetalSymbol = signal<string>('');
   /** Carga negativa elegida del no metal de sales binarias, o null. */
@@ -371,6 +389,17 @@ export class CompoundsComponent {
   readonly availableValences = computed<readonly ValenceOption[]>(() => {
     const element = this.selectedElement();
     return element === null ? [] : valenceOptionsFor(element.symbol, element.atomicNumber);
+  });
+
+  // ===== Ácidos hidrácidos: no metal + carga =====
+  /** No metal seleccionado del catálogo de ácidos (o null). */
+  readonly selectedAcidAnion = computed<AnionOption | null>(
+    () => this.acidAnions.find((a) => a.symbol === this.acidNonMetalSymbol()) ?? null
+  );
+  /** Cargas negativas disponibles del no metal del ácido (una en el MVP). */
+  readonly acidNonMetalCharges = computed<readonly number[]>(() => {
+    const anion = this.selectedAcidAnion();
+    return anion === null ? [] : [anion.charge];
   });
 
   // ===== Sales binarias: no metal + carga =====
@@ -464,9 +493,16 @@ export class CompoundsComponent {
     this.valence.set({ label: raw, value, signedValue: value });
   }
 
-  onAnionChange(event: Event): void {
-    const raw = (event.target as HTMLSelectElement).value;
-    this.anionIndex.set(raw === '' ? null : Number(raw));
+  onAcidNonMetalChange(event: Event): void {
+    const symbol = (event.target as HTMLSelectElement).value;
+    this.acidNonMetalSymbol.set(symbol);
+    // Cada no metal forma su hidrácido con una sola carga negativa: se selecciona sola.
+    const anion = this.acidAnions.find((a) => a.symbol === symbol) ?? null;
+    this.acidNonMetalCharge.set(anion === null ? null : anion.charge);
+  }
+
+  selectAcidNonMetalCharge(charge: number): void {
+    this.acidNonMetalCharge.set(charge);
   }
 
   onNonMetalChange(event: Event): void {
@@ -496,7 +532,8 @@ export class CompoundsComponent {
   resetForm(): void {
     this.elementSymbol.set('');
     this.valence.set(null);
-    this.anionIndex.set(null);
+    this.acidNonMetalSymbol.set('');
+    this.acidNonMetalCharge.set(null);
     this.nonMetalSymbol.set('');
     this.nonMetalCharge.set(null);
     this.centralSymbol.set('');
@@ -555,7 +592,10 @@ export class CompoundsComponent {
     const type = this.selectedType();
 
     if (type === 'acids') {
-      return this.selectedAcidAnion() === null ? 'Selecciona el anión o no metal.' : null;
+      if (this.selectedAcidAnion() === null) {
+        return 'Selecciona un no metal.';
+      }
+      return this.acidNonMetalCharge() === null ? 'Selecciona la carga del no metal.' : null;
     }
 
     // Resto de tipos requieren elemento + valencia
@@ -611,13 +651,14 @@ export class CompoundsComponent {
 
     if (type === 'acids') {
       const anion = this.selectedAcidAnion();
-      if (anion === null) {
+      const charge = this.acidNonMetalCharge();
+      if (anion === null || charge === null) {
         return null;
       }
       return this.engine.generateAcid({
         anionFormula: anion.symbol,
         anionName: anion.anionName,
-        anionCharge: anion.charge,
+        anionCharge: charge,
         acidName: anion.acidName,
       });
     }
@@ -661,11 +702,6 @@ export class CompoundsComponent {
       groupName: group.name,
       groupCharge: group.charge,
     });
-  }
-
-  private selectedAcidAnion(): AnionOption | null {
-    const i = this.anionIndex();
-    return i === null ? null : this.acidAnions[i] ?? null;
   }
 
   /** Nombre en español del elemento por su símbolo, o el símbolo si no se encuentra. */

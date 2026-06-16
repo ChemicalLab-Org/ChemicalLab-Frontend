@@ -53,6 +53,7 @@ export const ANION_OPTIONS: readonly AnionOption[] = [
   { symbol: 'I', anionName: 'yoduro', charge: 1, acidName: 'ácido yodhídrico' },
   { symbol: 'S', anionName: 'sulfuro', charge: 2, acidName: 'ácido sulfhídrico' },
   { symbol: 'Se', anionName: 'seleniuro', charge: 2, acidName: 'ácido selenhídrico' },
+  { symbol: 'Te', anionName: 'telururo', charge: 2, acidName: 'ácido telurhídrico' },
 ];
 
 /**
