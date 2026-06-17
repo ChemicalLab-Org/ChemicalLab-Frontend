@@ -12,6 +12,7 @@ import { TeacherPasswordsComponent } from './features/teacher/passwords/teacher-
 import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
 import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
 import { CompoundsComponent } from './features/compounds/compounds.component';
+import { ConceptsComponent } from './features/concepts/concepts.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
@@ -75,6 +76,12 @@ export const routes: Routes = [
   {
     path: 'compounds',
     component: CompoundsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
+  },
+  {
+    path: 'concepts',
+    component: ConceptsComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
   },

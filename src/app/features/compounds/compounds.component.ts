@@ -829,6 +829,7 @@ function buildNavItems(role: UserRole | null): readonly SidebarNavItem[] {
         { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
         { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
         { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
+        { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
         { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
         { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
       ];
@@ -837,13 +838,14 @@ function buildNavItems(role: UserRole | null): readonly SidebarNavItem[] {
         { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
         { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
         { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
+        { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
         { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
       ];
     default:
       return [
         { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
         { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
-        { label: 'Conceptos químicos', icon: 'menu_book', route: '/student-dashboard/concepts', disabled: true },
+        { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
         { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
         { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations', disabled: true },
         { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
