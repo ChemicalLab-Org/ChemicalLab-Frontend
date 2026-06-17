@@ -246,6 +246,7 @@ export class TeacherPasswordsComponent {
   readonly navItems: readonly SidebarNavItem[] = [
     { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
     { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
+    { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
     { label: 'Evaluaciones', icon: 'quiz', route: '/teacher-dashboard/evaluations', disabled: true },
     { label: 'Resultados', icon: 'analytics', route: '/teacher-dashboard/results', disabled: true },
     { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
