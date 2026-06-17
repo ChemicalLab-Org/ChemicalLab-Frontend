@@ -828,6 +828,7 @@ function buildNavItems(role: UserRole | null): readonly SidebarNavItem[] {
       return [
         { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
         { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
+        { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
         { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
         { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
         { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
