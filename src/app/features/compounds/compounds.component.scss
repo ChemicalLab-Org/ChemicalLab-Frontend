@@ -295,6 +295,62 @@
     line-height: 1.55;
     color: var(--color-neutral-800);
   }
+
+  &__nomen {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+// ─── Nomenclaturas ─────────────────────────────────────────────────────────
+.nomen-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.nomen-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--color-neutral-0);
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+
+  &__label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-neutral-500);
+  }
+
+  &__value {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-neutral-900);
+
+    &::first-letter {
+      text-transform: uppercase;
+    }
+  }
+}
+
+.nomen-note {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-neutral-600);
+
+  .material-icons {
+    font-size: 15px;
+    flex-shrink: 0;
+  }
 }
 
 // Botón de texto para reintentar la carga de catálogos dentro de una alerta.

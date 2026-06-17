@@ -55,8 +55,21 @@ export interface OxisaltRequest {
 }
 
 /**
+ * Nomenclatura del compuesto en sus tres sistemas escolares.
+ * Backend: `NomenclatureResponse`. Ningún nombre llega vacío; `notes` puede ser
+ * una cadena vacía cuando no hay aclaraciones.
+ */
+export interface NomenclatureResponse {
+  readonly traditional: string;
+  readonly stock: string;
+  readonly systematic: string;
+  readonly notes: string;
+}
+
+/**
  * Respuesta común del motor químico para todos los tipos de compuesto.
- * Backend: `CompoundResponse`.
+ * Backend: `CompoundResponse`. `name` es el nombre base; las tres nomenclaturas
+ * viven en `nomenclature`.
  */
 export interface CompoundResponse {
   readonly valid: boolean;
@@ -64,6 +77,7 @@ export interface CompoundResponse {
   readonly formula: string;
   readonly name: string;
   readonly explanation: string;
+  readonly nomenclature: NomenclatureResponse;
 }
 
 // ===== Catálogos (fuente de verdad del backend) =====

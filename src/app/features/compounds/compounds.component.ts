@@ -349,6 +349,32 @@ interface ElementChoice {
                     <span class="badge badge-neutral result__type">{{ r.compoundType }}</span>
                   </div>
 
+                  @if (r.nomenclature; as n) {
+                    <div class="result__nomen">
+                      <div class="result__explain-title">Nomenclaturas</div>
+                      <div class="nomen-grid">
+                        <div class="nomen-item">
+                          <span class="nomen-item__label">Tradicional</span>
+                          <span class="nomen-item__value">{{ n.traditional }}</span>
+                        </div>
+                        <div class="nomen-item">
+                          <span class="nomen-item__label">Stock</span>
+                          <span class="nomen-item__value">{{ n.stock }}</span>
+                        </div>
+                        <div class="nomen-item">
+                          <span class="nomen-item__label">Sistemática</span>
+                          <span class="nomen-item__value">{{ n.systematic }}</span>
+                        </div>
+                      </div>
+                      @if (n.notes) {
+                        <p class="nomen-note">
+                          <span class="material-icons">info</span>
+                          <span>{{ n.notes }}</span>
+                        </p>
+                      }
+                    </div>
+                  }
+
                   @if (r.explanation) {
                     <div class="result__explain">
                       <div class="result__explain-title">¿Cómo se formó?</div>
