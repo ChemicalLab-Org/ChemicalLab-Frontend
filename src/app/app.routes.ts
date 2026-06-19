@@ -9,7 +9,13 @@ import { TeacherDashboardComponent } from './features/teacher-dashboard/teacher-
 import { AdminDashboardComponent } from './features/admin-dashboard/admin-dashboard.component';
 import { TeacherStudentsComponent } from './features/teacher/students/teacher-students.component';
 import { TeacherPasswordsComponent } from './features/teacher/passwords/teacher-passwords.component';
+import { TeacherConceptsComponent } from './features/teacher/concepts/teacher-concepts.component';
+import { TeacherEvaluationsComponent } from './features/teacher/evaluations/teacher-evaluations.component';
 import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
+import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
+import { CompoundsComponent } from './features/compounds/compounds.component';
+import { ConceptsComponent } from './features/concepts/concepts.component';
+import { StudentEvaluationsComponent } from './features/student/evaluations/student-evaluations.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
@@ -53,6 +59,18 @@ export const routes: Routes = [
     data: { roles: ['DOCENTE'] },
   },
   {
+    path: 'teacher/concepts',
+    component: TeacherConceptsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/evaluations',
+    component: TeacherEvaluationsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
     path: 'admin-dashboard',
     component: AdminDashboardComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
@@ -63,6 +81,30 @@ export const routes: Routes = [
     component: TeacherManagementComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
+    path: 'periodic-table',
+    component: PeriodicTableComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
+  },
+  {
+    path: 'compounds',
+    component: CompoundsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
+  },
+  {
+    path: 'concepts',
+    component: ConceptsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ESTUDIANTE'] },
+  },
+  {
+    path: 'evaluations',
+    component: StudentEvaluationsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ESTUDIANTE'] },
   },
 
   { path: '**', redirectTo: 'auth/login' },

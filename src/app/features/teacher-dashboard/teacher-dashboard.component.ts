@@ -104,7 +104,8 @@ export class TeacherDashboardComponent {
   readonly navItems: readonly SidebarNavItem[] = [
     { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
     { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
-    { label: 'Evaluaciones', icon: 'quiz', route: '/teacher-dashboard/evaluations', disabled: true },
+    { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
+    { label: 'Evaluaciones', icon: 'quiz', route: '/teacher/evaluations' },
     { label: 'Resultados', icon: 'analytics', route: '/teacher-dashboard/results', disabled: true },
     { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
   ];
@@ -146,12 +147,22 @@ export class TeacherDashboardComponent {
       route: '/teacher/students',
     },
     {
-      id: 'create-eval',
-      title: 'Crear evaluación',
-      description: 'Diseña una nueva evaluación.',
-      icon: 'edit_note',
+      id: 'concepts',
+      title: 'Gestionar contenidos',
+      description: 'Crea y asigna contenidos conceptuales.',
+      icon: 'library_books',
+      tone: 'green',
+      cta: 'Gestionar contenidos',
+      route: '/teacher/concepts',
+    },
+    {
+      id: 'evaluations',
+      title: 'Gestionar evaluaciones',
+      description: 'Crea, publica y asigna evaluaciones.',
+      icon: 'quiz',
       tone: 'blue',
-      cta: 'Crear evaluación',
+      cta: 'Gestionar evaluaciones',
+      route: '/teacher/evaluations',
     },
     {
       id: 'results',

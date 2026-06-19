@@ -1,0 +1,546 @@
+@use 'sass:list';
+
+:host {
+  display: block;
+  height: 100vh;
+}
+
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--color-neutral-50);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 2rem 2.5rem;
+  background: var(--color-neutral-50);
+}
+
+// Colores por categoría (portados del diseño en oklch).
+$categories: (
+  metal: (oklch(0.93 0.055 35) oklch(0.40 0.115 35) oklch(0.78 0.110 35)),
+  transition: (oklch(0.92 0.045 240) oklch(0.38 0.110 240) oklch(0.74 0.095 240)),
+  lanthanide: (oklch(0.92 0.055 300) oklch(0.40 0.115 300) oklch(0.76 0.105 300)),
+  actinide: (oklch(0.91 0.060 340) oklch(0.40 0.130 340) oklch(0.76 0.115 340)),
+  metalloid: (oklch(0.94 0.060 80) oklch(0.42 0.130 70) oklch(0.80 0.115 75)),
+  nonmetal: (oklch(0.93 0.055 155) oklch(0.38 0.105 155) oklch(0.76 0.100 155)),
+  halogen: (oklch(0.93 0.050 200) oklch(0.40 0.110 200) oklch(0.76 0.100 200)),
+  noble: (oklch(0.93 0.055 285) oklch(0.40 0.115 285) oklch(0.76 0.105 285)),
+);
+
+@each $name, $c in $categories {
+  [data-category='#{$name}'] {
+    --cat-bg: #{list.nth($c, 1)};
+    --cat-fg: #{list.nth($c, 2)};
+    --cat-border: #{list.nth($c, 3)};
+  }
+}
+
+.periodic-table-page--split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 20px;
+  align-items: start;
+}
+
+.periodic-main {
+  min-width: 0;
+}
+
+.periodic-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 20px;
+
+  &__title {
+    margin: 0;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    color: var(--color-neutral-900);
+  }
+
+  &__subtitle {
+    margin: 6px 0 0;
+    font-size: 15px;
+    color: var(--color-neutral-600);
+  }
+
+  &__search {
+    width: 380px;
+    max-width: 100%;
+    flex-shrink: 0;
+  }
+}
+
+.periodic-table-page--split .periodic-header__title {
+  font-size: 28px;
+}
+
+// Filtros tipo pill.
+.periodic-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+
+  &__pill {
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+    border: 1.5px solid var(--color-neutral-300);
+    background: var(--color-neutral-0);
+    color: var(--color-neutral-700);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-base);
+
+    &:hover {
+      border-color: var(--color-primary-300);
+    }
+
+    &--active,
+    &--active:hover {
+      background: var(--color-primary-600);
+      border-color: var(--color-primary-600);
+      color: #ffffff;
+    }
+  }
+}
+
+// Leyenda.
+.periodic-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--color-neutral-0);
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  margin-bottom: 20px;
+  font-size: 12px;
+
+  &__title {
+    font-weight: 700;
+    color: var(--color-neutral-500);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 11px;
+  }
+
+  &__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-neutral-700);
+  }
+
+  &__swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    background: var(--cat-bg);
+    border: 1.5px solid var(--cat-border);
+  }
+}
+
+// Card con la cuadrícula.
+.periodic-grid-card {
+  background: var(--color-neutral-0);
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  overflow-x: auto;
+}
+
+.periodic-grid {
+  display: grid;
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  grid-template-rows: repeat(7, 60px) 14px repeat(2, 60px);
+  gap: 5px;
+  min-width: 900px;
+
+  &--compact {
+    grid-template-rows: repeat(7, 44px) 12px repeat(2, 44px);
+    gap: 3px;
+    min-width: 640px;
+  }
+}
+
+// Celda de elemento.
+.periodic-element {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 5px 3px;
+  border-radius: 8px;
+  background: var(--cat-bg);
+  color: var(--cat-fg);
+  border: 1.5px solid var(--cat-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover:not(.periodic-element--dimmed) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(26, 26, 22, 0.1), 0 0 0 2px var(--cat-border);
+    z-index: 1;
+  }
+
+  &__number {
+    align-self: flex-start;
+    font-size: 9px;
+    font-weight: 600;
+    opacity: 0.85;
+    font-family: var(--font-mono);
+    line-height: 1;
+  }
+
+  &__symbol {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  &__name {
+    max-width: 100%;
+    font-size: 8px;
+    font-weight: 500;
+    opacity: 0.85;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+  }
+
+  &--selected {
+    border: 2.5px solid var(--color-primary-600);
+    filter: saturate(1.35);
+    box-shadow: 0 4px 14px rgba(23, 136, 96, 0.3), 0 0 0 4px rgba(29, 158, 117, 0.18);
+    z-index: 2;
+  }
+
+  &--dimmed {
+    opacity: 0.18;
+    cursor: default;
+  }
+}
+
+.periodic-grid--compact .periodic-element {
+  border-radius: 5px;
+  padding: 2px 3px 1px;
+
+  .periodic-element__number {
+    font-size: 7px;
+  }
+  .periodic-element__symbol {
+    font-size: 13px;
+  }
+  .periodic-element__name {
+    display: none;
+  }
+}
+
+// Etiquetas de las series.
+.periodic-series-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  grid-column: 1 / 4;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+
+  &--lan {
+    grid-row: 9;
+  }
+  &--act {
+    grid-row: 10;
+  }
+
+  &__line {
+    flex: 1;
+    height: 1.5px;
+    background: var(--color-neutral-200);
+    border-radius: 2px;
+  }
+
+  &__range {
+    font-family: var(--font-mono);
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--color-neutral-100);
+    color: var(--color-neutral-600);
+    font-size: 10px;
+  }
+}
+
+.periodic-grid--compact .periodic-series-label {
+  font-size: 9px;
+
+  .periodic-series-label__range {
+    display: none;
+  }
+}
+
+// Panel lateral de detalle.
+.periodic-detail-panel {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 4rem);
+  background: var(--color-neutral-0);
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+
+  &__top {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 12px 0;
+  }
+
+  &__close {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    background: transparent;
+    border: 0;
+    color: var(--color-neutral-500);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background var(--transition-base);
+
+    .material-icons {
+      font-size: 20px;
+    }
+    &:hover {
+      background: var(--color-neutral-100);
+    }
+  }
+}
+
+.detail-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.detail-element-card {
+  align-self: center;
+  width: 168px;
+  height: 168px;
+  border-radius: 18px;
+  background: var(--cat-bg);
+  color: var(--cat-fg);
+  border: 2.5px solid var(--color-primary-600);
+  box-shadow: 0 8px 24px rgba(23, 136, 96, 0.22), 0 0 0 6px rgba(29, 158, 117, 0.12);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+
+  &__number {
+    align-self: flex-start;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    opacity: 0.9;
+  }
+
+  &__symbol {
+    font-size: 56px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  &__name {
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.9;
+  }
+}
+
+.detail-badge-row {
+  display: flex;
+  justify-content: center;
+}
+
+.detail-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--cat-bg);
+  color: var(--cat-fg);
+  border: 1.5px solid var(--cat-border);
+  font-size: 13px;
+  font-weight: 700;
+
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.7;
+  }
+}
+
+.detail-section__title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+// Lienzo oscuro de las visualizaciones atómicas (modelo de Bohr / 3D).
+.atom-stage {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(160deg, oklch(0.2 0.02 250), oklch(0.14 0.02 260));
+  border: 1.5px solid oklch(0.3 0.02 250);
+  overflow: hidden;
+
+  &__canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  &__caption {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: oklch(0.75 0.02 250);
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+}
+
+.detail-properties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--color-neutral-200);
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+
+  &__cell {
+    background: var(--color-neutral-0);
+    padding: 10px 12px;
+  }
+
+  &__label {
+    font-size: 11px;
+    color: var(--color-neutral-500);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+  }
+
+  &__value {
+    font-size: 14px;
+    color: var(--color-neutral-900);
+    font-weight: 700;
+  }
+}
+
+.detail-description {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-neutral-700);
+}
+
+// Acciones fijas al fondo del panel.
+.detail-panel-actions {
+  flex-shrink: 0;
+  padding: 20px;
+  border-top: 1.5px solid var(--color-neutral-200);
+  background: var(--color-neutral-50);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .btn {
+    width: 100%;
+  }
+
+  &__soon {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: rgba(255, 255, 255, 0.25);
+  }
+}
+
+// Responsive.
+@media (max-width: 900px) {
+  .main {
+    padding: 1.5rem;
+  }
+
+  .periodic-table-page--split {
+    grid-template-columns: 1fr;
+  }
+
+  .periodic-detail-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .detail-panel-body {
+    overflow: visible;
+  }
+
+  .periodic-grid--compact {
+    grid-template-rows: repeat(7, 52px) 12px repeat(2, 52px);
+
+    .periodic-element__name {
+      display: block;
+    }
+  }
+}
+
+@media (max-width: 720px) {
+  .periodic-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .periodic-header__search {
+    width: 100%;
+  }
+}

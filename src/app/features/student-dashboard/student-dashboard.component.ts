@@ -11,6 +11,8 @@ interface DashboardCard {
   readonly icon: string;
   readonly tone: 'mint' | 'blue' | 'violet' | 'amber' | 'green';
   readonly badge?: string;
+  /** Ruta a la que navega la card. Si no se define, la card aún no está disponible. */
+  readonly route?: string;
 }
 
 @Component({
@@ -42,7 +44,16 @@ interface DashboardCard {
 
         <section class="cards-grid">
           @for (card of cards; track card.id) {
-            <article class="card" [attr.data-tone]="card.tone">
+            <article
+              class="card"
+              [attr.data-tone]="card.tone"
+              [class.card--disabled]="!card.route"
+              [attr.role]="card.route ? 'button' : null"
+              [attr.tabindex]="card.route ? 0 : null"
+              (click)="openCard(card)"
+              (keydown.enter)="openCard(card)"
+              (keydown.space)="openCard(card)"
+            >
               <div class="card__icon" [attr.data-tone]="card.tone">
                 <span class="material-icons">{{ card.icon }}</span>
               </div>
@@ -54,8 +65,10 @@ interface DashboardCard {
               </div>
               <p class="card__desc">{{ card.description }}</p>
               <div class="card__cta">
-                Abrir
-                <span class="material-icons card__cta-arrow">arrow_forward</span>
+                {{ card.route ? 'Abrir' : 'Próximamente' }}
+                @if (card.route) {
+                  <span class="material-icons card__cta-arrow">arrow_forward</span>
+                }
               </div>
             </article>
           }
@@ -70,10 +83,10 @@ export class StudentDashboardComponent {
 
   readonly navItems: readonly SidebarNavItem[] = [
     { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
-    { label: 'Tabla periódica', icon: 'science', route: '/student-dashboard/periodic-table', disabled: true },
-    { label: 'Conceptos químicos', icon: 'menu_book', route: '/student-dashboard/concepts', disabled: true },
-    { label: 'Formar compuestos', icon: 'biotech', route: '/student-dashboard/compounds', disabled: true },
-    { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations', disabled: true },
+    { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
+    { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
+    { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
+    { label: 'Mis evaluaciones', icon: 'assignment', route: '/evaluations' },
     { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
   ];
 
@@ -105,28 +118,31 @@ export class StudentDashboardComponent {
       description: 'Consulta los 118 elementos.',
       icon: 'science',
       tone: 'mint',
+      route: '/periodic-table',
     },
     {
       id: 'concepts',
       title: 'Conceptos químicos',
-      description: 'Aprende sobre óxidos, hidróxidos, sales y oxisales.',
+      description: 'Aprende sobre óxidos, hidróxidos, ácidos, sales y nomenclatura.',
       icon: 'menu_book',
       tone: 'blue',
+      route: '/concepts',
     },
     {
       id: 'compounds',
-      title: 'Formar compuestos',
+      title: 'Formación de compuestos',
       description: 'Combina elementos y genera fórmulas químicas.',
       icon: 'biotech',
       tone: 'violet',
+      route: '/compounds',
     },
     {
       id: 'evaluations',
       title: 'Mis evaluaciones',
-      description: 'Tienes evaluaciones pendientes.',
+      description: 'Desarrolla las evaluaciones asignadas por tu docente.',
       icon: 'quiz',
       tone: 'amber',
-      badge: 'Pendientes',
+      route: '/evaluations',
     },
     {
       id: 'results',
@@ -136,6 +152,12 @@ export class StudentDashboardComponent {
       tone: 'green',
     },
   ];
+
+  openCard(card: DashboardCard): void {
+    if (card.route) {
+      void this.router.navigateByUrl(card.route);
+    }
+  }
 
   handleLogout(): void {
     this.authService.logout();
