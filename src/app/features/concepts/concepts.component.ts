@@ -509,7 +509,7 @@ function buildNavItems(role: UserRole | null): readonly SidebarNavItem[] {
         { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
         { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
         { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-        { label: 'Mis evaluaciones', icon: 'assignment', route: '/student-dashboard/evaluations', disabled: true },
+        { label: 'Mis evaluaciones', icon: 'assignment', route: '/evaluations' },
         { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
       ];
   }
