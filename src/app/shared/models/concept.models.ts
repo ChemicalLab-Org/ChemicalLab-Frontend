@@ -64,3 +64,15 @@ export interface AssignConceptContentRequest {
   readonly grade: string;
   readonly section: string;
 }
+
+/** Vista reducida de un contenido conceptual para el estudiante. Solo expone el material publicado y asignado. */
+export interface StudentConceptContentResponse {
+  readonly id: number;
+  readonly title: string;
+  readonly category: ConceptCategory;
+  readonly summary: string | null;
+  readonly explanation: string;
+  readonly formationSteps: string[];
+  readonly keyPoints: string[];
+  readonly examples: string[];
+}
