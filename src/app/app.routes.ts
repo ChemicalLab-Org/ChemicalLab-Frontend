@@ -10,6 +10,7 @@ import { AdminDashboardComponent } from './features/admin-dashboard/admin-dashbo
 import { TeacherStudentsComponent } from './features/teacher/students/teacher-students.component';
 import { TeacherPasswordsComponent } from './features/teacher/passwords/teacher-passwords.component';
 import { TeacherConceptsComponent } from './features/teacher/concepts/teacher-concepts.component';
+import { TeacherEvaluationsComponent } from './features/teacher/evaluations/teacher-evaluations.component';
 import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
 import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
 import { CompoundsComponent } from './features/compounds/compounds.component';
@@ -59,6 +60,12 @@ export const routes: Routes = [
   {
     path: 'teacher/concepts',
     component: TeacherConceptsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/evaluations',
+    component: TeacherEvaluationsComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
