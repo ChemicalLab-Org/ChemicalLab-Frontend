@@ -90,7 +90,7 @@ export const routes: Routes = [
     path: 'concepts',
     component: ConceptsComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
-    data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
+    data: { roles: ['ESTUDIANTE'] },
   },
 
   { path: '**', redirectTo: 'auth/login' },
