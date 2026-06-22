@@ -111,7 +111,7 @@ export class AdminDashboardComponent {
     { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
     { label: 'Grupos químicos', icon: 'hub', route: '/admin-dashboard/groups', disabled: true },
     { label: 'Logs del sistema', icon: 'terminal', route: '/admin-dashboard/logs', disabled: true },
-    { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin-dashboard/system', disabled: true },
+    { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin/system-status' },
   ];
 
   readonly userRole = 'Admin';
@@ -187,6 +187,7 @@ export class AdminDashboardComponent {
       icon: 'monitor_heart',
       tone: 'green',
       cta: 'Ver estado',
+      route: '/admin/system-status',
     },
   ];
 
