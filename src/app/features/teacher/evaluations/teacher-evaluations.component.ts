@@ -116,7 +116,7 @@ interface EvaluationLike {
           </div>
         } @else if (evaluations().length === 0) {
           <div class="empty-state">
-            <div class="empty-state__icon"><span class="material-icons">quiz</span></div>
+            <div class="empty-state__icon"><span class="material-icons">grading</span></div>
             <h2 class="empty-state__title">Aún no has creado evaluaciones.</h2>
             <p class="empty-state__desc">Crea tu primera evaluación para empezar a asignarla a tus estudiantes.</p>
             <button type="button" class="btn btn-primary" (click)="openCreate()">

@@ -125,7 +125,7 @@ export class AdminDashboardComponent {
       { id: 'users', label: 'Total usuarios', value: v(s?.totalUsers), icon: 'group' },
       { id: 'teachers', label: 'Total docentes', value: v(s?.totalTeachers), icon: 'badge' },
       { id: 'students', label: 'Total estudiantes', value: v(s?.totalStudents), icon: 'school' },
-      { id: 'evaluations', label: 'Evaluaciones', value: v(s?.totalEvaluations), icon: 'quiz' },
+      { id: 'evaluations', label: 'Evaluaciones', value: v(s?.totalEvaluations), icon: 'grading' },
     ];
   });
 
