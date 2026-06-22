@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { UserManagementService } from '../../core/services/user-management.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
+import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
 import { AuthResponse } from '../../shared/models';
 
 interface MetricCard {
@@ -101,14 +102,7 @@ export class TeacherDashboardComponent {
   private readonly userManagementService = inject(UserManagementService);
   private readonly router = inject(Router);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
-    { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
-    { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
-    { label: 'Evaluaciones', icon: 'quiz', route: '/teacher/evaluations' },
-    { label: 'Resultados', icon: 'analytics', route: '/teacher/results' },
-    { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
 
   readonly userRole = 'Docente';
 
@@ -132,8 +126,8 @@ export class TeacherDashboardComponent {
 
   readonly metrics = computed<MetricCard[]>(() => [
     { id: 'students', label: 'Estudiantes registrados', value: this.studentCount(), icon: 'group' },
-    { id: 'created', label: 'Evaluaciones creadas', value: 0, icon: 'quiz' },
-    { id: 'active', label: 'Evaluaciones activas', value: 0, icon: 'analytics' },
+    { id: 'created', label: 'Evaluaciones creadas', value: 0, icon: 'grading' },
+    { id: 'active', label: 'Evaluaciones activas', value: 0, icon: 'pending_actions' },
   ]);
 
   readonly shortcuts: readonly ShortcutCard[] = [
@@ -159,7 +153,7 @@ export class TeacherDashboardComponent {
       id: 'evaluations',
       title: 'Gestionar evaluaciones',
       description: 'Crea, publica y asigna evaluaciones.',
-      icon: 'quiz',
+      icon: 'grading',
       tone: 'blue',
       cta: 'Gestionar evaluaciones',
       route: '/teacher/evaluations',
@@ -168,7 +162,7 @@ export class TeacherDashboardComponent {
       id: 'results',
       title: 'Ver resultados',
       description: 'Revisa el desempeño de tus estudiantes.',
-      icon: 'analytics',
+      icon: 'bar_chart',
       tone: 'green',
       cta: 'Ver resultados',
       route: '/teacher/results',

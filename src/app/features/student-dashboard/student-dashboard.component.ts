@@ -134,7 +134,7 @@ export class StudentDashboardComponent {
       id: 'evaluations',
       title: 'Mis evaluaciones',
       description: 'Desarrolla las evaluaciones asignadas por tu docente.',
-      icon: 'quiz',
+      icon: 'assignment',
       tone: 'amber',
       route: '/evaluations',
     },

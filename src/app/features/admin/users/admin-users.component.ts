@@ -262,7 +262,7 @@ interface FilterTab {
 
               <article class="activity-card">
                 <header class="activity-card__head">
-                  <span class="material-icons">quiz</span>
+                  <span class="material-icons">grading</span>
                   Últimas evaluaciones creadas
                 </header>
                 @for (item of activity()?.recentEvaluations ?? []; track $index) {
@@ -520,7 +520,7 @@ export class AdminUsersComponent {
       { id: 'active', label: 'Activos', value: v(s?.activeUsers), icon: 'check_circle' },
       { id: 'inactive', label: 'Inactivos', value: v(s?.inactiveUsers), icon: 'do_not_disturb_on' },
       { id: 'concepts', label: 'Contenidos conceptuales', value: v(s?.totalConcepts), icon: 'auto_stories' },
-      { id: 'evaluations', label: 'Evaluaciones', value: v(s?.totalEvaluations), icon: 'quiz' },
+      { id: 'evaluations', label: 'Evaluaciones', value: v(s?.totalEvaluations), icon: 'grading' },
       { id: 'attempts', label: 'Intentos enviados', value: v(s?.submittedAttempts), icon: 'task_alt' },
     ];
   });
