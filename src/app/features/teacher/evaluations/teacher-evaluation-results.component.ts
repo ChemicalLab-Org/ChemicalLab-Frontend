@@ -6,6 +6,7 @@ import {
   SidebarComponent,
   SidebarNavItem,
 } from '../../../shared/components/sidebar/sidebar.component';
+import { TEACHER_NAV_ITEMS } from '../../../shared/components/sidebar/teacher-nav';
 import {
   AttemptStatus,
   TeacherAttemptResultDetailResponse,
@@ -42,7 +43,7 @@ const APPROVAL_PERCENTAGE = 60;
 
       <main class="main">
         <button type="button" class="back-link" (click)="goBack()">
-          <span class="material-icons">arrow_back</span> Evaluaciones
+          <span class="material-icons">arrow_back</span> {{ backLabel }}
         </button>
 
         @if (loading()) {
@@ -291,13 +292,7 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
-    { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
-    { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
-    { label: 'Evaluaciones', icon: 'quiz', route: '/teacher/evaluations' },
-    { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
 
   readonly approvalFilters: ReadonlyArray<{ key: ApprovalFilter; label: string }> = [
     { key: 'all', label: 'Todos' },
@@ -306,6 +301,10 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   ];
 
   private evaluationId = 0;
+  // El detalle se alcanza desde "Resultados" (/teacher/results/:id) o desde
+  // "Evaluaciones" (/teacher/evaluations/:id/results); volvemos al origen correcto.
+  private cameFromResults = false;
+  backLabel = 'Evaluaciones';
 
   readonly loading = signal(true);
   readonly error = signal(false);
@@ -358,6 +357,8 @@ export class TeacherEvaluationResultsComponent implements OnInit {
 
   ngOnInit(): void {
     this.evaluationId = Number(this.route.snapshot.paramMap.get('evaluationId'));
+    this.cameFromResults = this.router.url.startsWith('/teacher/results');
+    this.backLabel = this.cameFromResults ? 'Resultados' : 'Evaluaciones';
     this.load();
   }
 
@@ -426,7 +427,7 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   }
 
   goBack(): void {
-    void this.router.navigateByUrl('/teacher/evaluations');
+    void this.router.navigateByUrl(this.cameFromResults ? '/teacher/results' : '/teacher/evaluations');
   }
 
   handleLogout(): void {

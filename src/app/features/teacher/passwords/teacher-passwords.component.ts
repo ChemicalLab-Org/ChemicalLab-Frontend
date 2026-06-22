@@ -248,7 +248,7 @@ export class TeacherPasswordsComponent {
     { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
     { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
     { label: 'Evaluaciones', icon: 'quiz', route: '/teacher/evaluations' },
-    { label: 'Resultados', icon: 'analytics', route: '/teacher-dashboard/results', disabled: true },
+    { label: 'Resultados', icon: 'analytics', route: '/teacher/results' },
     { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
   ];
 

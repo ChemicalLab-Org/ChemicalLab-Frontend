@@ -12,6 +12,7 @@ import { TeacherPasswordsComponent } from './features/teacher/passwords/teacher-
 import { TeacherConceptsComponent } from './features/teacher/concepts/teacher-concepts.component';
 import { TeacherEvaluationsComponent } from './features/teacher/evaluations/teacher-evaluations.component';
 import { TeacherEvaluationResultsComponent } from './features/teacher/evaluations/teacher-evaluation-results.component';
+import { TeacherResultsComponent } from './features/teacher/evaluations/teacher-results.component';
 import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
 import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
 import { CompoundsComponent } from './features/compounds/compounds.component';
@@ -69,6 +70,18 @@ export const routes: Routes = [
   {
     path: 'teacher/evaluations',
     component: TeacherEvaluationsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/results',
+    component: TeacherResultsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/results/:evaluationId',
+    component: TeacherEvaluationResultsComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
