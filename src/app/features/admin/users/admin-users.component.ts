@@ -462,7 +462,7 @@ export class AdminUsersComponent {
     { label: 'Contenidos químicos', icon: 'auto_stories', route: '/admin-dashboard/content', disabled: true },
     { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
     { label: 'Grupos químicos', icon: 'hub', route: '/admin-dashboard/groups', disabled: true },
-    { label: 'Logs del sistema', icon: 'terminal', route: '/admin-dashboard/logs', disabled: true },
+    { label: 'Logs del sistema', icon: 'terminal', route: '/admin/logs' },
     { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin-dashboard/system', disabled: true },
   ];
 
