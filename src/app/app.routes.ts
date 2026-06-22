@@ -15,11 +15,13 @@ import { TeacherEvaluationResultsComponent } from './features/teacher/evaluation
 import { TeacherResultsComponent } from './features/teacher/evaluations/teacher-results.component';
 import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
 import { AdminUsersComponent } from './features/admin/users/admin-users.component';
+import { SystemStatusComponent } from './features/admin/system-status/system-status.component';
 import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
 import { CompoundsComponent } from './features/compounds/compounds.component';
 import { ConceptsComponent } from './features/concepts/concepts.component';
 import { StudentEvaluationsComponent } from './features/student/evaluations/student-evaluations.component';
 import { StudentResultsComponent } from './features/student/evaluations/student-results.component';
+import { NotFoundComponent } from './features/not-found/not-found.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
@@ -31,6 +33,8 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   { path: 'auth/access-denied', component: AccessDeniedComponent },
+  { path: 'forbidden', component: AccessDeniedComponent },
+  { path: 'not-found', component: NotFoundComponent },
 
   {
     path: 'dashboard',
@@ -111,6 +115,12 @@ export const routes: Routes = [
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
+    path: 'admin/system-status',
+    component: SystemStatusComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
     path: 'periodic-table',
     component: PeriodicTableComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
@@ -141,5 +151,5 @@ export const routes: Routes = [
     data: { roles: ['ESTUDIANTE'] },
   },
 
-  { path: '**', redirectTo: 'auth/login' },
+  { path: '**', component: NotFoundComponent },
 ];
