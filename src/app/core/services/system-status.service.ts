@@ -9,6 +9,7 @@ export interface ServiceStatusItem {
   readonly name: string;
   readonly status: ServiceStatus;
   readonly detail?: string;
+  readonly latencyMs?: number;
   readonly checkedAt: Date;
 }
 
@@ -18,18 +19,19 @@ export interface SystemHealth {
   readonly checkedAt: Date;
 }
 
+// Estructura de respuesta del endpoint /api/health del backend
 interface HealthResponse {
   status?: string;
-  message?: string;
-  components?: Record<string, { status?: string }>;
-  database?: { status?: string };
+  backend?: { status?: string; framework?: string };
+  database?: { status?: string; type?: string; latencyMs?: number; message?: string };
+  timestamp?: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class SystemStatusService {
   private readonly http = inject(HttpClient);
 
-  // Usa siempre la URL configurada en el entorno — no hardcodear localhost ni dominios públicos.
+  // Usa siempre la URL configurada en el entorno — sin hardcodear localhost ni dominios públicos.
   private readonly healthUrl = `${environment.apiUrl}/health`;
 
   checkHealth(): Observable<SystemHealth> {
@@ -42,43 +44,36 @@ export class SystemStatusService {
   }
 
   private parseHealthResponse(res: HealthResponse, checkedAt: Date): SystemHealth {
-    // Si llegamos aquí, el backend respondió con HTTP 2xx → Backend disponible.
-    // No dependemos del valor del campo "status" porque cada backend puede usar convenciones distintas
-    // (Spring Boot Actuator usa "UP", nuestro endpoint personalizado usa "OK", etc.).
-    const backend: ServiceStatusItem = { name: 'Backend API', status: 'disponible', checkedAt };
+    // Si llegamos aquí, el backend respondió con HTTP 2xx → backend disponible.
+    const backend: ServiceStatusItem = {
+      name: 'Backend API',
+      status: 'disponible',
+      checkedAt,
+    };
 
-    // Base de datos: solo marcamos estado si el backend lo reporta explícitamente.
     const database: ServiceStatusItem = this.extractDatabaseStatus(res, checkedAt);
 
     return { backend, database, checkedAt };
   }
 
   private extractDatabaseStatus(res: HealthResponse, checkedAt: Date): ServiceStatusItem {
-    // Acepta varias estructuras de respuesta del backend
-    const dbFromComponents =
-      res?.components?.['db'] ??
-      res?.components?.['datasource'] ??
-      res?.components?.['postgres'];
+    const dbFromResponse = res?.database;
 
-    const dbFromRoot = res?.database;
-
-    const rawStatus =
-      dbFromComponents?.status?.toLowerCase() ??
-      dbFromRoot?.status?.toLowerCase() ??
-      null;
-
-    if (rawStatus === null) {
+    if (dbFromResponse === undefined || dbFromResponse === null) {
       return { name: 'Base de datos', status: 'no-informado', checkedAt };
     }
 
+    const rawStatus = dbFromResponse.status?.toUpperCase();
     const status: ServiceStatus =
-      rawStatus === 'up' || rawStatus === 'ok' || rawStatus === 'disponible'
-        ? 'disponible'
-        : rawStatus === 'down'
-        ? 'no-disponible'
-        : 'con-problemas';
+      rawStatus === 'UP' ? 'disponible' :
+      rawStatus === 'DOWN' ? 'no-disponible' : 'con-problemas';
 
-    return { name: 'Base de datos', status, checkedAt };
+    return {
+      name: 'Base de datos',
+      status,
+      latencyMs: dbFromResponse.latencyMs,
+      checkedAt,
+    };
   }
 
   private buildUnavailable(checkedAt: Date): SystemHealth {

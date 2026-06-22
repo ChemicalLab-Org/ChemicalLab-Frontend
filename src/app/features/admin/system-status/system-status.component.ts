@@ -92,8 +92,10 @@ import { AuthResponse } from '../../../shared/models';
             </div>
             <div class="status-card__label">Base de datos</div>
             <div class="status-card__detail">
-              @if (health()?.database?.status === 'no-informado') {
-                Verificado por el backend
+              @if (health()?.database?.latencyMs !== undefined && health()?.database?.latencyMs !== null) {
+                PostgreSQL — {{ health()!.database!.latencyMs }} ms
+              } @else if (health()?.database?.status === 'no-informado') {
+                No reportado por el backend
               } @else {
                 PostgreSQL
               }
@@ -112,10 +114,10 @@ import { AuthResponse } from '../../../shared/models';
           </div>
         </section>
 
-        @if (health()?.database?.status === 'no-informado' && health()?.backend?.status === 'disponible') {
-          <div class="info-note">
-            <span class="material-icons">info</span>
-            La API respondió correctamente. El backend no reportó el estado detallado de la base de datos en este endpoint.
+        @if (!loading() && health() !== null) {
+          <div [class]="infoNoteClass()">
+            <span class="material-icons">{{ infoNoteIcon() }}</span>
+            {{ infoNoteMessage() }}
           </div>
         }
 
@@ -133,7 +135,9 @@ import { AuthResponse } from '../../../shared/models';
               </div>
               <div class="info-row">
                 <span class="info-key">Estado general</span>
-                <span class="info-val" [class.text-success]="isOperativo()" [class.text-danger]="!isOperativo() && !loading()">
+                <span class="info-val"
+                  [class.text-success]="isOperativo()"
+                  [class.text-danger]="!isOperativo() && !loading()">
                   {{ estadoGeneral() }}
                 </span>
               </div>
@@ -196,21 +200,56 @@ export class SystemStatusComponent implements OnInit {
 
   readonly isOperativo = computed<boolean>(() => {
     const h = this.health();
-    return h?.backend?.status === 'disponible';
+    return h?.backend?.status === 'disponible' && h?.database?.status !== 'no-disponible';
   });
 
   readonly estadoGeneral = computed<string>(() => {
     if (this.loading()) return 'Verificando…';
     const h = this.health();
     if (h === null) return '—';
-    if (h.backend.status === 'disponible') return 'Operativo';
-    if (h.backend.status === 'con-problemas') return 'Con problemas';
-    return 'No disponible';
+    if (h.backend.status !== 'disponible') return 'No disponible';
+    if (h.database.status === 'no-disponible') return 'Degradado';
+    if (h.database.status === 'con-problemas') return 'Con problemas';
+    return 'Operativo';
   });
 
   readonly envLabel: string = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
     ? 'Producción / Institucional'
     : 'Desarrollo local';
+
+  infoNoteClass(): string {
+    const h = this.health();
+    if (h?.database?.status === 'no-disponible' || h?.backend?.status === 'no-disponible') {
+      return 'info-note info-note--danger';
+    }
+    if (h?.database?.status === 'no-informado') {
+      return 'info-note info-note--neutral';
+    }
+    return 'info-note info-note--success';
+  }
+
+  infoNoteIcon(): string {
+    const h = this.health();
+    if (h?.database?.status === 'no-disponible' || h?.backend?.status === 'no-disponible') {
+      return 'warning';
+    }
+    return 'check_circle';
+  }
+
+  infoNoteMessage(): string {
+    const h = this.health();
+    if (h === null) return '';
+    if (h.backend.status === 'no-disponible') {
+      return 'No se pudo conectar con el backend. Verifica que el servidor esté en ejecución.';
+    }
+    if (h.database.status === 'no-disponible') {
+      return 'La API respondió correctamente, pero no se pudo conectar a la base de datos.';
+    }
+    if (h.database.status === 'no-informado') {
+      return 'La API respondió correctamente. El backend no reportó el estado detallado de la base de datos.';
+    }
+    return 'La API y la base de datos respondieron correctamente.';
+  }
 
   ngOnInit(): void {
     this.refreshStatus();
