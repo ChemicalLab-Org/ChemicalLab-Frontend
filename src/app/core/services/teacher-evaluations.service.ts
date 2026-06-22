@@ -10,6 +10,9 @@ import {
   EvaluationDetailResponse,
   EvaluationResponse,
   QuestionResponse,
+  TeacherAttemptResultDetailResponse,
+  TeacherEvaluationResultsResponse,
+  TeacherEvaluationResultsSummaryResponse,
   UpdateEvaluationRequest,
   UpdateQuestionRequest,
 } from '../../shared/models';
@@ -117,6 +120,33 @@ export class TeacherEvaluationsService {
     return this.http.patch<EvaluationAssignmentResponse>(
       `${this.baseUrl}/${evaluationId}/assignments/${assignmentId}/deactivate`,
       {}
+    );
+  }
+
+  /** Resultados de una evaluación propia: agregados más la lista de intentos. */
+  getEvaluationResults(
+    evaluationId: number
+  ): Observable<TeacherEvaluationResultsResponse> {
+    return this.http.get<TeacherEvaluationResultsResponse>(
+      `${this.baseUrl}/${evaluationId}/results`
+    );
+  }
+
+  /** Solo los agregados de resultados de una evaluación propia. */
+  getEvaluationResultsSummary(
+    evaluationId: number
+  ): Observable<TeacherEvaluationResultsSummaryResponse> {
+    return this.http.get<TeacherEvaluationResultsSummaryResponse>(
+      `${this.baseUrl}/${evaluationId}/results/summary`
+    );
+  }
+
+  /** Detalle del resultado de un intento de un estudiante (solo de evaluaciones propias). */
+  getTeacherAttemptResult(
+    attemptId: number
+  ): Observable<TeacherAttemptResultDetailResponse> {
+    return this.http.get<TeacherAttemptResultDetailResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/result`
     );
   }
 }

@@ -174,6 +174,16 @@ interface EvaluationLike {
                   <button type="button" class="row-action" title="Ver detalle" aria-label="Ver detalle" (click)="openDetail(e)">
                     <span class="material-icons">visibility</span>
                   </button>
+                  <button
+                    type="button"
+                    class="row-action"
+                    title="Ver resultados"
+                    aria-label="Ver resultados"
+                    [disabled]="e.status === 'DRAFT'"
+                    (click)="openResults(e)"
+                  >
+                    <span class="material-icons">analytics</span>
+                  </button>
                   <button type="button" class="row-action" title="Editar datos generales" aria-label="Editar datos generales" (click)="openEdit(e)">
                     <span class="material-icons">edit</span>
                   </button>
@@ -745,7 +755,7 @@ export class TeacherEvaluationsComponent {
     { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
     { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
     { label: 'Evaluaciones', icon: 'quiz', route: '/teacher/evaluations' },
-    { label: 'Resultados', icon: 'analytics', route: '/teacher-dashboard/results', disabled: true },
+    { label: 'Resultados', icon: 'analytics', route: '/teacher/results' },
     { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
   ];
 
@@ -1025,6 +1035,11 @@ export class TeacherEvaluationsComponent {
 
   closeDetail(): void {
     this.detailEvaluation.set(null);
+  }
+
+  /** Abre la pantalla de resultados de la evaluación. */
+  openResults(evaluation: EvaluationLike): void {
+    void this.router.navigateByUrl(`/teacher/evaluations/${evaluation.id}/results`);
   }
 
   /** Refresca el detalle abierto desde el backend. */
