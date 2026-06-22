@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { AdminService } from '../../core/services/admin.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
+import { ADMIN_NAV_ITEMS } from '../../shared/components/sidebar/admin-nav';
 import { AdminSummary, AuthResponse } from '../../shared/models';
 
 interface MetricCard {
@@ -17,7 +18,7 @@ interface ShortcutCard {
   readonly title: string;
   readonly description: string;
   readonly icon: string;
-  readonly tone: 'mint' | 'violet' | 'blue' | 'amber' | 'teal' | 'green';
+  readonly tone: 'mint' | 'violet' | 'amber' | 'green';
   readonly cta: string;
   /** Ruta a la que navega la card. Si no se define, la card aún no es funcional. */
   readonly route?: string;
@@ -103,16 +104,7 @@ export class AdminDashboardComponent {
   private readonly adminService = inject(AdminService);
   private readonly router = inject(Router);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
-    { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
-    { label: 'Usuarios y roles', icon: 'manage_accounts', route: '/admin/users' },
-    { label: 'Contenidos químicos', icon: 'auto_stories', route: '/admin-dashboard/content', disabled: true },
-    { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
-    { label: 'Grupos químicos', icon: 'hub', route: '/admin-dashboard/groups', disabled: true },
-    { label: 'Logs del sistema', icon: 'terminal', route: '/admin/logs' },
-    { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin/system-status' },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = ADMIN_NAV_ITEMS;
 
   readonly userRole = 'Admin';
 
@@ -157,14 +149,6 @@ export class AdminDashboardComponent {
       route: '/admin/users',
     },
     {
-      id: 'content',
-      title: 'Contenidos químicos',
-      description: 'Edita definiciones, reglas y ejemplos.',
-      icon: 'auto_stories',
-      tone: 'blue',
-      cta: 'Editar contenidos',
-    },
-    {
       id: 'logs',
       title: 'Logs del sistema',
       description: 'Revisa el registro de actividad del sistema.',
@@ -172,14 +156,6 @@ export class AdminDashboardComponent {
       tone: 'amber',
       cta: 'Ver logs',
       route: '/admin/logs',
-    },
-    {
-      id: 'elements',
-      title: 'Elementos químicos',
-      description: 'Consulta y edita los datos de los 118 elementos.',
-      icon: 'table_chart',
-      tone: 'teal',
-      cta: 'Ver elementos',
     },
     {
       id: 'system',

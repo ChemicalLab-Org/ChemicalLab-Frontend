@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { AdminLogsService } from '../../../core/services/admin-logs.service';
 import { SidebarComponent, SidebarNavItem } from '../../../shared/components/sidebar/sidebar.component';
+import { ADMIN_NAV_ITEMS } from '../../../shared/components/sidebar/admin-nav';
 import {
   ACTOR_ROLE_LABELS,
   AuditLogFilters,
@@ -269,16 +270,7 @@ export class AdminLogsComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly logsService = inject(AdminLogsService);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
-    { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
-    { label: 'Usuarios y roles', icon: 'manage_accounts', route: '/admin/users' },
-    { label: 'Contenidos químicos', icon: 'auto_stories', route: '/admin-dashboard/content', disabled: true },
-    { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
-    { label: 'Grupos químicos', icon: 'hub', route: '/admin-dashboard/groups', disabled: true },
-    { label: 'Logs del sistema', icon: 'terminal', route: '/admin/logs' },
-    { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin/system-status' },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = ADMIN_NAV_ITEMS;
 
   readonly userRole = 'Admin';
 

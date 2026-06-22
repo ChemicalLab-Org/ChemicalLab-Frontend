@@ -2,6 +2,9 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
+import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
+import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
+import { ADMIN_NAV_ITEMS } from '../../shared/components/sidebar/admin-nav';
 import { StudentConceptsService } from './services/student-concepts.service';
 import { ConceptCategory, StudentConceptContentResponse, UserRole } from '../../shared/models';
 
@@ -488,30 +491,11 @@ export class ConceptsComponent implements OnInit {
 function buildNavItems(role: UserRole | null): readonly SidebarNavItem[] {
   switch (role) {
     case 'DOCENTE':
-      return [
-        { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
-        { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
-        { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
-        { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
-        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-        { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
-      ];
+      return TEACHER_NAV_ITEMS;
     case 'ADMINISTRADOR':
-      return [
-        { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
-        { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
-        { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
-        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-      ];
+      return ADMIN_NAV_ITEMS;
     default:
-      return [
-        { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
-        { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
-        { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
-        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-        { label: 'Mis evaluaciones', icon: 'assignment', route: '/evaluations' },
-        { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
-      ];
+      return STUDENT_NAV_ITEMS;
   }
 }
 

@@ -171,6 +171,7 @@ export class TeacherDashboardComponent {
       icon: 'analytics',
       tone: 'green',
       cta: 'Ver resultados',
+      route: '/teacher/results',
     },
     {
       id: 'passwords',
