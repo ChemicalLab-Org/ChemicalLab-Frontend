@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   AdminActivity,
+  AdminPasswordResetResponse,
   AdminSummary,
   AdminUser,
   UserResponse,
@@ -44,5 +45,17 @@ export class AdminService {
   /** Desactiva un usuario (no lo elimina). */
   deactivateUser(userId: number): Observable<UserResponse> {
     return this.http.patch<UserResponse>(`${this.usersUrl}/${userId}/deactivate`, {});
+  }
+
+  /**
+   * Restablece la contraseña de cualquier usuario administrable (docente, estudiante u
+   * otro) por su id de cuenta. No depende del correo ni de quién creó al usuario.
+   * Devuelve la contraseña temporal generada una sola vez.
+   */
+  resetUserPassword(userId: number): Observable<AdminPasswordResetResponse> {
+    return this.http.patch<AdminPasswordResetResponse>(
+      `${this.adminUrl}/users/${userId}/password/reset`,
+      {}
+    );
   }
 }

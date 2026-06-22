@@ -466,7 +466,8 @@
     }
   }
 
-  &__success-icon {
+  &__success-icon,
+  &__key-icon {
     width: 56px;
     height: 56px;
     border-radius: 50%;

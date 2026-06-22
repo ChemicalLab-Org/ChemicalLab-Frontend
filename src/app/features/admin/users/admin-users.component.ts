@@ -12,7 +12,6 @@ import {
   AdminUser,
   ApiError,
   CreateTeacherRequest,
-  ResetPasswordRequest,
   UserRole,
 } from '../../../shared/models';
 
@@ -166,7 +165,7 @@ interface FilterTab {
                       <td class="date-cell">{{ formatDate(u.createdAt) }}</td>
                       <td>
                         <div class="row-actions">
-                          @if (u.role === 'DOCENTE') {
+                          @if (u.role !== 'ADMINISTRADOR' && !isProtected(u)) {
                             <button
                               type="button"
                               class="row-action"
@@ -178,7 +177,7 @@ interface FilterTab {
                             </button>
                           }
 
-                          @if (isSelf(u)) {
+                          @if (isProtected(u)) {
                             <span class="protected-tag" title="No puedes desactivar tu propia cuenta">
                               <span class="material-icons">shield</span>
                               Protegido
@@ -402,63 +401,29 @@ interface FilterTab {
       </div>
     }
 
-    <!-- Modal: restablecer contraseña de docente -->
+    <!-- Modal: confirmar restablecimiento de contraseña -->
     @if (resetTarget(); as target) {
       <div class="modal-overlay" (click)="closeReset()">
-        <div class="modal modal--form" (click)="$event.stopPropagation()">
-          <header class="modal__header">
-            <h2 class="modal__title">Restablecer contraseña</h2>
-            <button type="button" class="modal__close" aria-label="Cerrar" (click)="closeReset()">
-              <span class="material-icons">close</span>
+        <div class="modal modal--confirm" (click)="$event.stopPropagation()">
+          <div class="modal__key-icon"><span class="material-icons">lock_reset</span></div>
+          <h2 class="modal__title">¿Restablecer la contraseña de {{ target.fullName }}?</h2>
+          <p class="modal__text">
+            Se generará una contraseña temporal para
+            <strong>{{ target.code ?? target.username }}</strong> ({{ roleLabel(target.role) }}).
+            El usuario deberá cambiarla en su próximo ingreso. No depende de que tenga correo registrado.
+          </p>
+          @if (resetError()) {
+            <div class="alert alert-danger modal__note">
+              <span class="material-icons">error_outline</span>
+              {{ resetError() }}
+            </div>
+          }
+          <div class="modal__actions">
+            <button type="button" class="btn btn-secondary" (click)="closeReset()" [disabled]="resetSaving()">Cancelar</button>
+            <button type="button" class="btn btn-primary" (click)="confirmReset()" [disabled]="resetSaving()">
+              {{ resetSaving() ? 'Restableciendo…' : 'Generar contraseña temporal' }}
             </button>
-          </header>
-
-          <form [formGroup]="resetForm" (ngSubmit)="submitReset()" class="modal__body">
-            <p class="modal__text" style="margin-bottom: 1rem;">
-              Asigna una nueva contraseña temporal para
-              <strong>{{ target.fullName }}</strong> ({{ target.username }}).
-            </p>
-
-            <div class="form-grid">
-              <div class="form-group form-group--full">
-                <label class="form-label" for="resetPassword">Nueva contraseña temporal</label>
-                <input id="resetPassword" class="input" type="text" formControlName="newTemporaryPassword"
-                  placeholder="Mín. 6 caracteres" [class.input-error]="isResetInvalid('newTemporaryPassword')" />
-                @if (isResetInvalid('newTemporaryPassword')) {
-                  <span class="form-error">La contraseña debe tener entre 6 y 100 caracteres.</span>
-                }
-              </div>
-              <div class="form-group form-group--full">
-                <label class="form-label" for="resetConfirm">Confirmar contraseña</label>
-                <input id="resetConfirm" class="input" type="text" formControlName="confirmTemporaryPassword"
-                  placeholder="Repite la contraseña" [class.input-error]="isResetInvalid('confirmTemporaryPassword') || resetMismatch()" />
-                @if (isResetInvalid('confirmTemporaryPassword')) {
-                  <span class="form-error">Confirma la contraseña (entre 6 y 100 caracteres).</span>
-                } @else if (resetMismatch()) {
-                  <span class="form-error">La contraseña y su confirmación no coinciden.</span>
-                }
-              </div>
-            </div>
-
-            <div class="alert alert-info modal__note">
-              <span class="material-icons">info</span>
-              La contraseña temporal debe ser entregada al usuario. Deberá cambiarla al iniciar sesión.
-            </div>
-
-            @if (resetError()) {
-              <div class="alert alert-danger modal__note">
-                <span class="material-icons">error_outline</span>
-                {{ resetError() }}
-              </div>
-            }
-
-            <div class="modal__actions">
-              <button type="button" class="btn btn-secondary" (click)="closeReset()" [disabled]="resetSaving()">Cancelar</button>
-              <button type="submit" class="btn btn-primary" [disabled]="resetSaving()">
-                {{ resetSaving() ? 'Restableciendo…' : 'Confirmar restablecimiento' }}
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
       </div>
     }
@@ -550,11 +515,6 @@ export class AdminUsersComponent {
     username: ['', [Validators.required, Validators.minLength(4), Validators.maxLength(50)]],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(100)]],
     temporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
-  });
-
-  readonly resetForm: FormGroup = this.fb.group({
-    newTemporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
-    confirmTemporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
   });
 
   readonly metrics = computed<readonly MetricCard[]>(() => {
@@ -762,7 +722,6 @@ export class AdminUsersComponent {
 
   openReset(user: AdminUser): void {
     this.resetError.set(null);
-    this.resetForm.reset({ newTemporaryPassword: '', confirmTemporaryPassword: '' });
     this.resetTarget.set(user);
   }
 
@@ -771,27 +730,20 @@ export class AdminUsersComponent {
     this.resetError.set(null);
   }
 
-  submitReset(): void {
+  confirmReset(): void {
     const target = this.resetTarget();
     if (target === null) {
       return;
     }
-    if (this.resetForm.invalid || this.resetMismatch()) {
-      this.resetForm.markAllAsTouched();
-      return;
-    }
     this.resetSaving.set(true);
     this.resetError.set(null);
-    const raw = this.resetForm.getRawValue();
-    const request: ResetPasswordRequest = {
-      newTemporaryPassword: raw.newTemporaryPassword,
-      confirmTemporaryPassword: raw.confirmTemporaryPassword,
-    };
-    this.userManagementService.resetTeacherPassword(target.userId, request).subscribe({
-      next: () => {
+    // El backend genera la contraseña temporal y la devuelve una sola vez.
+    // Funciona para docentes y estudiantes, tengan o no correo registrado.
+    this.adminService.resetUserPassword(target.userId).subscribe({
+      next: (response) => {
         this.resetSaving.set(false);
         this.resetTarget.set(null);
-        this.resetResult.set({ name: target.fullName, password: request.newTemporaryPassword });
+        this.resetResult.set({ name: target.fullName, password: response.temporaryPassword });
         this.loadAll();
       },
       error: (err: unknown) => {
@@ -803,17 +755,6 @@ export class AdminUsersComponent {
 
   closeResetResult(): void {
     this.resetResult.set(null);
-  }
-
-  isResetInvalid(controlName: string): boolean {
-    const control = this.resetForm.controls[controlName];
-    return control.invalid && (control.touched || control.dirty);
-  }
-
-  resetMismatch(): boolean {
-    const pwd = this.resetForm.controls['newTemporaryPassword'];
-    const confirm = this.resetForm.controls['confirmTemporaryPassword'];
-    return confirm.value !== '' && pwd.value !== confirm.value && (confirm.touched || confirm.dirty);
   }
 
   // ===================== Utilidades =====================
@@ -830,6 +771,11 @@ export class AdminUsersComponent {
 
   isSelf(user: AdminUser): boolean {
     return this.currentUser()?.userId === user.userId;
+  }
+
+  /** Cuenta protegida: la marca el backend (propio admin) con respaldo en el usuario autenticado. */
+  isProtected(user: AdminUser): boolean {
+    return user.protectedAccount || this.isSelf(user);
   }
 
   roleLabel(role: UserRole): string {

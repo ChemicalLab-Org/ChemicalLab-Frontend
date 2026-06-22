@@ -33,6 +33,15 @@ export interface AdminUser {
   readonly active: boolean;
   readonly temporaryPassword: boolean;
   readonly createdAt: string | null;
+  /** Cuenta del propio administrador autenticado: no admite acciones peligrosas. */
+  readonly protectedAccount: boolean;
+}
+
+/** Respuesta al restablecer la contraseña de un usuario desde el panel admin. */
+export interface AdminPasswordResetResponse {
+  readonly message: string;
+  /** Contraseña temporal generada (texto plano, de un solo uso). */
+  readonly temporaryPassword: string;
 }
 
 /** Elemento simple de actividad reciente. */
