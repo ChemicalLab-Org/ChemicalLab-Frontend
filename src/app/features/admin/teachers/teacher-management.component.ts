@@ -361,7 +361,7 @@ export class TeacherManagementComponent {
   readonly navItems: readonly SidebarNavItem[] = [
     { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
     { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
-    { label: 'Usuarios y roles', icon: 'manage_accounts', route: '/admin-dashboard/users', disabled: true },
+    { label: 'Usuarios y roles', icon: 'manage_accounts', route: '/admin/users' },
     { label: 'Contenidos químicos', icon: 'auto_stories', route: '/admin-dashboard/content', disabled: true },
     { label: 'Elementos químicos', icon: 'table_chart', route: '/admin-dashboard/elements', disabled: true },
     { label: 'Grupos químicos', icon: 'hub', route: '/admin-dashboard/groups', disabled: true },
