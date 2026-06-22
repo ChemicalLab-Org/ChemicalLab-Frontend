@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, map, of, timeout } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
-export type ServiceStatus = 'disponible' | 'con-problemas' | 'no-disponible';
+export type ServiceStatus = 'disponible' | 'con-problemas' | 'no-disponible' | 'no-informado';
 
 export interface ServiceStatusItem {
   readonly name: string;
@@ -14,18 +14,22 @@ export interface ServiceStatusItem {
 
 export interface SystemHealth {
   readonly backend: ServiceStatusItem;
-  readonly database?: ServiceStatusItem;
+  readonly database: ServiceStatusItem;
   readonly checkedAt: Date;
 }
 
 interface HealthResponse {
   status?: string;
+  message?: string;
   components?: Record<string, { status?: string }>;
+  database?: { status?: string };
 }
 
 @Injectable({ providedIn: 'root' })
 export class SystemStatusService {
   private readonly http = inject(HttpClient);
+
+  // Usa siempre la URL configurada en el entorno — no hardcodear localhost ni dominios públicos.
   private readonly healthUrl = `${environment.apiUrl}/health`;
 
   checkHealth(): Observable<SystemHealth> {
@@ -38,31 +42,49 @@ export class SystemStatusService {
   }
 
   private parseHealthResponse(res: HealthResponse, checkedAt: Date): SystemHealth {
-    const overallStatus = res?.status?.toLowerCase();
-    const backendStatus: ServiceStatus =
-      overallStatus === 'up' ? 'disponible' :
-      overallStatus === 'down' ? 'no-disponible' : 'con-problemas';
+    // Si llegamos aquí, el backend respondió con HTTP 2xx → Backend disponible.
+    // No dependemos del valor del campo "status" porque cada backend puede usar convenciones distintas
+    // (Spring Boot Actuator usa "UP", nuestro endpoint personalizado usa "OK", etc.).
+    const backend: ServiceStatusItem = { name: 'Backend API', status: 'disponible', checkedAt };
 
-    const dbComponent = res?.components?.['db'] ?? res?.components?.['datasource'];
-    let dbItem: ServiceStatusItem | undefined;
-    if (dbComponent !== undefined) {
-      const dbStatus = dbComponent.status?.toLowerCase();
-      const dbServiceStatus: ServiceStatus =
-        dbStatus === 'up' ? 'disponible' :
-        dbStatus === 'down' ? 'no-disponible' : 'con-problemas';
-      dbItem = { name: 'Base de datos', status: dbServiceStatus, checkedAt };
+    // Base de datos: solo marcamos estado si el backend lo reporta explícitamente.
+    const database: ServiceStatusItem = this.extractDatabaseStatus(res, checkedAt);
+
+    return { backend, database, checkedAt };
+  }
+
+  private extractDatabaseStatus(res: HealthResponse, checkedAt: Date): ServiceStatusItem {
+    // Acepta varias estructuras de respuesta del backend
+    const dbFromComponents =
+      res?.components?.['db'] ??
+      res?.components?.['datasource'] ??
+      res?.components?.['postgres'];
+
+    const dbFromRoot = res?.database;
+
+    const rawStatus =
+      dbFromComponents?.status?.toLowerCase() ??
+      dbFromRoot?.status?.toLowerCase() ??
+      null;
+
+    if (rawStatus === null) {
+      return { name: 'Base de datos', status: 'no-informado', checkedAt };
     }
 
-    return {
-      backend: { name: 'Backend API', status: backendStatus, checkedAt },
-      database: dbItem,
-      checkedAt,
-    };
+    const status: ServiceStatus =
+      rawStatus === 'up' || rawStatus === 'ok' || rawStatus === 'disponible'
+        ? 'disponible'
+        : rawStatus === 'down'
+        ? 'no-disponible'
+        : 'con-problemas';
+
+    return { name: 'Base de datos', status, checkedAt };
   }
 
   private buildUnavailable(checkedAt: Date): SystemHealth {
     return {
       backend: { name: 'Backend API', status: 'no-disponible', checkedAt },
+      database: { name: 'Base de datos', status: 'no-informado', checkedAt },
       checkedAt,
     };
   }

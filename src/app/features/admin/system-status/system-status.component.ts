@@ -54,40 +54,51 @@ import { AuthResponse } from '../../../shared/models';
               <div class="status-card__icon">
                 <span class="material-icons">dns</span>
               </div>
-              @if (!loading()) {
-                <span [class]="badgeClass(health()?.backend?.status)">
-                  <span class="dot"></span>
-                  {{ statusLabel(health()?.backend?.status) }}
-                </span>
-              } @else {
+              @if (loading()) {
                 <span class="badge badge--neutral">
                   <span class="dot"></span>
                   Verificando…
+                </span>
+              } @else {
+                <span [class]="badgeClass(health()?.backend?.status)">
+                  <span class="dot"></span>
+                  {{ statusLabel(health()?.backend?.status) }}
                 </span>
               }
             </div>
             <div class="status-card__label">Backend API</div>
             <div class="status-card__detail">
-              Última verificación: {{ checkedAtLabel() }}
+              {{ loading() ? 'Verificando conexión…' : 'Última verificación: ' + checkedAtLabel() }}
             </div>
           </div>
 
           <!-- Base de datos -->
-          @if (health()?.database) {
-            <div class="status-card">
-              <div class="status-card__header">
-                <div class="status-card__icon">
-                  <span class="material-icons">storage</span>
-                </div>
-                <span [class]="badgeClass(health()!.database!.status)">
-                  <span class="dot"></span>
-                  {{ statusLabel(health()!.database!.status) }}
-                </span>
+          <div class="status-card">
+            <div class="status-card__header">
+              <div class="status-card__icon">
+                <span class="material-icons">storage</span>
               </div>
-              <div class="status-card__label">Base de datos</div>
-              <div class="status-card__detail">PostgreSQL</div>
+              @if (loading()) {
+                <span class="badge badge--neutral">
+                  <span class="dot"></span>
+                  Verificando…
+                </span>
+              } @else {
+                <span [class]="badgeClass(health()?.database?.status)">
+                  <span class="dot"></span>
+                  {{ statusLabel(health()?.database?.status) }}
+                </span>
+              }
             </div>
-          }
+            <div class="status-card__label">Base de datos</div>
+            <div class="status-card__detail">
+              @if (health()?.database?.status === 'no-informado') {
+                Verificado por el backend
+              } @else {
+                PostgreSQL
+              }
+            </div>
+          </div>
 
           <!-- Versión -->
           <div class="status-card">
@@ -101,6 +112,13 @@ import { AuthResponse } from '../../../shared/models';
           </div>
         </section>
 
+        @if (health()?.database?.status === 'no-informado' && health()?.backend?.status === 'disponible') {
+          <div class="info-note">
+            <span class="material-icons">info</span>
+            La API respondió correctamente. El backend no reportó el estado detallado de la base de datos en este endpoint.
+          </div>
+        }
+
         <section class="info-section">
           <div class="section-label">Información del sistema</div>
           <div class="info-grid">
@@ -110,21 +128,13 @@ import { AuthResponse } from '../../../shared/models';
                 <span class="info-val">{{ envLabel }}</span>
               </div>
               <div class="info-row">
-                <span class="info-key">Framework</span>
+                <span class="info-key">Frontend</span>
                 <span class="info-val info-val--mono">Angular 18</span>
               </div>
               <div class="info-row">
                 <span class="info-key">Estado general</span>
-                <span class="info-val">
-                  @if (loading()) {
-                    Verificando…
-                  } @else if (health()?.backend?.status === 'disponible') {
-                    Operativo
-                  } @else if (health()?.backend?.status === 'con-problemas') {
-                    Con problemas
-                  } @else {
-                    Degradado
-                  }
+                <span class="info-val" [class.text-success]="isOperativo()" [class.text-danger]="!isOperativo() && !loading()">
+                  {{ estadoGeneral() }}
                 </span>
               </div>
             </div>
@@ -139,9 +149,13 @@ import { AuthResponse } from '../../../shared/models';
               </div>
               <div class="info-row">
                 <span class="info-key">Última revisión</span>
-                <span class="info-val info-val--mono">{{ checkedAtLabel() }}</span>
+                <span class="info-val info-val--mono">{{ loading() ? '…' : checkedAtLabel() }}</span>
               </div>
             </div>
+          </div>
+          <div class="deploy-note">
+            La validación se realiza contra la API configurada en el entorno.<br>
+            Este sistema puede operar en red local, institucional o con reverse proxy — no requiere dominio público.
           </div>
         </section>
       </main>
@@ -180,9 +194,23 @@ export class SystemStatusComponent implements OnInit {
     return h.checkedAt.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   });
 
-  readonly envLabel = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? 'Producción'
-    : 'Desarrollo';
+  readonly isOperativo = computed<boolean>(() => {
+    const h = this.health();
+    return h?.backend?.status === 'disponible';
+  });
+
+  readonly estadoGeneral = computed<string>(() => {
+    if (this.loading()) return 'Verificando…';
+    const h = this.health();
+    if (h === null) return '—';
+    if (h.backend.status === 'disponible') return 'Operativo';
+    if (h.backend.status === 'con-problemas') return 'Con problemas';
+    return 'No disponible';
+  });
+
+  readonly envLabel: string = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? 'Producción / Institucional'
+    : 'Desarrollo local';
 
   ngOnInit(): void {
     this.refreshStatus();
@@ -204,12 +232,14 @@ export class SystemStatusComponent implements OnInit {
   badgeClass(status: ServiceStatus | undefined): string {
     if (status === 'disponible') return 'badge badge--success';
     if (status === 'con-problemas') return 'badge badge--warning';
+    if (status === 'no-informado') return 'badge badge--neutral';
     return 'badge badge--danger';
   }
 
   statusLabel(status: ServiceStatus | undefined): string {
     if (status === 'disponible') return 'Disponible';
     if (status === 'con-problemas') return 'Con problemas';
+    if (status === 'no-informado') return 'No informado';
     return 'No disponible';
   }
 
