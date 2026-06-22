@@ -6,6 +6,7 @@ import {
   SidebarComponent,
   SidebarNavItem,
 } from '../../../shared/components/sidebar/sidebar.component';
+import { STUDENT_NAV_ITEMS } from '../../../shared/components/sidebar/student-nav';
 import {
   AttemptStatus,
   StudentAttemptResultDetailResponse,
@@ -211,14 +212,7 @@ export class StudentResultsComponent implements OnInit {
   private readonly service = inject(StudentEvaluationsService);
   private readonly router = inject(Router);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
-    { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
-    { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
-    { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-    { label: 'Mis evaluaciones', icon: 'assignment', route: '/evaluations' },
-    { label: 'Mis resultados', icon: 'bar_chart', route: '/evaluations/results' },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = STUDENT_NAV_ITEMS;
 
   readonly view = signal<View>('list');
 

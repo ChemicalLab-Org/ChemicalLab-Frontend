@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
+import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
 import { AuthResponse } from '../../shared/models';
 
 interface DashboardCard {
@@ -81,14 +82,7 @@ export class StudentDashboardComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
-    { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
-    { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
-    { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-    { label: 'Mis evaluaciones', icon: 'assignment', route: '/evaluations' },
-    { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = STUDENT_NAV_ITEMS;
 
   readonly userRole = 'Estudiante';
 
@@ -150,6 +144,7 @@ export class StudentDashboardComponent {
       description: 'Revisa tus calificaciones.',
       icon: 'bar_chart',
       tone: 'green',
+      route: '/evaluations/results',
     },
   ];
 

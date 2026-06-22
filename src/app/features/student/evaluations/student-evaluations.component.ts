@@ -7,6 +7,7 @@ import {
   SidebarComponent,
   SidebarNavItem,
 } from '../../../shared/components/sidebar/sidebar.component';
+import { STUDENT_NAV_ITEMS } from '../../../shared/components/sidebar/student-nav';
 import {
   ApiError,
   AttemptResponse,
@@ -41,7 +42,7 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
   template: `
     <div class="layout">
       <app-sidebar
-        [navItems]="navItems()"
+        [navItems]="navItems"
         [userName]="userName()"
         [userRole]="userRoleLabel()"
         [userInitials]="userInitials()"
@@ -523,9 +524,7 @@ export class StudentEvaluationsComponent implements OnInit {
   private readonly currentUser = computed(() => this.authService.currentUser());
   readonly userName = computed<string>(() => this.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
-  readonly navItems = computed<readonly SidebarNavItem[]>(() =>
-    buildStudentNav()
-  );
+  readonly navItems: readonly SidebarNavItem[] = STUDENT_NAV_ITEMS;
   readonly userRoleLabel = computed<string>(() => {
     switch (this.authService.currentRole()) {
       case 'DOCENTE':
@@ -1008,18 +1007,6 @@ export class StudentEvaluationsComponent implements OnInit {
     }
     return fallback;
   }
-}
-
-/** Navegación del estudiante con la opción de evaluaciones activa. */
-function buildStudentNav(): readonly SidebarNavItem[] {
-  return [
-    { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
-    { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
-    { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
-    { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-    { label: 'Mis evaluaciones', icon: 'assignment', route: '/evaluations' },
-    { label: 'Mis resultados', icon: 'bar_chart', route: '/evaluations/results' },
-  ];
 }
 
 function buildInitials(name: string): string {

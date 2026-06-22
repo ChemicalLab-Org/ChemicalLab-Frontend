@@ -13,6 +13,7 @@ import {
   SidebarComponent,
   SidebarNavItem,
 } from '../../../shared/components/sidebar/sidebar.component';
+import { TEACHER_NAV_ITEMS } from '../../../shared/components/sidebar/teacher-nav';
 import {
   ApiError,
   CreateStudentRequest,
@@ -340,14 +341,7 @@ export class TeacherStudentsComponent {
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
-    { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
-    { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
-    { label: 'Evaluaciones', icon: 'quiz', route: '/teacher/evaluations' },
-    { label: 'Resultados', icon: 'analytics', route: '/teacher/results' },
-    { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
 
   readonly userRole = 'Docente';
   readonly gradeOptions = ['1', '2', '3', '4', '5'];
