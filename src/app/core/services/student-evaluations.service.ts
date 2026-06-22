@@ -5,8 +5,10 @@ import { environment } from '../../../environments/environment';
 import {
   AttemptResponse,
   StartEvaluationAttemptRequest,
+  StudentAttemptResultDetailResponse,
   StudentEvaluationDetailResponse,
   StudentEvaluationResponse,
+  StudentResultSummaryResponse,
   SubmitEvaluationAnswerRequest,
   SubmitEvaluationAttemptRequest,
 } from '../../shared/models';
@@ -60,7 +62,7 @@ export class StudentEvaluationsService {
     );
   }
 
-  /** Envía un intento. Tras esto el intento queda en SUBMITTED y no admite cambios. */
+  /** Envía un intento. Tras esto el intento queda calificado (GRADED) y no admite cambios. */
   submitAttempt(
     attemptId: number,
     request: SubmitEvaluationAttemptRequest = {}
@@ -68,6 +70,20 @@ export class StudentEvaluationsService {
     return this.http.post<AttemptResponse>(
       `${this.baseUrl}/attempts/${attemptId}/submit`,
       request
+    );
+  }
+
+  /** Lista las calificaciones de los intentos terminales del estudiante autenticado. */
+  listStudentResults(): Observable<StudentResultSummaryResponse[]> {
+    return this.http.get<StudentResultSummaryResponse[]>(`${this.baseUrl}/results`);
+  }
+
+  /** Obtiene el detalle del resultado de un intento propio. */
+  getStudentAttemptResult(
+    attemptId: number
+  ): Observable<StudentAttemptResultDetailResponse> {
+    return this.http.get<StudentAttemptResultDetailResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/result`
     );
   }
 }
