@@ -185,8 +185,8 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                           Ver evaluación <span class="material-icons">arrow_forward</span>
                         </button>
                       } @else if (isSubmitted(ev)) {
-                        <button type="button" class="btn btn-secondary" (click)="openEvaluation(ev)">
-                          Enviada
+                        <button type="button" class="btn btn-secondary" (click)="goToResults()">
+                          Ver resultado
                         </button>
                       } @else {
                         <button type="button" class="btn btn-secondary" disabled>
@@ -445,9 +445,14 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
               }
             </div>
 
-            <button type="button" class="btn btn-primary btn-lg" (click)="backToList()">
-              Volver a mis evaluaciones
-            </button>
+            <div class="ev-done__actions">
+              <button type="button" class="btn btn-secondary btn-lg" (click)="backToList()">
+                Volver a mis evaluaciones
+              </button>
+              <button type="button" class="btn btn-primary btn-lg" (click)="goToResults()">
+                Ver resultado <span class="material-icons">arrow_forward</span>
+              </button>
+            </div>
           </div>
         }
       </main>
@@ -961,6 +966,11 @@ export class StudentEvaluationsComponent implements OnInit {
 
   // ═══════════════ Utilidades ═══════════════
 
+  /** Abre la pantalla de resultados/calificaciones del estudiante. */
+  goToResults(): void {
+    void this.router.navigateByUrl('/evaluations/results');
+  }
+
   handleLogout(): void {
     this.authService.logout();
     void this.router.navigateByUrl('/auth/login');
@@ -1008,7 +1018,7 @@ function buildStudentNav(): readonly SidebarNavItem[] {
     { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
     { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
     { label: 'Mis evaluaciones', icon: 'assignment', route: '/evaluations' },
-    { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
+    { label: 'Mis resultados', icon: 'bar_chart', route: '/evaluations/results' },
   ];
 }
 
