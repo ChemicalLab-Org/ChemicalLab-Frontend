@@ -149,6 +149,15 @@ export class AdminDashboardComponent {
       route: '/admin/users',
     },
     {
+      id: 'academic-supervision',
+      title: 'Supervisión académica',
+      description: 'Supervisa contenidos, evaluaciones, asignaciones y actividad.',
+      icon: 'school',
+      tone: 'green',
+      cta: 'Ir a supervisión',
+      route: '/admin/academic-supervision',
+    },
+    {
       id: 'logs',
       title: 'Logs del sistema',
       description: 'Revisa el registro de actividad del sistema.',
