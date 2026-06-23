@@ -344,7 +344,7 @@ export class TeacherStudentsComponent {
   readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
 
   readonly userRole = 'Docente';
-  readonly gradeOptions = ['1', '2', '3', '4', '5'];
+  readonly gradeOptions = ['1', '2', '3', '4', '5', '6'];
   readonly sectionOptions = ['A', 'B', 'C', 'D'];
 
   // Estado de datos
