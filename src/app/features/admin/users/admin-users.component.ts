@@ -419,18 +419,26 @@ interface RoleOption {
                 }
                 <div class="form-group">
                   <label class="form-label" for="grade">Grado</label>
-                  <input id="grade" class="input" formControlName="grade" placeholder="ej. 5"
-                    [class.input-error]="isInvalid('grade')" />
+                  <select id="grade" class="select" formControlName="grade"
+                    [class.input-error]="isInvalid('grade')">
+                    <option value="" disabled>Selecciona…</option>
+                    @for (g of gradeOptions; track g) {
+                      <option [value]="g">{{ g }}</option>
+                    }
+                  </select>
                   @if (isInvalid('grade')) {
-                    <span class="form-error">Ingresa el grado (máx. 20 caracteres).</span>
+                    <span class="form-error">Selecciona un grado del 1 al 6.</span>
                   }
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="section">Sección</label>
-                  <input id="section" class="input" formControlName="section" placeholder="ej. A"
+                  <input id="section" class="input text-mono" formControlName="section" placeholder="ej. A"
+                    maxlength="1" autocapitalize="characters" (input)="onSectionInput($event)"
                     [class.input-error]="isInvalid('section')" />
                   @if (isInvalid('section')) {
-                    <span class="form-error">Ingresa la sección (máx. 20 caracteres).</span>
+                    <span class="form-error">La sección debe ser una sola letra (A-Z).</span>
+                  } @else {
+                    <span class="form-hint">Una sola letra; se guarda en mayúscula.</span>
                   }
                 </div>
                 <div class="form-group form-group--full">
@@ -601,6 +609,9 @@ export class AdminUsersComponent {
     { id: 'ESTUDIANTE', label: 'Estudiante' },
     { id: 'ADMINISTRADOR', label: 'Administrador' },
   ];
+
+  /** Grados válidos para estudiantes (1 a 6), alineados con la validación del backend. */
+  readonly gradeOptions: readonly string[] = ['1', '2', '3', '4', '5', '6'];
 
   // Datos
   readonly users = signal<AdminUser[]>([]);
@@ -778,6 +789,16 @@ export class AdminUsersComponent {
     this.searchTerm.set((event.target as HTMLInputElement).value);
   }
 
+  /** Normaliza la sección a una sola letra en mayúscula mientras el usuario escribe. */
+  onSectionInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const normalized = input.value.toUpperCase().slice(0, 1);
+    if (input.value !== normalized) {
+      input.value = normalized;
+    }
+    this.form.controls['section'].setValue(normalized);
+  }
+
   // ===================== Crear / editar usuario =====================
 
   openCreate(): void {
@@ -945,7 +966,7 @@ export class AdminUsersComponent {
       names: (v.names ?? '').trim(),
       lastNames: (v.lastNames ?? '').trim(),
       grade: (v.grade ?? '').trim(),
-      section: (v.section ?? '').trim(),
+      section: (v.section ?? '').trim().toUpperCase(),
       studentCode: trimToUndefined(v.studentCode),
       teacherUserId: v.teacherUserId ?? undefined,
     };
@@ -967,7 +988,7 @@ export class AdminUsersComponent {
       names: (v.names ?? '').trim(),
       lastNames: (v.lastNames ?? '').trim(),
       grade: (v.grade ?? '').trim(),
-      section: (v.section ?? '').trim(),
+      section: (v.section ?? '').trim().toUpperCase(),
       teacherUserId: v.teacherUserId ?? undefined,
     };
   }
@@ -998,8 +1019,9 @@ export class AdminUsersComponent {
     } else {
       required['names'] = [Validators.required, Validators.maxLength(100)];
       required['lastNames'] = [Validators.required, Validators.maxLength(100)];
-      required['grade'] = [Validators.required, Validators.maxLength(20)];
-      required['section'] = [Validators.required, Validators.maxLength(20)];
+      // Grado: entero del 1 al 6. Sección: exactamente una letra (A-Z).
+      required['grade'] = [Validators.required, Validators.pattern(/^[1-6]$/)];
+      required['section'] = [Validators.required, Validators.pattern(/^[A-Za-z]$/)];
       required['teacherUserId'] = [Validators.required];
     }
 
