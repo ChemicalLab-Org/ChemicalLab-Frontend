@@ -1,4 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { AcademicSupervisionService } from '../../../core/services/academic-supervision.service';
@@ -6,6 +7,7 @@ import { SidebarComponent, SidebarNavItem } from '../../../shared/components/sid
 import { ADMIN_NAV_ITEMS } from '../../../shared/components/sidebar/admin-nav';
 import {
   AdminActivity,
+  AdminActivityItem,
   AuthResponse,
   ConceptCategory,
   ConceptStatus,
@@ -38,7 +40,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
 @Component({
   selector: 'app-academic-supervision',
   standalone: true,
-  imports: [SidebarComponent],
+  imports: [FormsModule, SidebarComponent],
   styleUrls: ['./academic-supervision.component.scss'],
   template: `
     <div class="layout">
@@ -149,32 +151,85 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
           } @else if (concepts().length === 0) {
             <div class="state state--empty"><span class="material-icons">inbox</span><p>No hay contenidos registrados.</p></div>
           } @else {
-            <section class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Título</th>
-                    <th>Docente creador</th>
-                    <th>Categoría</th>
-                    <th>Estado</th>
-                    <th>Grados / secciones</th>
-                    <th>Creado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (c of concepts(); track c.id) {
-                    <tr>
-                      <td class="strong">{{ c.title }}</td>
-                      <td>{{ c.createdByTeacher ?? '—' }}</td>
-                      <td><span class="badge badge-neutral">{{ categoryLabel(c.category) }}</span></td>
-                      <td><span class="badge" [class]="statusBadgeClass(c.status)">{{ statusLabel(c.status) }}</span></td>
-                      <td>{{ sectionsLabel(c.sections) }}</td>
-                      <td class="mono">{{ formatDate(c.createdAt) }}</td>
-                    </tr>
+            <section class="filters">
+              <div class="field field--grow">
+                <label class="field__label">Buscar</label>
+                <input
+                  class="field__control"
+                  type="text"
+                  placeholder="Título o docente creador…"
+                  [ngModel]="conceptSearch()"
+                  (ngModelChange)="conceptSearch.set($event)"
+                />
+              </div>
+              <div class="field">
+                <label class="field__label">Estado</label>
+                <select class="field__control" [ngModel]="conceptStatus()" (ngModelChange)="conceptStatus.set($event)">
+                  <option value="">Todos</option>
+                  @for (s of statusOptions; track s) {
+                    <option [value]="s">{{ statusLabel(s) }}</option>
                   }
-                </tbody>
-              </table>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field__label">Categoría</label>
+                <select class="field__control" [ngModel]="conceptCategory()" (ngModelChange)="conceptCategory.set($event)">
+                  <option value="">Todas</option>
+                  @for (c of conceptCategoryOptions(); track c) {
+                    <option [value]="c">{{ categoryLabel(c) }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label class="field__label">Grado / sección</label>
+                <select class="field__control" [ngModel]="conceptSection()" (ngModelChange)="conceptSection.set($event)">
+                  <option value="">Todas</option>
+                  @for (s of conceptSectionOptions(); track s) {
+                    <option [value]="s">{{ s }}</option>
+                  }
+                </select>
+              </div>
+              @if (hasConceptFilters()) {
+                <div class="field field--actions">
+                  <button type="button" class="btn btn--ghost" (click)="clearConceptFilters()">Limpiar filtros</button>
+                </div>
+              }
             </section>
+
+            @if (filteredConcepts().length === 0) {
+              <div class="state state--empty">
+                <span class="material-icons">filter_alt_off</span>
+                <p>No se encontraron registros con los filtros aplicados.</p>
+                <button type="button" class="btn btn--ghost" (click)="clearConceptFilters()">Limpiar filtros</button>
+              </div>
+            } @else {
+              <section class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Título</th>
+                      <th>Docente creador</th>
+                      <th>Categoría</th>
+                      <th>Estado</th>
+                      <th>Grados / secciones</th>
+                      <th>Creado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (c of filteredConcepts(); track c.id) {
+                      <tr>
+                        <td class="strong">{{ c.title }}</td>
+                        <td>{{ c.createdByTeacher ?? '—' }}</td>
+                        <td><span class="badge badge-neutral">{{ categoryLabel(c.category) }}</span></td>
+                        <td><span class="badge" [class]="statusBadgeClass(c.status)">{{ statusLabel(c.status) }}</span></td>
+                        <td>{{ sectionsLabel(c.sections) }}</td>
+                        <td class="mono">{{ formatDate(c.createdAt) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </section>
+            }
           }
         }
 
@@ -195,34 +250,85 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               <span class="material-icons">lock</span>
               Vista de solo lectura. La supervisión muestra metadatos de las evaluaciones; nunca la clave de respuestas.
             </p>
-            <section class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Título</th>
-                    <th>Docente creador</th>
-                    <th>Estado</th>
-                    <th>Grados / secciones</th>
-                    <th class="num">Preguntas</th>
-                    <th class="num">Intentos enviados</th>
-                    <th>Creada</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (e of evaluations(); track e.id) {
-                    <tr>
-                      <td class="strong">{{ e.title }}</td>
-                      <td>{{ e.createdByTeacher ?? '—' }}</td>
-                      <td><span class="badge" [class]="statusBadgeClass(e.status)">{{ statusLabel(e.status) }}</span></td>
-                      <td>{{ sectionsLabel(e.sections) }}</td>
-                      <td class="num">{{ e.questionCount }}</td>
-                      <td class="num">{{ e.submittedAttempts }}</td>
-                      <td class="mono">{{ formatDate(e.createdAt) }}</td>
-                    </tr>
+
+            <section class="filters">
+              <div class="field field--grow">
+                <label class="field__label">Buscar</label>
+                <input
+                  class="field__control"
+                  type="text"
+                  placeholder="Título o docente creador…"
+                  [ngModel]="evalSearch()"
+                  (ngModelChange)="evalSearch.set($event)"
+                />
+              </div>
+              <div class="field">
+                <label class="field__label">Estado</label>
+                <select class="field__control" [ngModel]="evalStatus()" (ngModelChange)="evalStatus.set($event)">
+                  <option value="">Todos</option>
+                  @for (s of statusOptions; track s) {
+                    <option [value]="s">{{ statusLabel(s) }}</option>
                   }
-                </tbody>
-              </table>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field__label">Grado / sección</label>
+                <select class="field__control" [ngModel]="evalSection()" (ngModelChange)="evalSection.set($event)">
+                  <option value="">Todas</option>
+                  @for (s of evalSectionOptions(); track s) {
+                    <option [value]="s">{{ s }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field field--check">
+                <label class="check">
+                  <input type="checkbox" [ngModel]="evalWithAttempts()" (ngModelChange)="evalWithAttempts.set($event)" />
+                  Solo con intentos enviados
+                </label>
+              </div>
+              @if (hasEvalFilters()) {
+                <div class="field field--actions">
+                  <button type="button" class="btn btn--ghost" (click)="clearEvalFilters()">Limpiar filtros</button>
+                </div>
+              }
             </section>
+
+            @if (filteredEvaluations().length === 0) {
+              <div class="state state--empty">
+                <span class="material-icons">filter_alt_off</span>
+                <p>No se encontraron registros con los filtros aplicados.</p>
+                <button type="button" class="btn btn--ghost" (click)="clearEvalFilters()">Limpiar filtros</button>
+              </div>
+            } @else {
+              <section class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Título</th>
+                      <th>Docente creador</th>
+                      <th>Estado</th>
+                      <th>Grados / secciones</th>
+                      <th class="num">Preguntas</th>
+                      <th class="num">Intentos enviados</th>
+                      <th>Creada</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (e of filteredEvaluations(); track e.id) {
+                      <tr>
+                        <td class="strong">{{ e.title }}</td>
+                        <td>{{ e.createdByTeacher ?? '—' }}</td>
+                        <td><span class="badge" [class]="statusBadgeClass(e.status)">{{ statusLabel(e.status) }}</span></td>
+                        <td>{{ sectionsLabel(e.sections) }}</td>
+                        <td class="num">{{ e.questionCount }}</td>
+                        <td class="num">{{ e.submittedAttempts }}</td>
+                        <td class="mono">{{ formatDate(e.createdAt) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </section>
+            }
           }
         }
 
@@ -239,38 +345,98 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
           } @else if (assignments().length === 0) {
             <div class="state state--empty"><span class="material-icons">inbox</span><p>No hay asignaciones registradas.</p></div>
           } @else {
-            <section class="table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Tipo</th>
-                    <th>Título</th>
-                    <th>Docente responsable</th>
-                    <th>Grado</th>
-                    <th>Sección</th>
-                    <th>Estado</th>
-                    <th>Asignado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (a of assignments(); track $index) {
-                    <tr>
-                      <td><span class="badge" [class]="typeBadgeClass(a.type)">{{ typeLabel(a.type) }}</span></td>
-                      <td class="strong">{{ a.title }}</td>
-                      <td>{{ a.createdByTeacher ?? '—' }}</td>
-                      <td>{{ a.grade }}</td>
-                      <td>{{ a.section }}</td>
-                      <td>
-                        <span class="badge" [class]="a.active ? 'badge-success' : 'badge-neutral'">
-                          {{ a.active ? 'Activa' : 'Inactiva' }}
-                        </span>
-                      </td>
-                      <td class="mono">{{ formatDate(a.assignedAt) }}</td>
-                    </tr>
+            <section class="filters">
+              <div class="field field--grow">
+                <label class="field__label">Buscar</label>
+                <input
+                  class="field__control"
+                  type="text"
+                  placeholder="Título o docente responsable…"
+                  [ngModel]="assignSearch()"
+                  (ngModelChange)="assignSearch.set($event)"
+                />
+              </div>
+              <div class="field">
+                <label class="field__label">Tipo</label>
+                <select class="field__control" [ngModel]="assignType()" (ngModelChange)="assignType.set($event)">
+                  <option value="">Todos</option>
+                  <option value="CONTENIDO">Contenido</option>
+                  <option value="EVALUACION">Evaluación</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field__label">Grado</label>
+                <select class="field__control" [ngModel]="assignGrade()" (ngModelChange)="assignGrade.set($event)">
+                  <option value="">Todos</option>
+                  @for (g of assignGradeOptions(); track g) {
+                    <option [value]="g">{{ g }}</option>
                   }
-                </tbody>
-              </table>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field__label">Sección</label>
+                <select class="field__control" [ngModel]="assignSection()" (ngModelChange)="assignSection.set($event)">
+                  <option value="">Todas</option>
+                  @for (s of assignSectionOptions(); track s) {
+                    <option [value]="s">{{ s }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label class="field__label">Estado</label>
+                <select class="field__control" [ngModel]="assignActive()" (ngModelChange)="assignActive.set($event)">
+                  <option value="">Todos</option>
+                  <option value="true">Activa</option>
+                  <option value="false">Inactiva</option>
+                </select>
+              </div>
+              @if (hasAssignFilters()) {
+                <div class="field field--actions">
+                  <button type="button" class="btn btn--ghost" (click)="clearAssignFilters()">Limpiar filtros</button>
+                </div>
+              }
             </section>
+
+            @if (filteredAssignments().length === 0) {
+              <div class="state state--empty">
+                <span class="material-icons">filter_alt_off</span>
+                <p>No se encontraron registros con los filtros aplicados.</p>
+                <button type="button" class="btn btn--ghost" (click)="clearAssignFilters()">Limpiar filtros</button>
+              </div>
+            } @else {
+              <section class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Tipo</th>
+                      <th>Título</th>
+                      <th>Docente responsable</th>
+                      <th>Grado</th>
+                      <th>Sección</th>
+                      <th>Estado</th>
+                      <th>Asignado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (a of filteredAssignments(); track $index) {
+                      <tr>
+                        <td><span class="badge" [class]="typeBadgeClass(a.type)">{{ typeLabel(a.type) }}</span></td>
+                        <td class="strong">{{ a.title }}</td>
+                        <td>{{ a.createdByTeacher ?? '—' }}</td>
+                        <td>{{ a.grade }}</td>
+                        <td>{{ a.section }}</td>
+                        <td>
+                          <span class="badge" [class]="a.active ? 'badge-success' : 'badge-neutral'">
+                            {{ a.active ? 'Activa' : 'Inactiva' }}
+                          </span>
+                        </td>
+                        <td class="mono">{{ formatDate(a.assignedAt) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </section>
+            }
           }
         }
 
@@ -285,55 +451,96 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               <button type="button" class="btn btn--primary" (click)="loadActivity()">Reintentar</button>
             </div>
           } @else if (activity(); as act) {
-            <section class="activity-grid">
-              <article class="activity-card">
-                <h2 class="activity-card__title"><span class="material-icons">menu_book</span> Contenidos recientes</h2>
-                @if (act.recentConcepts.length === 0) {
-                  <p class="activity-card__empty">Sin contenidos recientes.</p>
-                } @else {
-                  <ul class="activity-list">
-                    @for (item of act.recentConcepts; track $index) {
-                      <li class="activity-item">
-                        <span class="activity-item__title">{{ item.title }}</span>
-                        <span class="activity-item__meta">{{ item.subtitle ?? '—' }} · {{ formatDate(item.timestamp) }}</span>
-                      </li>
-                    }
-                  </ul>
-                }
-              </article>
-
-              <article class="activity-card">
-                <h2 class="activity-card__title"><span class="material-icons">quiz</span> Evaluaciones recientes</h2>
-                @if (act.recentEvaluations.length === 0) {
-                  <p class="activity-card__empty">Sin evaluaciones recientes.</p>
-                } @else {
-                  <ul class="activity-list">
-                    @for (item of act.recentEvaluations; track $index) {
-                      <li class="activity-item">
-                        <span class="activity-item__title">{{ item.title }}</span>
-                        <span class="activity-item__meta">{{ item.subtitle ?? '—' }} · {{ formatDate(item.timestamp) }}</span>
-                      </li>
-                    }
-                  </ul>
-                }
-              </article>
-
-              <article class="activity-card">
-                <h2 class="activity-card__title"><span class="material-icons">person_add</span> Usuarios recientes</h2>
-                @if (act.recentUsers.length === 0) {
-                  <p class="activity-card__empty">Sin usuarios recientes.</p>
-                } @else {
-                  <ul class="activity-list">
-                    @for (item of act.recentUsers; track $index) {
-                      <li class="activity-item">
-                        <span class="activity-item__title">{{ item.title }}</span>
-                        <span class="activity-item__meta">{{ item.subtitle ?? '—' }} · {{ formatDate(item.timestamp) }}</span>
-                      </li>
-                    }
-                  </ul>
-                }
-              </article>
+            <section class="filters">
+              <div class="field field--grow">
+                <label class="field__label">Buscar</label>
+                <input
+                  class="field__control"
+                  type="text"
+                  placeholder="Título, usuario o docente…"
+                  [ngModel]="activitySearch()"
+                  (ngModelChange)="activitySearch.set($event)"
+                />
+              </div>
+              <div class="field">
+                <label class="field__label">Tipo de actividad</label>
+                <select class="field__control" [ngModel]="activityType()" (ngModelChange)="activityType.set($event)">
+                  <option value="">Todas</option>
+                  <option value="concepts">Contenidos</option>
+                  <option value="evaluations">Evaluaciones</option>
+                  <option value="users">Usuarios</option>
+                </select>
+              </div>
+              @if (hasActivityFilters()) {
+                <div class="field field--actions">
+                  <button type="button" class="btn btn--ghost" (click)="clearActivityFilters()">Limpiar filtros</button>
+                </div>
+              }
             </section>
+
+            @if (activityEmpty()) {
+              <div class="state state--empty">
+                <span class="material-icons">filter_alt_off</span>
+                <p>No se encontraron registros con los filtros aplicados.</p>
+                <button type="button" class="btn btn--ghost" (click)="clearActivityFilters()">Limpiar filtros</button>
+              </div>
+            } @else {
+              <section class="activity-grid">
+                @if (showActivityType('concepts')) {
+                  <article class="activity-card">
+                    <h2 class="activity-card__title"><span class="material-icons">menu_book</span> Contenidos recientes</h2>
+                    @if (filteredRecentConcepts().length === 0) {
+                      <p class="activity-card__empty">Sin contenidos para los filtros aplicados.</p>
+                    } @else {
+                      <ul class="activity-list">
+                        @for (item of filteredRecentConcepts(); track $index) {
+                          <li class="activity-item">
+                            <span class="activity-item__title">{{ item.title }}</span>
+                            <span class="activity-item__meta">{{ item.subtitle ?? '—' }} · {{ formatDate(item.timestamp) }}</span>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </article>
+                }
+
+                @if (showActivityType('evaluations')) {
+                  <article class="activity-card">
+                    <h2 class="activity-card__title"><span class="material-icons">quiz</span> Evaluaciones recientes</h2>
+                    @if (filteredRecentEvaluations().length === 0) {
+                      <p class="activity-card__empty">Sin evaluaciones para los filtros aplicados.</p>
+                    } @else {
+                      <ul class="activity-list">
+                        @for (item of filteredRecentEvaluations(); track $index) {
+                          <li class="activity-item">
+                            <span class="activity-item__title">{{ item.title }}</span>
+                            <span class="activity-item__meta">{{ item.subtitle ?? '—' }} · {{ formatDate(item.timestamp) }}</span>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </article>
+                }
+
+                @if (showActivityType('users')) {
+                  <article class="activity-card">
+                    <h2 class="activity-card__title"><span class="material-icons">person_add</span> Usuarios recientes</h2>
+                    @if (filteredRecentUsers().length === 0) {
+                      <p class="activity-card__empty">Sin usuarios para los filtros aplicados.</p>
+                    } @else {
+                      <ul class="activity-list">
+                        @for (item of filteredRecentUsers(); track $index) {
+                          <li class="activity-item">
+                            <span class="activity-item__title">{{ item.title }}</span>
+                            <span class="activity-item__meta">{{ item.subtitle ?? '—' }} · {{ formatDate(item.timestamp) }}</span>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </article>
+                }
+              </section>
+            }
           }
         }
       </main>
@@ -400,8 +607,184 @@ export class AcademicSupervisionComponent implements OnInit {
       this.activityLoading()
   );
 
+  // ===========================================================================
+  // FILTROS (lado frontend, sobre los datos ya cargados)
+  // ===========================================================================
+
+  // Estados disponibles para contenidos y evaluaciones (comparten valores).
+  readonly statusOptions: readonly ConceptStatus[] = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+
+  // --- Contenidos ---
+  readonly conceptSearch = signal<string>('');
+  readonly conceptStatus = signal<string>('');
+  readonly conceptCategory = signal<string>('');
+  readonly conceptSection = signal<string>('');
+
+  readonly conceptCategoryOptions = computed<ConceptCategory[]>(() => {
+    const set = new Set<ConceptCategory>();
+    this.concepts().forEach((c) => set.add(c.category));
+    return Array.from(set).sort((a, b) => this.categoryLabel(a).localeCompare(this.categoryLabel(b)));
+  });
+
+  readonly conceptSectionOptions = computed<string[]>(() =>
+    this.sectionOptionsFrom(this.concepts().flatMap((c) => c.sections))
+  );
+
+  readonly filteredConcepts = computed<SupervisionConcept[]>(() => {
+    const term = this.conceptSearch();
+    const status = this.conceptStatus();
+    const category = this.conceptCategory();
+    const section = this.conceptSection();
+    return this.concepts().filter((c) => {
+      if (!this.textIncludes(term, c.title, c.createdByTeacher)) return false;
+      if (status && c.status !== status) return false;
+      if (category && c.category !== category) return false;
+      if (section && !this.activeSectionKeys(c.sections).includes(section)) return false;
+      return true;
+    });
+  });
+
+  readonly hasConceptFilters = computed<boolean>(
+    () => !!(this.conceptSearch().trim() || this.conceptStatus() || this.conceptCategory() || this.conceptSection())
+  );
+
+  // --- Evaluaciones ---
+  readonly evalSearch = signal<string>('');
+  readonly evalStatus = signal<string>('');
+  readonly evalSection = signal<string>('');
+  readonly evalWithAttempts = signal<boolean>(false);
+
+  readonly evalSectionOptions = computed<string[]>(() =>
+    this.sectionOptionsFrom(this.evaluations().flatMap((e) => e.sections))
+  );
+
+  readonly filteredEvaluations = computed<SupervisionEvaluation[]>(() => {
+    const term = this.evalSearch();
+    const status = this.evalStatus();
+    const section = this.evalSection();
+    const withAttempts = this.evalWithAttempts();
+    return this.evaluations().filter((e) => {
+      if (!this.textIncludes(term, e.title, e.createdByTeacher)) return false;
+      if (status && e.status !== status) return false;
+      if (section && !this.activeSectionKeys(e.sections).includes(section)) return false;
+      if (withAttempts && e.submittedAttempts <= 0) return false;
+      return true;
+    });
+  });
+
+  readonly hasEvalFilters = computed<boolean>(
+    () => !!(this.evalSearch().trim() || this.evalStatus() || this.evalSection() || this.evalWithAttempts())
+  );
+
+  // --- Asignaciones ---
+  readonly assignSearch = signal<string>('');
+  readonly assignType = signal<string>('');
+  readonly assignGrade = signal<string>('');
+  readonly assignSection = signal<string>('');
+  readonly assignActive = signal<string>('');
+
+  readonly assignGradeOptions = computed<string[]>(() => {
+    const set = new Set<string>();
+    this.assignments().forEach((a) => set.add(a.grade));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  });
+
+  readonly assignSectionOptions = computed<string[]>(() => {
+    const set = new Set<string>();
+    this.assignments().forEach((a) => set.add(a.section));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  });
+
+  readonly filteredAssignments = computed<SupervisionAssignment[]>(() => {
+    const term = this.assignSearch();
+    const type = this.assignType();
+    const grade = this.assignGrade();
+    const section = this.assignSection();
+    const active = this.assignActive();
+    return this.assignments().filter((a) => {
+      if (!this.textIncludes(term, a.title, a.createdByTeacher)) return false;
+      if (type && a.type !== type) return false;
+      if (grade && a.grade !== grade) return false;
+      if (section && a.section !== section) return false;
+      if (active && String(a.active) !== active) return false;
+      return true;
+    });
+  });
+
+  readonly hasAssignFilters = computed<boolean>(
+    () =>
+      !!(
+        this.assignSearch().trim() ||
+        this.assignType() ||
+        this.assignGrade() ||
+        this.assignSection() ||
+        this.assignActive()
+      )
+  );
+
+  // --- Actividad ---
+  readonly activitySearch = signal<string>('');
+  readonly activityType = signal<string>('');
+
+  readonly filteredRecentConcepts = computed<AdminActivityItem[]>(() =>
+    this.filterActivityItems(this.activity()?.recentConcepts ?? [])
+  );
+  readonly filteredRecentEvaluations = computed<AdminActivityItem[]>(() =>
+    this.filterActivityItems(this.activity()?.recentEvaluations ?? [])
+  );
+  readonly filteredRecentUsers = computed<AdminActivityItem[]>(() =>
+    this.filterActivityItems(this.activity()?.recentUsers ?? [])
+  );
+
+  readonly hasActivityFilters = computed<boolean>(
+    () => !!(this.activitySearch().trim() || this.activityType())
+  );
+
+  readonly activityEmpty = computed<boolean>(() => {
+    const concepts = this.showActivityType('concepts') ? this.filteredRecentConcepts().length : 0;
+    const evaluations = this.showActivityType('evaluations') ? this.filteredRecentEvaluations().length : 0;
+    const users = this.showActivityType('users') ? this.filteredRecentUsers().length : 0;
+    return concepts + evaluations + users === 0;
+  });
+
   ngOnInit(): void {
     this.loadSummary();
+  }
+
+  // ===========================================================================
+  // Acciones de filtros
+  // ===========================================================================
+
+  clearConceptFilters(): void {
+    this.conceptSearch.set('');
+    this.conceptStatus.set('');
+    this.conceptCategory.set('');
+    this.conceptSection.set('');
+  }
+
+  clearEvalFilters(): void {
+    this.evalSearch.set('');
+    this.evalStatus.set('');
+    this.evalSection.set('');
+    this.evalWithAttempts.set(false);
+  }
+
+  clearAssignFilters(): void {
+    this.assignSearch.set('');
+    this.assignType.set('');
+    this.assignGrade.set('');
+    this.assignSection.set('');
+    this.assignActive.set('');
+  }
+
+  clearActivityFilters(): void {
+    this.activitySearch.set('');
+    this.activityType.set('');
+  }
+
+  /** Indica si una columna de actividad debe mostrarse según el filtro de tipo. */
+  showActivityType(type: 'concepts' | 'evaluations' | 'users'): boolean {
+    return this.activityType() === '' || this.activityType() === type;
   }
 
   /** Cambia de pestaña y carga sus datos la primera vez que se abre. */
@@ -553,6 +936,31 @@ export class AcademicSupervisionComponent implements OnInit {
     const active = sections.filter((s) => s.active);
     if (active.length === 0) return 'Sin asignar';
     return active.map((s) => `${s.grade} ${s.section}`).join(', ');
+  }
+
+  /** Verdadero si el término está vacío o aparece en alguno de los valores dados. */
+  private textIncludes(term: string, ...values: (string | null | undefined)[]): boolean {
+    const t = term.trim().toLowerCase();
+    if (!t) return true;
+    return values.some((v) => (v ?? '').toLowerCase().includes(t));
+  }
+
+  /** Claves "grado sección" de las asignaciones activas de un recurso. */
+  private activeSectionKeys(sections: SupervisionSectionRef[]): string[] {
+    return sections.filter((s) => s.active).map((s) => `${s.grade} ${s.section}`);
+  }
+
+  /** Lista ordenada y sin duplicados de "grado sección" a partir de secciones activas. */
+  private sectionOptionsFrom(sections: SupervisionSectionRef[]): string[] {
+    const set = new Set<string>();
+    sections.filter((s) => s.active).forEach((s) => set.add(`${s.grade} ${s.section}`));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }
+
+  /** Filtra una lista de actividad por el término de búsqueda (título o subtítulo). */
+  private filterActivityItems(items: AdminActivityItem[]): AdminActivityItem[] {
+    const term = this.activitySearch();
+    return items.filter((i) => this.textIncludes(term, i.title, i.subtitle));
   }
 
   formatDate(value: string | null): string {
