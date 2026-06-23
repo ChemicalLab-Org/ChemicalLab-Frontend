@@ -508,3 +508,8 @@
 .form-group--full {
   grid-column: 1 / -1;
 }
+
+// Selector de rol dentro del formulario de creación: sin margen inferior extra.
+.role-tabs {
+  margin-bottom: 0;
+}

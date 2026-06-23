@@ -1,10 +1,16 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  FormBuilder,
+  FormGroup,
+  ReactiveFormsModule,
+  ValidatorFn,
+  Validators,
+} from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { AdminService } from '../../../core/services/admin.service';
-import { UserManagementService } from '../../../core/services/user-management.service';
 import { SidebarComponent, SidebarNavItem } from '../../../shared/components/sidebar/sidebar.component';
 import { ADMIN_NAV_ITEMS } from '../../../shared/components/sidebar/admin-nav';
 import {
@@ -12,11 +18,14 @@ import {
   AdminSummary,
   AdminUser,
   ApiError,
-  CreateTeacherRequest,
+  CreateUserRequest,
+  TeacherOption,
+  UpdateUserRequest,
   UserRole,
 } from '../../../shared/models';
 
 type UserFilter = 'all' | UserRole | 'active' | 'inactive';
+type FormMode = 'create' | 'edit';
 
 interface MetricCard {
   readonly id: string;
@@ -27,6 +36,11 @@ interface MetricCard {
 
 interface FilterTab {
   readonly id: UserFilter;
+  readonly label: string;
+}
+
+interface RoleOption {
+  readonly id: UserRole;
   readonly label: string;
 }
 
@@ -54,8 +68,8 @@ interface FilterTab {
             </p>
           </div>
           <button type="button" class="btn btn-primary" (click)="openCreate()">
-            <span class="material-icons">add</span>
-            Registrar docente
+            <span class="material-icons">person_add</span>
+            Crear usuario
           </button>
         </header>
 
@@ -125,7 +139,7 @@ interface FilterTab {
             <div class="empty-state">
               <div class="empty-state__icon"><span class="material-icons">group</span></div>
               <h2 class="empty-state__title">No hay usuarios registrados.</h2>
-              <p class="empty-state__desc">Registra al primer docente para comenzar.</p>
+              <p class="empty-state__desc">Crea el primer usuario para comenzar.</p>
             </div>
           } @else {
             <div class="table-container">
@@ -166,7 +180,17 @@ interface FilterTab {
                       <td class="date-cell">{{ formatDate(u.createdAt) }}</td>
                       <td>
                         <div class="row-actions">
-                          @if (u.role !== 'ADMINISTRADOR' && !isProtected(u)) {
+                          <button
+                            type="button"
+                            class="row-action"
+                            title="Editar datos básicos"
+                            aria-label="Editar datos básicos"
+                            (click)="openEdit(u)"
+                          >
+                            <span class="material-icons">edit</span>
+                          </button>
+
+                          @if (!isProtected(u)) {
                             <button
                               type="button"
                               class="row-action"
@@ -295,67 +319,151 @@ interface FilterTab {
       </main>
     </div>
 
-    <!-- Modal: registrar docente -->
+    <!-- Modal: crear / editar usuario -->
     @if (formOpen()) {
       <div class="modal-overlay" (click)="closeForm()">
         <div class="modal modal--form" (click)="$event.stopPropagation()">
           <header class="modal__header">
-            <h2 class="modal__title">Registrar docente</h2>
+            <h2 class="modal__title">{{ formMode() === 'create' ? 'Crear usuario' : 'Editar usuario' }}</h2>
             <button type="button" class="modal__close" aria-label="Cerrar" (click)="closeForm()">
               <span class="material-icons">close</span>
             </button>
           </header>
 
           <form [formGroup]="form" (ngSubmit)="submitForm()" class="modal__body">
+            <!-- Selector de rol (solo al crear) -->
+            @if (formMode() === 'create') {
+              <div class="form-group form-group--full">
+                <label class="form-label">Rol</label>
+                <div class="filter-tabs role-tabs">
+                  @for (r of roleOptions; track r.id) {
+                    <button
+                      type="button"
+                      class="filter-pill"
+                      [class.filter-pill--active]="selectedRole() === r.id"
+                      (click)="selectRole(r.id)"
+                    >
+                      {{ r.label }}
+                    </button>
+                  }
+                </div>
+              </div>
+            } @else {
+              <div class="form-group form-group--full">
+                <label class="form-label">Rol</label>
+                <div><span class="role-badge" [attr.data-role]="selectedRole()">{{ roleLabel(selectedRole()) }}</span></div>
+                <span class="form-hint">El rol no se modifica en la edición.</span>
+              </div>
+            }
+
             <div class="form-grid">
-              <div class="form-group">
-                <label class="form-label" for="names">Nombres</label>
-                <input id="names" class="input" formControlName="names" placeholder="ej. Pedro"
-                  [class.input-error]="isInvalid('names')" />
-                @if (isInvalid('names')) {
-                  <span class="form-error">Ingresa los nombres (máx. 100 caracteres).</span>
+              <!-- Nombres / apellidos: docente y estudiante -->
+              @if (showNames()) {
+                <div class="form-group">
+                  <label class="form-label" for="names">Nombres</label>
+                  <input id="names" class="input" formControlName="names" placeholder="ej. Pedro"
+                    [class.input-error]="isInvalid('names')" />
+                  @if (isInvalid('names')) {
+                    <span class="form-error">Ingresa los nombres (máx. 100 caracteres).</span>
+                  }
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="lastNames">Apellidos</label>
+                  <input id="lastNames" class="input" formControlName="lastNames" placeholder="ej. Martínez"
+                    [class.input-error]="isInvalid('lastNames')" />
+                  @if (isInvalid('lastNames')) {
+                    <span class="form-error">Ingresa los apellidos (máx. 100 caracteres).</span>
+                  }
+                </div>
+              }
+
+              <!-- Usuario: administrador y docente, solo al crear (es inmutable) -->
+              @if (showUsername()) {
+                <div class="form-group form-group--full">
+                  <label class="form-label" for="username">Usuario</label>
+                  <input id="username" class="input text-mono" formControlName="username" placeholder="ej. pedro.martinez"
+                    [class.input-error]="isInvalid('username')" />
+                  @if (isInvalid('username')) {
+                    <span class="form-error">El usuario debe tener entre 4 y 50 caracteres.</span>
+                  } @else {
+                    <span class="form-hint">Se usará para iniciar sesión.</span>
+                  }
+                </div>
+              }
+
+              <!-- Correo: administrador y docente -->
+              @if (showEmail()) {
+                <div class="form-group form-group--full">
+                  <label class="form-label" for="email">Correo (opcional)</label>
+                  <input id="email" class="input" type="email" formControlName="email"
+                    placeholder="ej. pedro.martinez@correo.com" [class.input-error]="isInvalid('email')" />
+                  @if (isInvalid('email')) {
+                    <span class="form-error">Ingresa un correo con formato válido (máx. 100 caracteres).</span>
+                  }
+                </div>
+              }
+
+              <!-- Campos de estudiante -->
+              @if (selectedRole() === 'ESTUDIANTE') {
+                @if (formMode() === 'create') {
+                  <div class="form-group form-group--full">
+                    <label class="form-label" for="studentCode">Código de estudiante (opcional)</label>
+                    <input id="studentCode" class="input text-mono" formControlName="studentCode"
+                      placeholder="Se genera automáticamente si lo dejas vacío" [class.input-error]="isInvalid('studentCode')" />
+                    @if (isInvalid('studentCode')) {
+                      <span class="form-error">El código no puede superar 20 caracteres.</span>
+                    } @else {
+                      <span class="form-hint">También será su usuario de inicio de sesión.</span>
+                    }
+                  </div>
                 }
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="lastNames">Apellidos</label>
-                <input id="lastNames" class="input" formControlName="lastNames" placeholder="ej. Martínez"
-                  [class.input-error]="isInvalid('lastNames')" />
-                @if (isInvalid('lastNames')) {
-                  <span class="form-error">Ingresa los apellidos (máx. 100 caracteres).</span>
-                }
-              </div>
-              <div class="form-group form-group--full">
-                <label class="form-label" for="username">Usuario</label>
-                <input id="username" class="input text-mono" formControlName="username" placeholder="ej. pedro.martinez"
-                  [class.input-error]="isInvalid('username')" />
-                @if (isInvalid('username')) {
-                  <span class="form-error">El usuario debe tener entre 4 y 50 caracteres.</span>
-                } @else {
-                  <span class="form-hint">Se usará para iniciar sesión.</span>
-                }
-              </div>
-              <div class="form-group form-group--full">
-                <label class="form-label" for="email">Correo</label>
-                <input id="email" class="input" type="email" formControlName="email" placeholder="ej. pedro.martinez@correo.com"
-                  [class.input-error]="isInvalid('email')" />
-                @if (isInvalid('email')) {
-                  <span class="form-error">Ingresa un correo con formato válido (máx. 100 caracteres).</span>
-                }
-              </div>
-              <div class="form-group form-group--full">
-                <label class="form-label" for="temporaryPassword">Contraseña temporal</label>
-                <input id="temporaryPassword" class="input" formControlName="temporaryPassword"
-                  placeholder="Mín. 6 caracteres" [class.input-error]="isInvalid('temporaryPassword')" />
-                @if (isInvalid('temporaryPassword')) {
-                  <span class="form-error">La contraseña debe tener entre 6 y 100 caracteres.</span>
-                }
-              </div>
+                <div class="form-group">
+                  <label class="form-label" for="grade">Grado</label>
+                  <input id="grade" class="input" formControlName="grade" placeholder="ej. 5"
+                    [class.input-error]="isInvalid('grade')" />
+                  @if (isInvalid('grade')) {
+                    <span class="form-error">Ingresa el grado (máx. 20 caracteres).</span>
+                  }
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="section">Sección</label>
+                  <input id="section" class="input" formControlName="section" placeholder="ej. A"
+                    [class.input-error]="isInvalid('section')" />
+                  @if (isInvalid('section')) {
+                    <span class="form-error">Ingresa la sección (máx. 20 caracteres).</span>
+                  }
+                </div>
+                <div class="form-group form-group--full">
+                  <label class="form-label" for="teacherUserId">Docente responsable</label>
+                  <select id="teacherUserId" class="select" formControlName="teacherUserId"
+                    [class.input-error]="isInvalid('teacherUserId')">
+                    <option [ngValue]="null" disabled>Selecciona un docente…</option>
+                    @for (t of teacherOptions(); track t.userId) {
+                      <option [ngValue]="t.userId">{{ t.fullName }} ({{ t.username }})</option>
+                    }
+                  </select>
+                  @if (teacherOptions().length === 0) {
+                    <span class="form-hint">No hay docentes activos. Crea o activa un docente primero.</span>
+                  } @else if (isInvalid('teacherUserId')) {
+                    <span class="form-error">Selecciona un docente responsable activo.</span>
+                  }
+                </div>
+              }
             </div>
 
-            <div class="alert alert-info modal__note">
-              <span class="material-icons">info</span>
-              El docente deberá cambiar su contraseña en el primer ingreso.
-            </div>
+            @if (formMode() === 'create') {
+              <div class="alert alert-info modal__note">
+                <span class="material-icons">info</span>
+                Se generará una contraseña temporal que verás una sola vez. El usuario deberá
+                cambiarla en su primer ingreso.
+              </div>
+            } @else {
+              <div class="alert alert-info modal__note">
+                <span class="material-icons">info</span>
+                La edición no cambia la contraseña ni el usuario/código. Usa «Restablecer contraseña»
+                para generar una nueva.
+              </div>
+            }
 
             @if (formError()) {
               <div class="alert alert-danger modal__note">
@@ -367,10 +475,30 @@ interface FilterTab {
             <div class="modal__actions">
               <button type="button" class="btn btn-secondary" (click)="closeForm()" [disabled]="saving()">Cancelar</button>
               <button type="submit" class="btn btn-primary" [disabled]="saving()">
-                {{ saving() ? 'Guardando…' : 'Guardar docente' }}
+                {{ saving() ? 'Guardando…' : (formMode() === 'create' ? 'Crear usuario' : 'Guardar cambios') }}
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    }
+
+    <!-- Modal: confirmar creación de administrador (acción sensible) -->
+    @if (adminConfirmOpen()) {
+      <div class="modal-overlay" (click)="cancelAdminConfirm()">
+        <div class="modal modal--confirm" (click)="$event.stopPropagation()">
+          <div class="modal__warn-icon"><span class="material-icons">admin_panel_settings</span></div>
+          <h2 class="modal__title">¿Crear un nuevo administrador?</h2>
+          <p class="modal__text">
+            Los administradores tienen acceso total a la gestión de usuarios y del sistema.
+            Asegúrate de que esta persona deba tener ese nivel de acceso.
+          </p>
+          <div class="modal__actions">
+            <button type="button" class="btn btn-secondary" (click)="cancelAdminConfirm()" [disabled]="saving()">Cancelar</button>
+            <button type="button" class="btn btn-primary" (click)="confirmAdminCreate()" [disabled]="saving()">
+              {{ saving() ? 'Creando…' : 'Crear administrador' }}
+            </button>
+          </div>
         </div>
       </div>
     }
@@ -429,20 +557,20 @@ interface FilterTab {
       </div>
     }
 
-    <!-- Modal: contraseña temporal establecida -->
-    @if (resetResult(); as result) {
-      <div class="modal-overlay" (click)="closeResetResult()">
+    <!-- Modal: contraseña temporal generada (creación o reset) -->
+    @if (tempPasswordResult(); as result) {
+      <div class="modal-overlay" (click)="closeTempPasswordResult()">
         <div class="modal modal--confirm" (click)="$event.stopPropagation()">
           <div class="modal__success-icon"><span class="material-icons">key</span></div>
-          <h2 class="modal__title">Contraseña restablecida</h2>
+          <h2 class="modal__title">{{ result.title }}</h2>
           <p class="modal__text">
-            La contraseña temporal de <strong>{{ result.name }}</strong> se estableció correctamente.
+            La contraseña temporal de <strong>{{ result.name }}</strong> se generó correctamente.
             Entrégala personalmente al usuario:
           </p>
           <div class="temp-password">{{ result.password }}</div>
           <p class="modal__text">El usuario deberá cambiarla en su próximo ingreso.</p>
           <div class="modal__actions">
-            <button type="button" class="btn btn-primary" (click)="closeResetResult()">Listo</button>
+            <button type="button" class="btn btn-primary" (click)="closeTempPasswordResult()">Listo</button>
           </div>
         </div>
       </div>
@@ -452,7 +580,6 @@ interface FilterTab {
 export class AdminUsersComponent {
   private readonly authService = inject(AuthService);
   private readonly adminService = inject(AdminService);
-  private readonly userManagementService = inject(UserManagementService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
@@ -467,6 +594,12 @@ export class AdminUsersComponent {
     { id: 'ESTUDIANTE', label: 'Estudiantes' },
     { id: 'active', label: 'Activos' },
     { id: 'inactive', label: 'Inactivos' },
+  ];
+
+  readonly roleOptions: readonly RoleOption[] = [
+    { id: 'DOCENTE', label: 'Docente' },
+    { id: 'ESTUDIANTE', label: 'Estudiante' },
+    { id: 'ADMINISTRADOR', label: 'Administrador' },
   ];
 
   // Datos
@@ -486,28 +619,46 @@ export class AdminUsersComponent {
   readonly busyUserId = signal<number | null>(null);
   readonly deactivateTarget = signal<AdminUser | null>(null);
 
-  // Registro de docente
+  // Formulario crear/editar
   readonly formOpen = signal<boolean>(false);
+  readonly formMode = signal<FormMode>('create');
+  readonly editingUser = signal<AdminUser | null>(null);
+  readonly selectedRole = signal<UserRole>('DOCENTE');
   readonly saving = signal<boolean>(false);
   readonly formError = signal<string | null>(null);
+  readonly teacherOptions = signal<TeacherOption[]>([]);
+  readonly adminConfirmOpen = signal<boolean>(false);
 
   // Restablecimiento de contraseña
   readonly resetTarget = signal<AdminUser | null>(null);
   readonly resetSaving = signal<boolean>(false);
   readonly resetError = signal<string | null>(null);
-  readonly resetResult = signal<{ name: string; password: string } | null>(null);
+
+  // Modal de contraseña temporal generada (creación o reset)
+  readonly tempPasswordResult = signal<{ title: string; name: string; password: string } | null>(null);
 
   private readonly currentUser = this.authService.currentUser;
   readonly userName = computed<string>(() => this.currentUser()?.username ?? 'Administrador');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
   readonly form: FormGroup = this.fb.group({
-    names: ['', [Validators.required, Validators.maxLength(100)]],
-    lastNames: ['', [Validators.required, Validators.maxLength(100)]],
-    username: ['', [Validators.required, Validators.minLength(4), Validators.maxLength(50)]],
-    email: ['', [Validators.required, Validators.email, Validators.maxLength(100)]],
-    temporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
+    role: ['DOCENTE' as UserRole, [Validators.required]],
+    names: ['', [Validators.maxLength(100)]],
+    lastNames: ['', [Validators.maxLength(100)]],
+    username: ['', [Validators.maxLength(50)]],
+    email: ['', [Validators.email, Validators.maxLength(100)]],
+    studentCode: ['', [Validators.maxLength(20)]],
+    grade: ['', [Validators.maxLength(20)]],
+    section: ['', [Validators.maxLength(20)]],
+    teacherUserId: [null as number | null],
   });
+
+  // Visibilidad de campos según rol y modo
+  readonly showNames = computed<boolean>(() => this.selectedRole() !== 'ADMINISTRADOR');
+  readonly showUsername = computed<boolean>(
+    () => this.formMode() === 'create' && this.selectedRole() !== 'ESTUDIANTE'
+  );
+  readonly showEmail = computed<boolean>(() => this.selectedRole() !== 'ESTUDIANTE');
 
   readonly metrics = computed<readonly MetricCard[]>(() => {
     const s = this.summary();
@@ -610,6 +761,13 @@ export class AdminUsersComponent {
     });
   }
 
+  private loadTeacherOptions(): void {
+    this.adminService.getTeacherOptions().subscribe({
+      next: (options) => this.teacherOptions.set(options),
+      error: () => this.teacherOptions.set([]),
+    });
+  }
+
   // ===================== Filtros / búsqueda =====================
 
   setFilter(filter: UserFilter): void {
@@ -620,16 +778,67 @@ export class AdminUsersComponent {
     this.searchTerm.set((event.target as HTMLInputElement).value);
   }
 
-  // ===================== Registro de docente =====================
+  // ===================== Crear / editar usuario =====================
 
   openCreate(): void {
+    this.formMode.set('create');
+    this.editingUser.set(null);
+    this.selectedRole.set('DOCENTE');
     this.formError.set(null);
-    this.form.reset({ names: '', lastNames: '', username: '', email: '', temporaryPassword: '' });
+    this.form.reset({
+      role: 'DOCENTE',
+      names: '',
+      lastNames: '',
+      username: '',
+      email: '',
+      studentCode: '',
+      grade: '',
+      section: '',
+      teacherUserId: null,
+    });
+    this.configureValidators('DOCENTE', 'create');
+    this.loadTeacherOptions();
     this.formOpen.set(true);
+  }
+
+  openEdit(user: AdminUser): void {
+    this.formMode.set('edit');
+    this.editingUser.set(user);
+    this.selectedRole.set(user.role);
+    this.formError.set(null);
+    this.form.reset({
+      role: user.role,
+      names: user.names ?? '',
+      lastNames: user.lastNames ?? '',
+      username: user.username,
+      email: user.email ?? '',
+      studentCode: user.code ?? '',
+      grade: user.grade ?? '',
+      section: user.section ?? '',
+      teacherUserId: user.teacherUserId ?? null,
+    });
+    this.configureValidators(user.role, 'edit');
+    if (user.role === 'ESTUDIANTE') {
+      this.loadTeacherOptions();
+    }
+    this.formOpen.set(true);
+  }
+
+  selectRole(role: UserRole): void {
+    if (this.formMode() !== 'create') {
+      return;
+    }
+    this.selectedRole.set(role);
+    this.form.controls['role'].setValue(role);
+    this.configureValidators(role, 'create');
+    if (role === 'ESTUDIANTE') {
+      this.loadTeacherOptions();
+    }
   }
 
   closeForm(): void {
     this.formOpen.set(false);
+    this.adminConfirmOpen.set(false);
     this.formError.set(null);
   }
 
@@ -638,28 +847,167 @@ export class AdminUsersComponent {
       this.form.markAllAsTouched();
       return;
     }
+    // Confirmación adicional para una acción sensible: crear un administrador.
+    if (this.formMode() === 'create' && this.selectedRole() === 'ADMINISTRADOR') {
+      this.adminConfirmOpen.set(true);
+      return;
+    }
+    this.persist();
+  }
+
+  confirmAdminCreate(): void {
+    this.persist();
+  }
+
+  cancelAdminConfirm(): void {
+    if (this.saving()) {
+      return;
+    }
+    this.adminConfirmOpen.set(false);
+  }
+
+  private persist(): void {
+    if (this.formMode() === 'create') {
+      this.performCreate();
+    } else {
+      this.performUpdate();
+    }
+  }
+
+  private performCreate(): void {
     this.saving.set(true);
     this.formError.set(null);
-    const raw = this.form.getRawValue();
-    const request: CreateTeacherRequest = {
-      names: raw.names.trim(),
-      lastNames: raw.lastNames.trim(),
-      username: raw.username.trim(),
-      email: raw.email.trim(),
-      temporaryPassword: raw.temporaryPassword,
-    };
-    this.userManagementService.createTeacher(request).subscribe({
-      next: () => {
+    const request = this.buildCreateRequest();
+    this.adminService.createUser(request).subscribe({
+      next: (response) => {
         this.saving.set(false);
+        this.adminConfirmOpen.set(false);
         this.formOpen.set(false);
-        this.flashSuccess('Docente registrado correctamente.');
+        this.flashSuccess(`${this.roleLabel(request.role)} creado correctamente.`);
+        this.tempPasswordResult.set({
+          title: 'Usuario creado',
+          name: response.user.fullName,
+          password: response.temporaryPassword,
+        });
         this.loadAll();
       },
       error: (err: unknown) => {
         this.saving.set(false);
-        this.formError.set(this.extractError(err, 'No se pudo registrar el docente.'));
+        this.adminConfirmOpen.set(false);
+        this.formError.set(this.extractError(err, 'No se pudo crear el usuario.'));
       },
     });
+  }
+
+  private performUpdate(): void {
+    const user = this.editingUser();
+    if (user === null) {
+      return;
+    }
+    this.saving.set(true);
+    this.formError.set(null);
+    const request = this.buildUpdateRequest(user.role);
+    this.adminService.updateUser(user.userId, request).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.formOpen.set(false);
+        this.flashSuccess('Datos actualizados correctamente.');
+        this.loadAll();
+      },
+      error: (err: unknown) => {
+        this.saving.set(false);
+        this.formError.set(this.extractError(err, 'No se pudieron actualizar los datos.'));
+      },
+    });
+  }
+
+  private buildCreateRequest(): CreateUserRequest {
+    const v = this.form.getRawValue();
+    const role = v.role as UserRole;
+    if (role === 'ADMINISTRADOR') {
+      return {
+        role,
+        username: (v.username ?? '').trim(),
+        email: trimToUndefined(v.email),
+      };
+    }
+    if (role === 'DOCENTE') {
+      return {
+        role,
+        names: (v.names ?? '').trim(),
+        lastNames: (v.lastNames ?? '').trim(),
+        username: (v.username ?? '').trim(),
+        email: trimToUndefined(v.email),
+      };
+    }
+    return {
+      role,
+      names: (v.names ?? '').trim(),
+      lastNames: (v.lastNames ?? '').trim(),
+      grade: (v.grade ?? '').trim(),
+      section: (v.section ?? '').trim(),
+      studentCode: trimToUndefined(v.studentCode),
+      teacherUserId: v.teacherUserId ?? undefined,
+    };
+  }
+
+  private buildUpdateRequest(role: UserRole): UpdateUserRequest {
+    const v = this.form.getRawValue();
+    if (role === 'ADMINISTRADOR') {
+      return { email: trimToUndefined(v.email) };
+    }
+    if (role === 'DOCENTE') {
+      return {
+        names: (v.names ?? '').trim(),
+        lastNames: (v.lastNames ?? '').trim(),
+        email: trimToUndefined(v.email),
+      };
+    }
+    return {
+      names: (v.names ?? '').trim(),
+      lastNames: (v.lastNames ?? '').trim(),
+      grade: (v.grade ?? '').trim(),
+      section: (v.section ?? '').trim(),
+      teacherUserId: v.teacherUserId ?? undefined,
+    };
+  }
+
+  /** Ajusta los validadores requeridos según el rol y el modo (crear/editar). */
+  private configureValidators(role: UserRole, mode: FormMode): void {
+    const required: Record<string, ValidatorFn[]> = {
+      names: [Validators.maxLength(100)],
+      lastNames: [Validators.maxLength(100)],
+      username: [Validators.maxLength(50)],
+      email: [Validators.email, Validators.maxLength(100)],
+      studentCode: [Validators.maxLength(20)],
+      grade: [Validators.maxLength(20)],
+      section: [Validators.maxLength(20)],
+      teacherUserId: [],
+    };
+
+    if (role === 'ADMINISTRADOR') {
+      if (mode === 'create') {
+        required['username'] = [Validators.required, Validators.minLength(4), Validators.maxLength(50)];
+      }
+    } else if (role === 'DOCENTE') {
+      required['names'] = [Validators.required, Validators.maxLength(100)];
+      required['lastNames'] = [Validators.required, Validators.maxLength(100)];
+      if (mode === 'create') {
+        required['username'] = [Validators.required, Validators.minLength(4), Validators.maxLength(50)];
+      }
+    } else {
+      required['names'] = [Validators.required, Validators.maxLength(100)];
+      required['lastNames'] = [Validators.required, Validators.maxLength(100)];
+      required['grade'] = [Validators.required, Validators.maxLength(20)];
+      required['section'] = [Validators.required, Validators.maxLength(20)];
+      required['teacherUserId'] = [Validators.required];
+    }
+
+    for (const [name, validators] of Object.entries(required)) {
+      const control = this.form.controls[name] as AbstractControl;
+      control.setValidators(validators);
+      control.updateValueAndValidity({ emitEvent: false });
+    }
   }
 
   // ===================== Desactivar / reactivar =====================
@@ -730,12 +1078,15 @@ export class AdminUsersComponent {
     this.resetSaving.set(true);
     this.resetError.set(null);
     // El backend genera la contraseña temporal y la devuelve una sola vez.
-    // Funciona para docentes y estudiantes, tengan o no correo registrado.
     this.adminService.resetUserPassword(target.userId).subscribe({
       next: (response) => {
         this.resetSaving.set(false);
         this.resetTarget.set(null);
-        this.resetResult.set({ name: target.fullName, password: response.temporaryPassword });
+        this.tempPasswordResult.set({
+          title: 'Contraseña restablecida',
+          name: target.fullName,
+          password: response.temporaryPassword,
+        });
         this.loadAll();
       },
       error: (err: unknown) => {
@@ -745,8 +1096,8 @@ export class AdminUsersComponent {
     });
   }
 
-  closeResetResult(): void {
-    this.resetResult.set(null);
+  closeTempPasswordResult(): void {
+    this.tempPasswordResult.set(null);
   }
 
   // ===================== Utilidades =====================
@@ -826,4 +1177,10 @@ function buildInitials(name: string): string {
     return parts[0].substring(0, 2).toUpperCase();
   }
   return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+/** Convierte un texto en su versión recortada o `undefined` si queda vacío. */
+function trimToUndefined(value: string | null | undefined): string | undefined {
+  const trimmed = (value ?? '').trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }

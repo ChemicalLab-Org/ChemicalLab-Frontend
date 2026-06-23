@@ -7,20 +7,21 @@ import {
   AdminPasswordResetResponse,
   AdminSummary,
   AdminUser,
-  UserResponse,
+  AdminUserCreatedResponse,
+  CreateUserRequest,
+  TeacherOption,
+  UpdateUserRequest,
 } from '../../shared/models';
 
 /**
- * Servicio del panel administrativo. Consume los endpoints de solo lectura
- * `/api/admin/**` (resumen, usuarios y actividad) y reutiliza los endpoints
- * generales de activación/desactivación de usuarios. El token JWT lo agrega el
- * authInterceptor, por lo que aquí no se manipula el token.
+ * Servicio del panel administrativo. Consume los endpoints `/api/admin/**`
+ * (resumen, usuarios, actividad y gestión completa de usuarios). El token JWT lo
+ * agrega el authInterceptor, por lo que aquí no se manipula el token.
  */
 @Injectable({ providedIn: 'root' })
 export class AdminService {
   private readonly http = inject(HttpClient);
   private readonly adminUrl = `${environment.apiUrl}/admin`;
-  private readonly usersUrl = `${environment.apiUrl}/users`;
 
   /** Resumen de métricas generales del sistema. */
   getSummary(): Observable<AdminSummary> {
@@ -37,14 +38,35 @@ export class AdminService {
     return this.http.get<AdminActivity>(`${this.adminUrl}/activity`);
   }
 
-  /** Reactiva un usuario previamente desactivado. */
-  activateUser(userId: number): Observable<UserResponse> {
-    return this.http.patch<UserResponse>(`${this.usersUrl}/${userId}/activate`, {});
+  /** Docentes activos disponibles como docente responsable de un estudiante. */
+  getTeacherOptions(): Observable<TeacherOption[]> {
+    return this.http.get<TeacherOption[]>(`${this.adminUrl}/users/teacher-options`);
   }
 
-  /** Desactiva un usuario (no lo elimina). */
-  deactivateUser(userId: number): Observable<UserResponse> {
-    return this.http.patch<UserResponse>(`${this.usersUrl}/${userId}/deactivate`, {});
+  /**
+   * Crea un usuario (administrador, docente o estudiante). El backend genera la
+   * contraseña temporal y la devuelve una sola vez en la respuesta.
+   */
+  createUser(request: CreateUserRequest): Observable<AdminUserCreatedResponse> {
+    return this.http.post<AdminUserCreatedResponse>(`${this.adminUrl}/users`, request);
+  }
+
+  /** Actualiza los datos básicos de un usuario según su rol. */
+  updateUser(userId: number, request: UpdateUserRequest): Observable<AdminUser> {
+    return this.http.patch<AdminUser>(`${this.adminUrl}/users/${userId}`, request);
+  }
+
+  /** Reactiva un usuario previamente desactivado. */
+  activateUser(userId: number): Observable<AdminUser> {
+    return this.http.patch<AdminUser>(`${this.adminUrl}/users/${userId}/activate`, {});
+  }
+
+  /**
+   * Desactiva un usuario (no lo elimina). El backend impide desactivar la propia
+   * cuenta y al último administrador activo.
+   */
+  deactivateUser(userId: number): Observable<AdminUser> {
+    return this.http.patch<AdminUser>(`${this.adminUrl}/users/${userId}/deactivate`, {});
   }
 
   /**
