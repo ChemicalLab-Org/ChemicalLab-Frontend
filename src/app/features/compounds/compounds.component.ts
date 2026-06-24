@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, OnDestroy, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TitleCasePipe } from '@angular/common';
@@ -47,10 +47,46 @@ const COMPOUND_TYPES: readonly CompoundTypeMeta[] = [
 type FormStatus = 'idle' | 'loading' | 'success' | 'error';
 type CatalogStatus = 'loading' | 'ready' | 'error';
 
+/**
+ * Fases de la animación didáctica que acompaña a un resultado exitoso. Es una
+ * capa puramente visual: el resultado real ya vive en `result()` (backend).
+ *  - idle: sin animación (estado inicial o tras un error).
+ *  - elements: aparecen los componentes seleccionados.
+ *  - valences: se muestran las valencias/cargas de cada componente.
+ *  - cross: se ilustra el cruce de valencias.
+ *  - formula: aparece la fórmula final (la que devolvió el backend).
+ *  - done: animación terminada; se muestra el resultado completo.
+ */
+type AnimPhase = 'idle' | 'elements' | 'valences' | 'cross' | 'formula' | 'done';
+
+/** Orden de las fases para comparar progreso de la animación. */
+const ANIM_PHASE_ORDER: Readonly<Record<AnimPhase, number>> = {
+  idle: 0,
+  elements: 1,
+  valences: 2,
+  cross: 3,
+  formula: 4,
+  done: 5,
+};
+
+/** Duración de cada paso de la animación (ms). Breve y ligera a propósito. */
+const ANIM_STEP_MS = 750;
+
 /** Opción simple de elemento para el selector (símbolo + nombre). */
 interface ElementChoice {
   readonly symbol: string;
   readonly name: string;
+}
+
+/**
+ * Componente visual de la animación (uno de los dos reactivos). Solo se usa para
+ * presentar lo que el usuario ya seleccionó; no recalcula química ni subíndices.
+ */
+interface AnimComponent {
+  readonly symbol: string;
+  readonly name: string;
+  readonly value: number;
+  readonly sign: '+' | '-';
 }
 
 @Component({
@@ -339,6 +375,47 @@ interface ElementChoice {
               }
               @case ('success') {
                 @if (result(); as r) {
+                  @if (animPlaying()) {
+                    <!-- ===== Animación didáctica (capa visual) ===== -->
+                    <div class="anim" role="status" aria-live="polite">
+                      <div class="anim__head">
+                        <span class="anim__step">{{ animStepLabel() }}</span>
+                        <button type="button" class="link-btn anim__skip" (click)="skipAnimation()">
+                          Ver resultado
+                        </button>
+                      </div>
+
+                      <div class="anim__stage">
+                        <div class="anim__components">
+                          @for (c of animComponents(); track $index; let i = $index) {
+                            @if (i > 0) {
+                              <span class="anim__plus" aria-hidden="true">+</span>
+                            }
+                            <div class="anim-chip" [attr.data-sign]="c.sign">
+                              <span class="anim-chip__symbol">{{ c.symbol }}</span>
+                              <span class="anim-chip__name">{{ c.name | titlecase }}</span>
+                              @if (phaseReached('valences')) {
+                                <span class="anim-chip__valence" [attr.data-sign]="c.sign">
+                                  {{ c.sign }}{{ c.value }}
+                                </span>
+                              }
+                            </div>
+                          }
+                        </div>
+
+                        @if (phaseReached('cross')) {
+                          <div class="anim__cross">
+                            <span class="material-icons">swap_horiz</span>
+                            <span>Las valencias se cruzan como subíndices</span>
+                          </div>
+                        }
+
+                        @if (phaseReached('formula')) {
+                          <div class="anim__formula">{{ r.formula }}</div>
+                        }
+                      </div>
+                    </div>
+                  } @else {
                   <div class="result__head">
                     <h2 class="cmp-card__title">Resultado</h2>
                     <span class="badge badge-success">
@@ -385,6 +462,7 @@ interface ElementChoice {
                       <p class="result__explain-text">{{ r.explanation }}</p>
                     </div>
                   }
+                  }
                 }
               }
               @default {
@@ -400,7 +478,7 @@ interface ElementChoice {
     </div>
   `,
 })
-export class CompoundsComponent {
+export class CompoundsComponent implements OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly engine = inject(ChemicalEngineService);
@@ -439,8 +517,17 @@ export class CompoundsComponent {
   readonly result = signal<CompoundResponse | null>(null);
   readonly errorMessage = signal<string>('');
 
+  // ===== Animación didáctica (capa visual sobre el resultado real) =====
+  readonly animPhase = signal<AnimPhase>('idle');
+  /** Temporizadores de la secuencia, para poder cancelarlos al reiniciar. */
+  private animTimers: ReturnType<typeof setTimeout>[] = [];
+
   constructor() {
     this.loadCatalogs();
+  }
+
+  ngOnDestroy(): void {
+    this.clearAnimTimers();
   }
 
   /** Carga todos los catálogos del backend en paralelo. */
@@ -582,6 +669,113 @@ export class CompoundsComponent {
     }
   });
 
+  // ===== Animación didáctica =====
+
+  /**
+   * Los dos reactivos a animar, derivados solo de la selección del usuario
+   * (símbolos, valencias y cargas ya presentes en el formulario y los catálogos).
+   * No recalcula química: la fórmula final sigue saliendo del backend.
+   */
+  readonly animComponents = computed<readonly AnimComponent[]>(() => {
+    const valence = this.valence() ?? 0;
+    const metalPart: AnimComponent = {
+      symbol: this.elementSymbol(),
+      name: this.selectedElementName(),
+      value: valence,
+      sign: '+',
+    };
+    switch (this.selectedType()) {
+      case 'oxides':
+        return [metalPart, { symbol: 'O', name: 'oxígeno', value: 2, sign: '-' }];
+      case 'hydroxides':
+        return [metalPart, { symbol: 'OH', name: 'hidroxilo', value: 1, sign: '-' }];
+      case 'salts': {
+        const nm = this.selectedNonMetal();
+        return [metalPart, { symbol: nm?.symbol ?? '', name: nm?.name ?? '', value: nm?.charge ?? 0, sign: '-' }];
+      }
+      case 'oxisalts': {
+        const g = this.selectedOxoanion();
+        return [metalPart, { symbol: g?.formula ?? '', name: g?.name ?? '', value: g?.charge ?? 0, sign: '-' }];
+      }
+      case 'acids': {
+        const hydrogen: AnimComponent = { symbol: 'H', name: 'hidrógeno', value: 1, sign: '+' };
+        if (this.acidType() === 'HYDRACID') {
+          const a = this.selectedAcidNonMetal();
+          return [hydrogen, { symbol: a?.symbol ?? '', name: a?.name ?? '', value: a?.charge ?? 0, sign: '-' }];
+        }
+        const g = this.selectedOxoanion();
+        return [hydrogen, { symbol: g?.formula ?? '', name: g?.name ?? '', value: g?.charge ?? 0, sign: '-' }];
+      }
+      default:
+        return [];
+    }
+  });
+
+  /** La animación está en curso (resultado válido, aún sin terminar la secuencia). */
+  readonly animPlaying = computed<boolean>(
+    () => this.status() === 'success' && this.animPhase() !== 'done'
+  );
+
+  /** Texto del paso actual de la animación, para acompañar la secuencia. */
+  readonly animStepLabel = computed<string>(() => {
+    switch (this.animPhase()) {
+      case 'elements':
+        return 'Componentes seleccionados';
+      case 'valences':
+        return 'Valencias de cada componente';
+      case 'cross':
+        return 'Cruce de valencias';
+      case 'formula':
+        return 'Fórmula resultante';
+      default:
+        return '';
+    }
+  });
+
+  /** Indica si la animación ya alcanzó (o superó) la fase indicada. */
+  phaseReached(phase: AnimPhase): boolean {
+    return ANIM_PHASE_ORDER[this.animPhase()] >= ANIM_PHASE_ORDER[phase];
+  }
+
+  /** Inicia la secuencia visual tras un resultado válido del backend. */
+  private startAnimation(): void {
+    this.clearAnimTimers();
+    // Accesibilidad: si el usuario pidió menos movimiento, se muestra el resultado directo.
+    if (this.prefersReducedMotion()) {
+      this.animPhase.set('done');
+      return;
+    }
+    const sequence: AnimPhase[] = ['elements', 'valences', 'cross', 'formula', 'done'];
+    this.animPhase.set(sequence[0]);
+    for (let i = 1; i < sequence.length; i++) {
+      const phase = sequence[i];
+      this.animTimers.push(setTimeout(() => this.animPhase.set(phase), ANIM_STEP_MS * i));
+    }
+  }
+
+  /** Salta la animación y muestra el resultado completo de inmediato. */
+  skipAnimation(): void {
+    this.clearAnimTimers();
+    this.animPhase.set('done');
+  }
+
+  /** Cancela todos los temporizadores pendientes de la animación. */
+  private clearAnimTimers(): void {
+    for (const timer of this.animTimers) {
+      clearTimeout(timer);
+    }
+    this.animTimers = [];
+  }
+
+  /** Respeta la preferencia del sistema de reducir el movimiento. */
+  private prefersReducedMotion(): boolean {
+    return (
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+  }
+
   selectType(type: CompoundType): void {
     if (type === this.selectedType()) {
       return;
@@ -654,6 +848,8 @@ export class CompoundsComponent {
     this.status.set('idle');
     this.result.set(null);
     this.errorMessage.set('');
+    this.clearAnimTimers();
+    this.animPhase.set('idle');
   }
 
   onSubmit(event?: Event): void {
@@ -681,6 +877,9 @@ export class CompoundsComponent {
     this.status.set('loading');
     this.result.set(null);
     this.errorMessage.set('');
+    // Reinicia cualquier animación anterior antes de la nueva consulta.
+    this.clearAnimTimers();
+    this.animPhase.set('idle');
 
     const compoundType = this.selectedType();
     request$.subscribe({
@@ -691,6 +890,8 @@ export class CompoundsComponent {
         if (response.valid) {
           this.result.set(response);
           this.status.set('success');
+          // Capa visual didáctica sobre el resultado real ya obtenido.
+          this.startAnimation();
         } else {
           this.status.set('error');
           this.errorMessage.set(
