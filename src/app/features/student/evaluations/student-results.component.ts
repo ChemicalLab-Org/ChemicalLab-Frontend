@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { UsageMetricsService } from '../../../core/services/usage-metrics.service';
 import { StudentEvaluationsService } from '../../../core/services/student-evaluations.service';
 import {
   SidebarComponent,
@@ -211,6 +212,7 @@ export class StudentResultsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly service = inject(StudentEvaluationsService);
   private readonly router = inject(Router);
+  private readonly usageMetrics = inject(UsageMetricsService);
 
   readonly navItems: readonly SidebarNavItem[] = STUDENT_NAV_ITEMS;
 
@@ -255,6 +257,8 @@ export class StudentResultsComponent implements OnInit {
     this.detailAttemptId = attemptId;
     this.view.set('detail');
     this.loadDetail();
+    // Métrica de uso: el estudiante revisó el detalle de un resultado.
+    this.usageMetrics.trackResultsViewed('ESTUDIANTE');
   }
 
   reloadDetail(): void {

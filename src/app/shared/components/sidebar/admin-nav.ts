@@ -6,5 +6,6 @@ export const ADMIN_NAV_ITEMS: readonly SidebarNavItem[] = [
   { label: 'Usuarios y roles', icon: 'manage_accounts', route: '/admin/users' },
   { label: 'Supervisión académica', icon: 'school', route: '/admin/academic-supervision' },
   { label: 'Logs del sistema', icon: 'terminal', route: '/admin/logs' },
+  { label: 'Métricas de uso', icon: 'insights', route: '/admin/usage-metrics' },
   { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin/system-status' },
 ];

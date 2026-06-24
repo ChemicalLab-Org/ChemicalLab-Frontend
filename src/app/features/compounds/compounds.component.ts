@@ -4,6 +4,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { TitleCasePipe } from '@angular/common';
 import { forkJoin } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
+import { UsageMetricsService } from '../../core/services/usage-metrics.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
@@ -404,6 +405,7 @@ export class CompoundsComponent {
   private readonly router = inject(Router);
   private readonly engine = inject(ChemicalEngineService);
   private readonly catalog = inject(ChemistryCatalogService);
+  private readonly usageMetrics = inject(UsageMetricsService);
 
   readonly compoundTypes = COMPOUND_TYPES;
   private readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
@@ -680,8 +682,12 @@ export class CompoundsComponent {
     this.result.set(null);
     this.errorMessage.set('');
 
+    const compoundType = this.selectedType();
     request$.subscribe({
       next: (response) => {
+        // Métrica de uso: el usuario intentó formar/validar un compuesto. Solo se registra
+        // el tipo y el resultado (true/false); nunca el payload ni datos sensibles.
+        this.usageMetrics.trackCompoundFormation(response.compoundType ?? compoundType, response.valid);
         if (response.valid) {
           this.result.set(response);
           this.status.set('success');

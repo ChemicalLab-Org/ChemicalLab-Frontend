@@ -17,6 +17,7 @@ import { TeacherManagementComponent } from './features/admin/teachers/teacher-ma
 import { AdminUsersComponent } from './features/admin/users/admin-users.component';
 import { SystemStatusComponent } from './features/admin/system-status/system-status.component';
 import { AdminLogsComponent } from './features/admin/logs/admin-logs.component';
+import { UsageMetricsComponent } from './features/admin/usage-metrics/usage-metrics.component';
 import { AcademicSupervisionComponent } from './features/admin/academic-supervision/academic-supervision.component';
 import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
 import { CompoundsComponent } from './features/compounds/compounds.component';
@@ -131,6 +132,12 @@ export const routes: Routes = [
   {
     path: 'admin/logs',
     component: AdminLogsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
+    path: 'admin/usage-metrics',
+    component: UsageMetricsComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
