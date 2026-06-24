@@ -1,0 +1,238 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.sim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: var(--color-neutral-0);
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  padding: 20px 16px;
+}
+
+.sim__stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 56px;
+  width: 100%;
+  min-height: 190px;
+}
+
+.sim__caption {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-neutral-500);
+  text-align: center;
+}
+
+// ─── Partícula / átomo (representación didáctica simplificada) ──────────────
+.atom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+
+  &__core {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 2px solid var(--c);
+    background: var(--bg);
+    color: var(--c);
+  }
+
+  &__symbol {
+    font-family: var(--font-mono);
+    font-size: 24px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  &__dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    border-radius: 50%;
+    background: var(--c);
+    transform: rotate(var(--a)) translateY(-40px);
+  }
+
+  &__name {
+    font-size: 12px;
+    color: var(--color-neutral-700);
+  }
+
+  &__valence {
+    padding: 1px 9px;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--bg);
+    color: var(--c);
+  }
+
+  // Paleta por tipo de componente (solo color, sin significado químico estricto).
+  &[data-kind='metal']    { --c: oklch(0.45 0.115 250); --bg: oklch(0.95 0.045 250); }
+  &[data-kind='nonmetal'] { --c: oklch(0.45 0.110 168); --bg: oklch(0.95 0.045 168); }
+  &[data-kind='oxygen']   { --c: oklch(0.50 0.150 28);  --bg: oklch(0.95 0.045 28); }
+  &[data-kind='hydrogen'] { --c: oklch(0.46 0.120 300); --bg: oklch(0.95 0.050 300); }
+  &[data-kind='group']    { --c: oklch(0.46 0.110 200); --bg: oklch(0.94 0.045 200); }
+}
+
+// ─── Compuesto formado (núcleo central) ────────────────────────────────────
+.compound {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+
+  &__bubble {
+    display: grid;
+    place-items: center;
+    min-width: 88px;
+    padding: 16px 22px;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(160deg, var(--color-primary-50), var(--color-neutral-0));
+    border: 2px solid var(--color-primary-300, var(--color-primary-200));
+    box-shadow: 0 6px 18px rgba(29, 158, 117, 0.18);
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  &__formula {
+    font-family: var(--font-mono);
+    font-size: 30px;
+    font-weight: 800;
+    color: var(--color-primary-700);
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+  }
+}
+
+// ─── Animaciones ───────────────────────────────────────────────────────────
+// Vista previa: las partículas flotan suavemente mientras no hay compuesto.
+.sim:not(.sim--formed) {
+  .atom--left {
+    animation: sim-float 3.2s ease-in-out infinite;
+  }
+  .atom--right {
+    animation: sim-float 3.2s ease-in-out infinite;
+    animation-delay: -1.6s;
+  }
+}
+
+// Compuesto formado: bucle de acercamiento + combinación + aparición.
+.sim--formed {
+  .atom--left {
+    --mx: 70px;
+    animation: sim-merge 6s ease-in-out infinite;
+  }
+  .atom--right {
+    --mx: -70px;
+    animation: sim-merge 6s ease-in-out infinite;
+  }
+  .compound__bubble {
+    animation: sim-compound 6s ease-in-out infinite;
+  }
+}
+
+@keyframes sim-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes sim-merge {
+  0%,
+  16% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  46%,
+  56% {
+    transform: translateX(var(--mx)) scale(0.55);
+    opacity: 0;
+  }
+  84%,
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes sim-compound {
+  0%,
+  40% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  52%,
+  72% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  86%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+// ─── Responsive ────────────────────────────────────────────────────────────
+@media (max-width: 520px) {
+  .sim__stage {
+    gap: 32px;
+    min-height: 170px;
+  }
+  .atom__core {
+    width: 54px;
+    height: 54px;
+  }
+  .atom__symbol {
+    font-size: 20px;
+  }
+  .sim--formed {
+    .atom--left {
+      --mx: 46px;
+    }
+    .atom--right {
+      --mx: -46px;
+    }
+  }
+  .compound__formula {
+    font-size: 26px;
+  }
+}
+
+// Accesibilidad: respeta la preferencia de reducir el movimiento. Las partículas
+// quedan estáticas (siguen mostrando símbolos y valencias) y el compuesto no se
+// superpone; la fórmula final sigue visible en el panel de resultado.
+@media (prefers-reduced-motion: reduce) {
+  .atom--left,
+  .atom--right,
+  .compound__bubble {
+    animation: none;
+  }
+}
