@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { UsageMetricsService } from '../../../core/services/usage-metrics.service';
 import { TeacherEvaluationsService } from '../../../core/services/teacher-evaluations.service';
 import {
   SidebarComponent,
@@ -99,6 +100,7 @@ export class TeacherResultsComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly service = inject(TeacherEvaluationsService);
   private readonly router = inject(Router);
+  private readonly usageMetrics = inject(UsageMetricsService);
 
   readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
 
@@ -138,6 +140,8 @@ export class TeacherResultsComponent implements OnInit {
   }
 
   openResults(evaluation: EvaluationResponse): void {
+    // Métrica de uso: el docente abrió los resultados de una evaluación.
+    this.usageMetrics.trackResultsViewed('DOCENTE', evaluation.id);
     void this.router.navigateByUrl(`/teacher/results/${evaluation.id}`);
   }
 

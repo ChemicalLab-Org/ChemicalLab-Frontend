@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { UsageMetricsService } from '../../core/services/usage-metrics.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
@@ -444,6 +445,7 @@ const ORBIT_3D_ROTATIONS: readonly number[] = [-22, 18, -8, 26, -16, 10, -24];
 export class PeriodicTableComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly usageMetrics = inject(UsageMetricsService);
 
   readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
   readonly filters: readonly ElementFilter[] = ELEMENT_FILTERS;
@@ -655,6 +657,10 @@ export class PeriodicTableComponent {
 
   selectElement(atomicNumber: number): void {
     this.selectedAtomicNumber.set(atomicNumber);
+    const element = this.elements.find((el) => el.atomicNumber === atomicNumber);
+    if (element) {
+      this.usageMetrics.trackElementViewed(element.symbol, element.atomicNumber, element.category);
+    }
   }
 
   closePanel(): void {

@@ -2,6 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { UsageMetricsService } from '../../../core/services/usage-metrics.service';
 import { StudentEvaluationsService } from '../../../core/services/student-evaluations.service';
 import {
   SidebarComponent,
@@ -478,6 +479,7 @@ export class StudentEvaluationsComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly service = inject(StudentEvaluationsService);
   private readonly router = inject(Router);
+  private readonly usageMetrics = inject(UsageMetricsService);
 
   // ── Estado general ──
   readonly view = signal<View>('list');
@@ -673,6 +675,8 @@ export class StudentEvaluationsComponent implements OnInit {
     this.startError.set(null);
     this.view.set('detail');
     this.loadDetail(ev.id);
+    // Métrica de uso: solo el id y la cantidad de preguntas; nunca enunciados ni respuestas.
+    this.usageMetrics.trackEvaluationOpened(ev.id, ev.questionCount);
   }
 
   reloadDetail(): void {
@@ -717,6 +721,8 @@ export class StudentEvaluationsComponent implements OnInit {
         this.rememberAttempt(ev.id, attempt.id);
         this.enterTake(attempt);
         this.starting.set(false);
+        // Métrica de uso: el estudiante inició un intento. Solo el id de la evaluación.
+        this.usageMetrics.trackEvaluationStarted(ev.id);
       },
       error: (err: HttpErrorResponse) => {
         this.starting.set(false);

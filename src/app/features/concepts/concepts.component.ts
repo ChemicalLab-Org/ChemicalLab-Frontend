@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { UsageMetricsService } from '../../core/services/usage-metrics.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
@@ -346,6 +347,7 @@ export class ConceptsComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly studentConceptsService = inject(StudentConceptsService);
   private readonly router = inject(Router);
+  private readonly usageMetrics = inject(UsageMetricsService);
 
   readonly loading = signal(true);
   readonly loadError = signal(false);
@@ -429,6 +431,10 @@ export class ConceptsComponent implements OnInit {
 
   selectConcept(id: number): void {
     this.selectedId.set(id);
+    const concept = this.filtered().find((c) => c.id === id);
+    if (concept) {
+      this.usageMetrics.trackContentView(concept.id, concept.category);
+    }
   }
 
   closeConcept(): void {
