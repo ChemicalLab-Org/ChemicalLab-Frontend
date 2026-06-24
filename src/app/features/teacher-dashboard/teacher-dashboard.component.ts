@@ -168,6 +168,15 @@ export class TeacherDashboardComponent {
       route: '/teacher/results',
     },
     {
+      id: 'compounds',
+      title: 'Formación de compuestos',
+      description: 'Forma y explica compuestos químicos en clase.',
+      icon: 'biotech',
+      tone: 'mint',
+      cta: 'Abrir módulo',
+      route: '/compounds',
+    },
+    {
       id: 'passwords',
       title: 'Restablecer contraseñas',
       description: 'Genera contraseñas temporales.',
