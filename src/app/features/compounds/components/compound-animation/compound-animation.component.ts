@@ -47,11 +47,16 @@ const MAX_VALENCE_DOTS = 8;
             [class.atom--left]="i === 0"
             [class.atom--right]="i === 1"
           >
-            <span class="atom__core">
-              <span class="atom__symbol">{{ c.symbol }}</span>
-              @for (a of dots(c.value); track $index) {
-                <span class="atom__dot" [style.--a]="a + 'deg'"></span>
-              }
+            <span class="atom__model">
+              <span class="atom__orbit atom__orbit--a"></span>
+              <span class="atom__orbit atom__orbit--b"></span>
+              <!-- Electrones de valencia: cantidad = valencia/carga seleccionada. -->
+              <span class="atom__electrons">
+                @for (a of dots(c.value); track $index) {
+                  <span class="atom__electron" [style.--a]="a + 'deg'"></span>
+                }
+              </span>
+              <span class="atom__nucleus">{{ c.symbol }}</span>
             </span>
             <span class="atom__name">{{ c.name | titlecase }}</span>
             <span class="atom__valence" [attr.data-sign]="c.sign">{{ c.sign }}{{ c.value }}</span>
@@ -61,6 +66,15 @@ const MAX_VALENCE_DOTS = 8;
         @if (formed()) {
           <div class="compound">
             <span class="compound__bubble">
+              <!-- Molécula didáctica: nodos de los componentes unidos por un enlace. -->
+              <span class="compound__molecule">
+                @for (c of components(); track $index; let i = $index) {
+                  @if (i > 0) {
+                    <span class="compound__bond"></span>
+                  }
+                  <span class="compound__node" [attr.data-kind]="c.kind">{{ c.symbol }}</span>
+                }
+              </span>
               <span class="compound__formula">{{ formula() }}</span>
             </span>
           </div>

@@ -12,7 +12,7 @@
   background: var(--color-neutral-0);
   border: 1.5px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
-  padding: 20px 16px;
+  padding: 22px 16px;
 }
 
 .sim__stage {
@@ -20,9 +20,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 56px;
+  gap: 64px;
   width: 100%;
-  min-height: 190px;
+  min-height: 210px;
 }
 
 .sim__caption {
@@ -35,42 +35,80 @@
   text-align: center;
 }
 
-// ─── Partícula / átomo (representación didáctica simplificada) ──────────────
+// ─── Paleta por tipo de componente (solo color, sin valor químico estricto) ──
+[data-kind='metal']    { --c: oklch(0.50 0.130 250); --bg: oklch(0.95 0.045 250); }
+[data-kind='nonmetal'] { --c: oklch(0.52 0.130 168); --bg: oklch(0.95 0.045 168); }
+[data-kind='oxygen']   { --c: oklch(0.55 0.170 28);  --bg: oklch(0.95 0.045 28); }
+[data-kind='hydrogen'] { --c: oklch(0.52 0.140 300); --bg: oklch(0.95 0.050 300); }
+[data-kind='group']    { --c: oklch(0.52 0.120 200); --bg: oklch(0.94 0.045 200); }
+
+// ─── Átomo estilizado (representación didáctica, no científica) ─────────────
 .atom {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  color: var(--c);
 
-  &__core {
+  &__model {
     position: relative;
     display: grid;
     place-items: center;
-    width: 64px;
-    height: 64px;
+    width: 96px;
+    height: 96px;
+  }
+
+  // Anillos orbitales: dos elipses finas inclinadas alrededor del núcleo.
+  &__orbit {
+    position: absolute;
+    inset: 4px;
+    border: 1.5px solid var(--c);
     border-radius: 50%;
-    border: 2px solid var(--c);
-    background: var(--bg);
-    color: var(--c);
+    opacity: 0.3;
+  }
+  &__orbit--a {
+    transform: rotate(60deg) scaleY(0.4);
+  }
+  &__orbit--b {
+    transform: rotate(-60deg) scaleY(0.4);
   }
 
-  &__symbol {
-    font-family: var(--font-mono);
-    font-size: 24px;
-    font-weight: 800;
-    line-height: 1;
+  // Capa que rota para hacer orbitar los electrones de valencia.
+  &__electrons {
+    position: absolute;
+    inset: 0;
+    animation: atom-orbit 6s linear infinite;
   }
 
-  &__dot {
+  &__electron {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 7px;
-    height: 7px;
-    margin: -3.5px 0 0 -3.5px;
+    width: 8px;
+    height: 8px;
+    margin: -4px 0 0 -4px;
     border-radius: 50%;
     background: var(--c);
-    transform: rotate(var(--a)) translateY(-40px);
+    box-shadow: 0 0 6px var(--c);
+    transform: rotate(var(--a)) translateY(-44px);
+  }
+
+  // Núcleo central con el símbolo, leve relieve y glow pulsante.
+  &__nucleus {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--color-neutral-0);
+    background: radial-gradient(circle at 35% 30%, color-mix(in oklch, var(--c) 55%, white), var(--c));
+    box-shadow: 0 0 0 4px var(--bg), 0 4px 12px rgba(0, 0, 0, 0.14);
+    animation: atom-pulse 3s ease-in-out infinite;
   }
 
   &__name {
@@ -88,15 +126,14 @@
     color: var(--c);
   }
 
-  // Paleta por tipo de componente (solo color, sin significado químico estricto).
-  &[data-kind='metal']    { --c: oklch(0.45 0.115 250); --bg: oklch(0.95 0.045 250); }
-  &[data-kind='nonmetal'] { --c: oklch(0.45 0.110 168); --bg: oklch(0.95 0.045 168); }
-  &[data-kind='oxygen']   { --c: oklch(0.50 0.150 28);  --bg: oklch(0.95 0.045 28); }
-  &[data-kind='hydrogen'] { --c: oklch(0.46 0.120 300); --bg: oklch(0.95 0.050 300); }
-  &[data-kind='group']    { --c: oklch(0.46 0.110 200); --bg: oklch(0.94 0.045 200); }
+  // Electrones del átomo derecho orbitan en sentido opuesto y a otra velocidad.
+  &--right .atom__electrons {
+    animation-duration: 7.5s;
+    animation-direction: reverse;
+  }
 }
 
-// ─── Compuesto formado (núcleo central) ────────────────────────────────────
+// ─── Compuesto formado: molécula didáctica + fórmula ───────────────────────
 .compound {
   position: absolute;
   top: 50%;
@@ -105,9 +142,11 @@
   pointer-events: none;
 
   &__bubble {
-    display: grid;
-    place-items: center;
-    min-width: 88px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 96px;
     padding: 16px 22px;
     border-radius: var(--radius-lg);
     background: linear-gradient(160deg, var(--color-primary-50), var(--color-neutral-0));
@@ -117,9 +156,35 @@
     transform: scale(0.4);
   }
 
+  &__molecule {
+    display: flex;
+    align-items: center;
+  }
+
+  &__node {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--color-neutral-0);
+    background: radial-gradient(circle at 35% 30%, color-mix(in oklch, var(--c) 55%, white), var(--c));
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+  }
+
+  &__bond {
+    width: 20px;
+    height: 4px;
+    border-radius: var(--radius-pill);
+    background: var(--color-neutral-400);
+  }
+
   &__formula {
     font-family: var(--font-mono);
-    font-size: 30px;
+    font-size: 28px;
     font-weight: 800;
     color: var(--color-primary-700);
     letter-spacing: 0.02em;
@@ -128,7 +193,7 @@
 }
 
 // ─── Animaciones ───────────────────────────────────────────────────────────
-// Vista previa: las partículas flotan suavemente mientras no hay compuesto.
+// Vista previa: los átomos flotan suavemente mientras no hay compuesto.
 .sim:not(.sim--formed) {
   .atom--left {
     animation: sim-float 3.2s ease-in-out infinite;
@@ -142,15 +207,31 @@
 // Compuesto formado: bucle de acercamiento + combinación + aparición.
 .sim--formed {
   .atom--left {
-    --mx: 70px;
+    --mx: 78px;
     animation: sim-merge 6s ease-in-out infinite;
   }
   .atom--right {
-    --mx: -70px;
+    --mx: -78px;
     animation: sim-merge 6s ease-in-out infinite;
   }
   .compound__bubble {
     animation: sim-compound 6s ease-in-out infinite;
+  }
+}
+
+@keyframes atom-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes atom-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px var(--bg), 0 0 10px -2px var(--c);
+  }
+  50% {
+    box-shadow: 0 0 0 5px var(--bg), 0 0 20px 0 var(--c);
   }
 }
 
@@ -203,35 +284,42 @@
 // ─── Responsive ────────────────────────────────────────────────────────────
 @media (max-width: 520px) {
   .sim__stage {
-    gap: 32px;
-    min-height: 170px;
+    gap: 36px;
+    min-height: 190px;
   }
-  .atom__core {
-    width: 54px;
-    height: 54px;
+  .atom__model {
+    width: 80px;
+    height: 80px;
   }
-  .atom__symbol {
-    font-size: 20px;
+  .atom__nucleus {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+  .atom__electron {
+    transform: rotate(var(--a)) translateY(-36px);
   }
   .sim--formed {
     .atom--left {
-      --mx: 46px;
+      --mx: 52px;
     }
     .atom--right {
-      --mx: -46px;
+      --mx: -52px;
     }
   }
   .compound__formula {
-    font-size: 26px;
+    font-size: 24px;
   }
 }
 
-// Accesibilidad: respeta la preferencia de reducir el movimiento. Las partículas
-// quedan estáticas (siguen mostrando símbolos y valencias) y el compuesto no se
-// superpone; la fórmula final sigue visible en el panel de resultado.
+// Accesibilidad: respeta la preferencia de reducir el movimiento. Los átomos
+// quedan estáticos (siguen mostrando núcleo, órbitas y electrones de valencia)
+// y la fórmula final sigue visible en el panel de resultado.
 @media (prefers-reduced-motion: reduce) {
   .atom--left,
   .atom--right,
+  .atom__electrons,
+  .atom__nucleus,
   .compound__bubble {
     animation: none;
   }
