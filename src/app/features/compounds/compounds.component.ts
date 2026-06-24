@@ -13,6 +13,11 @@ import { UserRole } from '../../shared/models';
 import { PERIODIC_ELEMENTS, PeriodicElement } from '../periodic-table/data/elements-data';
 import { valenceOptionsFor } from './data/common-valences';
 import { allowedElementSymbols } from './data/compound-element-rules';
+import {
+  AnimComponent,
+  AnimKind,
+  CompoundAnimationComponent,
+} from './components/compound-animation/compound-animation.component';
 import { ChemicalEngineService } from './services/chemical-engine.service';
 import { ChemistryCatalogService } from './services/chemistry-catalog.service';
 import {
@@ -56,7 +61,7 @@ interface ElementChoice {
 @Component({
   selector: 'app-compounds',
   standalone: true,
-  imports: [SidebarComponent, TitleCasePipe],
+  imports: [SidebarComponent, TitleCasePipe, CompoundAnimationComponent],
   styleUrls: ['./compounds.component.scss'],
   template: `
     <div class="layout">
@@ -339,6 +344,12 @@ interface ElementChoice {
               }
               @case ('success') {
                 @if (result(); as r) {
+                  <!-- Simulación visual en bucle, junto al resultado real. -->
+                  <app-compound-animation
+                    [components]="animComponents()"
+                    [formula]="r.formula"
+                  />
+
                   <div class="result__head">
                     <h2 class="cmp-card__title">Resultado</h2>
                     <span class="badge badge-success">
@@ -388,10 +399,18 @@ interface ElementChoice {
                 }
               }
               @default {
-                <div class="result__placeholder">
-                  <span class="material-icons">science</span>
-                  <p>Configura el compuesto y presiona «Formar compuesto» para ver el resultado.</p>
-                </div>
+                @if (hasSelection()) {
+                  <!-- Vista previa: muestra los componentes seleccionados antes de formar. -->
+                  <app-compound-animation [components]="animComponents()" [formula]="null" />
+                  <p class="result__hint">
+                    Pulsa «Formar compuesto» para combinar los componentes y ver el resultado.
+                  </p>
+                } @else {
+                  <div class="result__placeholder">
+                    <span class="material-icons">science</span>
+                    <p>Configura el compuesto y presiona «Formar compuesto» para ver el resultado.</p>
+                  </div>
+                }
               }
             }
           </div>
@@ -582,6 +601,81 @@ export class CompoundsComponent {
     }
   });
 
+  // ===== Simulación didáctica (capa visual sobre el resultado real) =====
+
+  /**
+   * Los dos reactivos a representar en la simulación, derivados solo de la
+   * selección del usuario (símbolos, valencias y cargas ya presentes en el
+   * formulario y los catálogos). No recalcula química: la fórmula final sigue
+   * saliendo del backend. El `kind` solo determina el color de la partícula.
+   */
+  readonly animComponents = computed<readonly AnimComponent[]>(() => {
+    const valence = this.valence() ?? 0;
+    const mainPart: AnimComponent = {
+      symbol: this.elementSymbol(),
+      name: this.selectedElementName(),
+      value: valence,
+      sign: '+',
+      kind: this.selectedType() === 'oxides' ? this.oxideElementKind(this.elementSymbol()) : 'metal',
+    };
+    switch (this.selectedType()) {
+      case 'oxides':
+        return [mainPart, { symbol: 'O', name: 'oxígeno', value: 2, sign: '-', kind: 'oxygen' }];
+      case 'hydroxides':
+        return [mainPart, { symbol: 'OH', name: 'hidroxilo', value: 1, sign: '-', kind: 'group' }];
+      case 'salts': {
+        const nm = this.selectedNonMetal();
+        return [
+          mainPart,
+          { symbol: nm?.symbol ?? '', name: nm?.name ?? '', value: nm?.charge ?? 0, sign: '-', kind: 'nonmetal' },
+        ];
+      }
+      case 'oxisalts': {
+        const g = this.selectedOxoanion();
+        return [
+          mainPart,
+          { symbol: g?.formula ?? '', name: g?.name ?? '', value: g?.charge ?? 0, sign: '-', kind: 'group' },
+        ];
+      }
+      case 'acids': {
+        const hydrogen: AnimComponent = { symbol: 'H', name: 'hidrógeno', value: 1, sign: '+', kind: 'hydrogen' };
+        if (this.acidType() === 'HYDRACID') {
+          const a = this.selectedAcidNonMetal();
+          return [
+            hydrogen,
+            { symbol: a?.symbol ?? '', name: a?.name ?? '', value: a?.charge ?? 0, sign: '-', kind: 'nonmetal' },
+          ];
+        }
+        const g = this.selectedOxoanion();
+        return [
+          hydrogen,
+          { symbol: g?.formula ?? '', name: g?.name ?? '', value: g?.charge ?? 0, sign: '-', kind: 'group' },
+        ];
+      }
+      default:
+        return [];
+    }
+  });
+
+  /** Hay una selección suficiente para mostrar la vista previa de la simulación. */
+  readonly hasSelection = computed<boolean>(() => {
+    const comps = this.animComponents();
+    return comps.length === 2 && comps[0].symbol !== '' && comps[1].symbol !== '';
+  });
+
+  /** Color de un elemento de óxido según su categoría en la tabla periódica. */
+  private oxideElementKind(symbol: string): AnimKind {
+    const element = this.elements.find((el) => el.symbol === symbol);
+    if (element === undefined) {
+      return 'metal';
+    }
+    return element.category === 'nonmetal' ||
+      element.category === 'halogen' ||
+      element.category === 'metalloid'
+      ? 'nonmetal'
+      : 'metal';
+  }
+
   selectType(type: CompoundType): void {
     if (type === this.selectedType()) {
       return;
@@ -689,6 +783,7 @@ export class CompoundsComponent {
         // el tipo y el resultado (true/false); nunca el payload ni datos sensibles.
         this.usageMetrics.trackCompoundFormation(response.compoundType ?? compoundType, response.valid);
         if (response.valid) {
+          // El resultado real y la simulación visual (en bucle) se muestran juntos.
           this.result.set(response);
           this.status.set('success');
         } else {
