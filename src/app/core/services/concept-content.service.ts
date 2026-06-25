@@ -26,6 +26,11 @@ export class ConceptContentService {
     return this.http.get<ConceptContentResponse[]>(this.baseUrl);
   }
 
+  /** Categorías sugeridas (catálogo por defecto + las ya usadas por el docente). */
+  listCategorySuggestions(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.baseUrl}/categories`);
+  }
+
   /** Obtiene el detalle de un contenido propio del docente. */
   getTeacherConcept(conceptId: number): Observable<ConceptContentResponse> {
     return this.http.get<ConceptContentResponse>(`${this.baseUrl}/${conceptId}`);

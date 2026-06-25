@@ -31,10 +31,19 @@ type FormMode = 'create' | 'edit';
 type StatusFilter = 'all' | ConceptStatus;
 type ListField = 'formationSteps' | 'keyPoints' | 'examples';
 
-interface CategoryOption {
-  readonly value: ConceptCategory;
-  readonly label: string;
-}
+/**
+ * Etiquetas legibles para las categorías clásicas que se almacenaban como código en
+ * mayúsculas. Las categorías personalizadas se muestran tal cual las escribió el docente.
+ */
+const LEGACY_CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  OXIDOS: 'Óxidos',
+  HIDROXIDOS: 'Hidróxidos',
+  ACIDOS: 'Ácidos',
+  SALES_BINARIAS: 'Sales binarias',
+  OXISALES: 'Oxisales',
+  NOMENCLATURA: 'Nomenclatura',
+  GENERAL: 'General',
+};
 
 @Component({
   selector: 'app-teacher-concepts',
@@ -229,11 +238,26 @@ interface CategoryOption {
 
               <div class="form-group">
                 <label class="form-label" for="category">Categoría</label>
-                <select id="category" class="select" formControlName="category" [class.input-error]="isInvalid('category')">
-                  @for (opt of categoryOptions; track opt.value) {
-                    <option [value]="opt.value">{{ opt.label }}</option>
+                <input
+                  id="category"
+                  class="input"
+                  formControlName="category"
+                  list="category-suggestions"
+                  maxlength="100"
+                  placeholder="ej. Enlace químico, Tabla periódica…"
+                  [class.input-error]="isInvalid('category')"
+                />
+                <datalist id="category-suggestions">
+                  @for (cat of categorySuggestions(); track cat) {
+                    <option [value]="cat"></option>
                   }
-                </select>
+                </datalist>
+                <span class="form-hint">
+                  Escribe una categoría o elige una sugerida. Puedes usar temas libres, no solo tipos de compuestos.
+                </span>
+                @if (isInvalid('category')) {
+                  <span class="form-error">La categoría es obligatoria (máx. 100 caracteres).</span>
+                }
               </div>
 
               <div class="form-group form-group--full">
@@ -308,6 +332,16 @@ interface CategoryOption {
                     <span class="material-icons">add</span> Agregar ejemplo
                   </button>
                 </div>
+              </div>
+
+              <div class="form-group form-group--full">
+                <label class="form-label" for="suggestedActivity">Actividad sugerida</label>
+                <textarea id="suggestedActivity" class="textarea" formControlName="suggestedActivity" rows="3"
+                  placeholder="Indicaciones o actividad sugerida para trabajar el tema (opcional)"
+                  [class.input-error]="isInvalid('suggestedActivity')"></textarea>
+                @if (isInvalid('suggestedActivity')) {
+                  <span class="form-error">La actividad sugerida no puede superar 2000 caracteres.</span>
+                }
               </div>
             </div>
 
@@ -393,6 +427,13 @@ interface CategoryOption {
                     <li>{{ e }}</li>
                   }
                 </ul>
+              </section>
+            }
+
+            @if (d.suggestedActivity) {
+              <section class="detail__section">
+                <h3 class="detail__heading">Actividad sugerida</h3>
+                <p class="detail__text detail__text--pre">{{ d.suggestedActivity }}</p>
               </section>
             }
 
@@ -583,15 +624,8 @@ export class TeacherConceptsComponent {
 
   readonly userRole = 'Docente';
 
-  readonly categoryOptions: readonly CategoryOption[] = [
-    { value: 'OXIDOS', label: 'Óxidos' },
-    { value: 'HIDROXIDOS', label: 'Hidróxidos' },
-    { value: 'ACIDOS', label: 'Ácidos' },
-    { value: 'SALES_BINARIAS', label: 'Sales binarias' },
-    { value: 'OXISALES', label: 'Oxisales' },
-    { value: 'NOMENCLATURA', label: 'Nomenclatura' },
-    { value: 'GENERAL', label: 'General' },
-  ];
+  // Categorías sugeridas para el formulario (catálogo del backend + las ya usadas).
+  readonly categorySuggestions = signal<string[]>([]);
 
   readonly statusTabs: readonly { value: StatusFilter; label: string }[] = [
     { value: 'all', label: 'Todos' },
@@ -653,12 +687,13 @@ export class TeacherConceptsComponent {
 
   readonly form: FormGroup = this.fb.group({
     title: ['', [Validators.required, Validators.maxLength(150)]],
-    category: ['OXIDOS', [Validators.required]],
+    category: ['', [Validators.required, Validators.maxLength(100)]],
     summary: ['', [Validators.required, Validators.maxLength(500)]],
     explanation: ['', [Validators.required]],
     formationSteps: this.fb.array<FormControl<string>>([]),
     keyPoints: this.fb.array<FormControl<string>>([]),
     examples: this.fb.array<FormControl<string>>([]),
+    suggestedActivity: ['', [Validators.maxLength(2000)]],
   });
 
   readonly assignForm: FormGroup = this.fb.group({
@@ -702,6 +737,15 @@ export class TeacherConceptsComponent {
   constructor() {
     this.loadConcepts();
     this.loadGradeSectionOptions();
+    this.loadCategorySuggestions();
+  }
+
+  /** Carga las categorías sugeridas; si falla no es bloqueante (el campo es libre). */
+  private loadCategorySuggestions(): void {
+    this.conceptService.listCategorySuggestions().subscribe({
+      next: (categories) => this.categorySuggestions.set(categories),
+      error: () => this.categorySuggestions.set([]),
+    });
   }
 
   // ===========================================================================
@@ -799,9 +843,10 @@ export class TeacherConceptsComponent {
     this.formError.set(null);
     this.form.reset({
       title: '',
-      category: 'OXIDOS',
+      category: '',
       summary: '',
       explanation: '',
+      suggestedActivity: '',
     });
     this.setListValues('formationSteps', []);
     this.setListValues('keyPoints', []);
@@ -819,6 +864,7 @@ export class TeacherConceptsComponent {
       category: concept.category,
       summary: concept.summary ?? '',
       explanation: concept.explanation,
+      suggestedActivity: concept.suggestedActivity ?? '',
     });
     this.setListValues('formationSteps', concept.formationSteps);
     this.setListValues('keyPoints', concept.keyPoints);
@@ -842,14 +888,16 @@ export class TeacherConceptsComponent {
     this.formError.set(null);
 
     const raw = this.form.getRawValue();
+    const suggestedActivity = (raw.suggestedActivity ?? '').trim();
     const request: CreateConceptContentRequest = {
       title: (raw.title ?? '').trim(),
-      category: raw.category as ConceptCategory,
+      category: (raw.category ?? '').trim(),
       summary: (raw.summary ?? '').trim(),
       explanation: (raw.explanation ?? '').trim(),
       formationSteps: cleanList(raw.formationSteps),
       keyPoints: cleanList(raw.keyPoints),
       examples: cleanList(raw.examples),
+      suggestedActivity: suggestedActivity.length > 0 ? suggestedActivity : undefined,
     };
 
     if (this.formMode() === 'create') {
@@ -1055,7 +1103,12 @@ export class TeacherConceptsComponent {
   // ===========================================================================
 
   categoryLabel(category: ConceptCategory): string {
-    return this.categoryOptions.find((o) => o.value === category)?.label ?? category;
+    if (!category) {
+      return 'Sin categoría';
+    }
+    // Las categorías clásicas se guardaban como código en mayúsculas; se muestran con su
+    // etiqueta legible. Las personalizadas se muestran tal cual.
+    return LEGACY_CATEGORY_LABELS[category] ?? category;
   }
 
   statusLabel(status: ConceptStatus): string {
