@@ -1,13 +1,20 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { ConceptMaterialsService } from '../../core/services/concept-materials.service';
 import { UsageMetricsService } from '../../core/services/usage-metrics.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
 import { ADMIN_NAV_ITEMS } from '../../shared/components/sidebar/admin-nav';
 import { StudentConceptsService } from './services/student-concepts.service';
-import { ConceptCategory, StudentConceptContentResponse, UserRole } from '../../shared/models';
+import {
+  ConceptCategory,
+  ConceptMaterialResponse,
+  StudentConceptContentResponse,
+  UserRole,
+} from '../../shared/models';
 
 interface CategoryVisual {
   readonly iconName: string;
@@ -323,6 +330,68 @@ const LEGACY_CATEGORY_ORDER: string[] = [
                     </div>
                   }
 
+                  <!-- Materiales de apoyo -->
+                  @if (concept.materials.length > 0) {
+                    <div class="content-section">
+                      <div class="content-section__label">Materiales de apoyo</div>
+                      <div class="materials-grid">
+                        @for (m of concept.materials; track m.materialId) {
+                          <div class="material-card">
+                            <div class="material-card__head">
+                              <span class="material-icons material-card__icon">{{ materialIcon(m) }}</span>
+                              <span class="material-card__title">{{ materialLabel(m) }}</span>
+                            </div>
+
+                            @if (m.type === 'LINK') {
+                              <p class="material-card__hint">Recurso externo de apoyo.</p>
+                              <a class="btn btn-secondary btn-sm" [href]="m.url" target="_blank" rel="noopener noreferrer">
+                                <span class="material-icons">open_in_new</span> Abrir enlace
+                              </a>
+                            } @else if (m.previewAvailable) {
+                              <div class="material-card__actions">
+                                <button type="button" class="btn btn-primary btn-sm"
+                                  [disabled]="downloadingId() === m.materialId" (click)="previewFile(m)">
+                                  <span class="material-icons">visibility</span> Visualizar
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm"
+                                  [disabled]="downloadingId() === m.materialId" (click)="downloadFile(m)">
+                                  <span class="material-icons">download</span> Descargar
+                                </button>
+                              </div>
+                            } @else {
+                              <p class="material-card__hint">
+                                Este material contiene diapositivas. Puedes descargarlo para revisarlo.
+                              </p>
+                              <button type="button" class="btn btn-secondary btn-sm"
+                                [disabled]="downloadingId() === m.materialId" (click)="downloadFile(m)">
+                                <span class="material-icons">download</span> Descargar
+                              </button>
+                            }
+                          </div>
+                        }
+                      </div>
+
+                      @if (previewLoading()) {
+                        <p class="material-card__hint">Cargando vista previa…</p>
+                      }
+                      @if (previewError()) {
+                        <p class="material-preview__error">{{ previewError() }}</p>
+                      }
+                      @if (previewSafeUrl(); as safeUrl) {
+                        <div class="material-preview">
+                          <div class="material-preview__bar">
+                            <span>Vista previa</span>
+                            <button type="button" class="btn btn-secondary btn-sm" (click)="closePreview()">
+                              <span class="material-icons">close</span> Cerrar
+                            </button>
+                          </div>
+                          <iframe class="material-preview__frame" [src]="safeUrl"
+                            title="Vista previa del material"></iframe>
+                        </div>
+                      }
+                    </div>
+                  }
+
                   <!-- CTA a formación de compuestos -->
                   @if (hasRelatedCompounds(concept.category)) {
                     <div class="detail-cta">
@@ -366,9 +435,11 @@ const LEGACY_CATEGORY_ORDER: string[] = [
     </div>
   `,
 })
-export class ConceptsComponent implements OnInit {
+export class ConceptsComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly studentConceptsService = inject(StudentConceptsService);
+  private readonly materialsService = inject(ConceptMaterialsService);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly router = inject(Router);
   private readonly usageMetrics = inject(UsageMetricsService);
 
@@ -379,6 +450,15 @@ export class ConceptsComponent implements OnInit {
   readonly query = signal('');
   readonly activeCategory = signal<ConceptCategory | null>(null);
   readonly selectedId = signal<number | null>(null);
+
+  // Vista previa de materiales (PDF/imágenes) y estado de descarga.
+  readonly previewSafeUrl = signal<SafeResourceUrl | null>(null);
+  readonly previewLoading = signal(false);
+  readonly previewError = signal<string | null>(null);
+  readonly downloadingId = signal<number | null>(null);
+
+  // URL de objeto activa, necesaria para liberarla al cerrar/cambiar de contenido.
+  private currentObjectUrl: string | null = null;
 
   readonly availableCategoryKeys = computed<ConceptCategory[]>(() => {
     const present = [...new Set(this.concepts().map((c) => c.category))];
@@ -402,7 +482,7 @@ export class ConceptsComponent implements OnInit {
         c.title.toLowerCase().includes(q) ||
         this.categoryLabel(c.category).toLowerCase().includes(q) ||
         (c.summary?.toLowerCase().includes(q) ?? false) ||
-        c.explanation.toLowerCase().includes(q) ||
+        (c.explanation?.toLowerCase().includes(q) ?? false) ||
         c.formationSteps.some((s) => s.toLowerCase().includes(q)) ||
         c.keyPoints.some((p) => p.toLowerCase().includes(q)) ||
         c.examples.some((e) => e.toLowerCase().includes(q)) ||
@@ -447,6 +527,7 @@ export class ConceptsComponent implements OnInit {
   onSearch(event: Event): void {
     this.query.set((event.target as HTMLInputElement).value);
     this.selectedId.set(null);
+    this.clearPreview();
   }
 
   clearSearch(): void {
@@ -456,9 +537,11 @@ export class ConceptsComponent implements OnInit {
   setCategory(cat: ConceptCategory | null): void {
     this.activeCategory.set(cat);
     this.selectedId.set(null);
+    this.clearPreview();
   }
 
   selectConcept(id: number): void {
+    this.clearPreview();
     this.selectedId.set(id);
     const concept = this.filtered().find((c) => c.id === id);
     if (concept) {
@@ -468,12 +551,116 @@ export class ConceptsComponent implements OnInit {
 
   closeConcept(): void {
     this.selectedId.set(null);
+    this.clearPreview();
   }
 
   resetFilters(): void {
     this.query.set('');
     this.activeCategory.set(null);
     this.selectedId.set(null);
+    this.clearPreview();
+  }
+
+  // ===========================================================================
+  // Materiales de apoyo
+  // ===========================================================================
+
+  /** Previsualiza un PDF o imagen dentro del sistema usando un blob autenticado. */
+  previewFile(material: ConceptMaterialResponse): void {
+    const concept = this.selectedConcept();
+    if (concept === null || material.type !== 'FILE') {
+      return;
+    }
+    this.clearPreview();
+    this.previewLoading.set(true);
+    this.downloadingId.set(material.materialId);
+    this.materialsService.downloadMaterial(concept.id, material.materialId).subscribe({
+      next: (blob) => {
+        this.downloadingId.set(null);
+        this.previewLoading.set(false);
+        const url = URL.createObjectURL(blob);
+        this.currentObjectUrl = url;
+        this.previewSafeUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+      },
+      error: () => {
+        this.downloadingId.set(null);
+        this.previewLoading.set(false);
+        this.previewError.set('No se pudo cargar la vista previa. Intenta descargar el archivo.');
+      },
+    });
+  }
+
+  /** Descarga el archivo de un material como blob autenticado. */
+  downloadFile(material: ConceptMaterialResponse): void {
+    const concept = this.selectedConcept();
+    if (concept === null || material.type !== 'FILE') {
+      return;
+    }
+    this.downloadingId.set(material.materialId);
+    this.previewError.set(null);
+    this.materialsService.downloadMaterial(concept.id, material.materialId).subscribe({
+      next: (blob) => {
+        this.downloadingId.set(null);
+        this.triggerDownload(blob, material.originalFileName ?? 'material');
+      },
+      error: () => {
+        this.downloadingId.set(null);
+        this.previewError.set('No se pudo descargar el material. Intenta nuevamente.');
+      },
+    });
+  }
+
+  closePreview(): void {
+    this.clearPreview();
+  }
+
+  private clearPreview(): void {
+    if (this.currentObjectUrl !== null) {
+      URL.revokeObjectURL(this.currentObjectUrl);
+      this.currentObjectUrl = null;
+    }
+    this.previewSafeUrl.set(null);
+    this.previewLoading.set(false);
+    this.previewError.set(null);
+    this.downloadingId.set(null);
+  }
+
+  private triggerDownload(blob: Blob, fileName: string): void {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  materialIcon(material: ConceptMaterialResponse): string {
+    if (material.type === 'LINK') {
+      return 'link';
+    }
+    const type = material.contentType ?? '';
+    if (type === 'application/pdf') {
+      return 'picture_as_pdf';
+    }
+    if (type.startsWith('image/')) {
+      return 'image';
+    }
+    return 'slideshow';
+  }
+
+  materialLabel(material: ConceptMaterialResponse): string {
+    return (
+      material.title ||
+      material.originalFileName ||
+      material.url ||
+      'Material de apoyo'
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.clearPreview();
   }
 
   goToCompounds(): void {

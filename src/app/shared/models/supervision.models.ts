@@ -34,6 +34,8 @@ export interface SupervisionConcept {
   readonly status: ConceptStatus;
   readonly createdByTeacher: string | null;
   readonly assignmentCount: number;
+  readonly materialCount: number;
+  readonly hasAttachment: boolean;
   readonly sections: SupervisionSectionRef[];
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
