@@ -9,7 +9,14 @@ import { ADMIN_NAV_ITEMS } from '../../shared/components/sidebar/admin-nav';
 import { StudentConceptsService } from './services/student-concepts.service';
 import { ConceptCategory, StudentConceptContentResponse, UserRole } from '../../shared/models';
 
-const CATEGORY_LABELS: Record<ConceptCategory, string> = {
+interface CategoryVisual {
+  readonly iconName: string;
+  readonly tone: { bg: string; fg: string };
+}
+
+// Etiquetas legibles para las categorías clásicas (se guardaban como código en mayúsculas).
+// Las categorías personalizadas se muestran tal cual las escribió el docente.
+const LEGACY_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   OXIDOS: 'Óxidos',
   HIDROXIDOS: 'Hidróxidos',
   ACIDOS: 'Ácidos',
@@ -19,7 +26,8 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
   GENERAL: 'General',
 };
 
-const CATEGORY_CONFIG: Record<ConceptCategory, { iconName: string; tone: { bg: string; fg: string } }> = {
+// Ícono y color por categoría clásica; las personalizadas usan el aspecto por defecto.
+const CATEGORY_CONFIG: Readonly<Record<string, CategoryVisual>> = {
   OXIDOS:       { iconName: 'local_fire_department', tone: { bg: '#fff4ed', fg: '#c2410c' } },
   HIDROXIDOS:   { iconName: 'opacity',               tone: { bg: '#eff6ff', fg: '#1d4ed8' } },
   ACIDOS:       { iconName: 'water_drop',            tone: { bg: '#f0fdf4', fg: '#15803d' } },
@@ -29,11 +37,18 @@ const CATEGORY_CONFIG: Record<ConceptCategory, { iconName: string; tone: { bg: s
   GENERAL:      { iconName: 'science',               tone: { bg: '#f0f9ff', fg: '#0369a1' } },
 };
 
-const CATEGORIES_WITH_COMPOUNDS = new Set<ConceptCategory>([
+const DEFAULT_CATEGORY_CONFIG: CategoryVisual = {
+  iconName: 'menu_book',
+  tone: { bg: '#f0f9ff', fg: '#0369a1' },
+};
+
+// Solo las categorías químicas clásicas enlazan con el módulo de formación de compuestos.
+const CATEGORIES_WITH_COMPOUNDS = new Set<string>([
   'OXIDOS', 'HIDROXIDOS', 'ACIDOS', 'SALES_BINARIAS', 'OXISALES',
 ]);
 
-const CATEGORY_ORDER: ConceptCategory[] = [
+// Orden preferente de las categorías clásicas en los filtros; las demás van después.
+const LEGACY_CATEGORY_ORDER: string[] = [
   'OXIDOS', 'HIDROXIDOS', 'ACIDOS', 'SALES_BINARIAS', 'OXISALES', 'NOMENCLATURA', 'GENERAL',
 ];
 
@@ -300,6 +315,14 @@ const CATEGORY_ORDER: ConceptCategory[] = [
                     </div>
                   }
 
+                  <!-- Actividad sugerida -->
+                  @if (concept.suggestedActivity) {
+                    <div class="content-section">
+                      <div class="content-section__label">Actividad sugerida</div>
+                      <p class="content-section__text">{{ concept.suggestedActivity }}</p>
+                    </div>
+                  }
+
                   <!-- CTA a formación de compuestos -->
                   @if (hasRelatedCompounds(concept.category)) {
                     <div class="detail-cta">
@@ -358,8 +381,13 @@ export class ConceptsComponent implements OnInit {
   readonly selectedId = signal<number | null>(null);
 
   readonly availableCategoryKeys = computed<ConceptCategory[]>(() => {
-    const present = new Set(this.concepts().map((c) => c.category));
-    return CATEGORY_ORDER.filter((k) => present.has(k));
+    const present = [...new Set(this.concepts().map((c) => c.category))];
+    // Primero las clásicas en su orden preferente, luego las personalizadas alfabéticamente.
+    const legacy = LEGACY_CATEGORY_ORDER.filter((k) => present.includes(k));
+    const custom = present
+      .filter((k) => !LEGACY_CATEGORY_ORDER.includes(k))
+      .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    return [...legacy, ...custom];
   });
 
   readonly filtered = computed<StudentConceptContentResponse[]>(() => {
@@ -372,12 +400,13 @@ export class ConceptsComponent implements OnInit {
       if (!q) return true;
       return (
         c.title.toLowerCase().includes(q) ||
-        CATEGORY_LABELS[c.category].toLowerCase().includes(q) ||
+        this.categoryLabel(c.category).toLowerCase().includes(q) ||
         (c.summary?.toLowerCase().includes(q) ?? false) ||
         c.explanation.toLowerCase().includes(q) ||
         c.formationSteps.some((s) => s.toLowerCase().includes(q)) ||
         c.keyPoints.some((p) => p.toLowerCase().includes(q)) ||
-        c.examples.some((e) => e.toLowerCase().includes(q))
+        c.examples.some((e) => e.toLowerCase().includes(q)) ||
+        (c.suggestedActivity?.toLowerCase().includes(q) ?? false)
       );
     });
   });
@@ -457,19 +486,26 @@ export class ConceptsComponent implements OnInit {
   }
 
   categoryLabel(cat: ConceptCategory): string {
-    return CATEGORY_LABELS[cat];
+    if (!cat) {
+      return 'Sin categoría';
+    }
+    return LEGACY_CATEGORY_LABELS[cat] ?? cat;
+  }
+
+  private categoryVisual(cat: ConceptCategory): CategoryVisual {
+    return CATEGORY_CONFIG[cat] ?? DEFAULT_CATEGORY_CONFIG;
   }
 
   conceptIcon(cat: ConceptCategory): string {
-    return CATEGORY_CONFIG[cat].iconName;
+    return this.categoryVisual(cat).iconName;
   }
 
   conceptBg(cat: ConceptCategory): string {
-    return CATEGORY_CONFIG[cat].tone.bg;
+    return this.categoryVisual(cat).tone.bg;
   }
 
   conceptFg(cat: ConceptCategory): string {
-    return CATEGORY_CONFIG[cat].tone.fg;
+    return this.categoryVisual(cat).tone.fg;
   }
 
   hasRelatedCompounds(cat: ConceptCategory): boolean {

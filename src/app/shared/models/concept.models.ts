@@ -4,15 +4,12 @@
  * UpdateConceptContentRequest, AssignConceptContentRequest, ConceptAssignmentResponse).
  */
 
-/** Categorías temáticas de un contenido conceptual. */
-export type ConceptCategory =
-  | 'OXIDOS'
-  | 'HIDROXIDOS'
-  | 'ACIDOS'
-  | 'SALES_BINARIAS'
-  | 'OXISALES'
-  | 'NOMENCLATURA'
-  | 'GENERAL';
+/**
+ * Categoría temática de un contenido conceptual. Es texto libre: el docente puede
+ * usar las categorías químicas clásicas o registrar cualquier otro tema. Se conserva
+ * como alias de `string` por claridad y compatibilidad con el resto del módulo.
+ */
+export type ConceptCategory = string;
 
 /** Estado del ciclo de vida de un contenido conceptual. */
 export type ConceptStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
@@ -36,6 +33,7 @@ export interface ConceptContentResponse {
   readonly formationSteps: string[];
   readonly keyPoints: string[];
   readonly examples: string[];
+  readonly suggestedActivity: string | null;
   readonly status: ConceptStatus;
   readonly active: boolean;
   readonly createdByTeacherId: number;
@@ -54,6 +52,7 @@ export interface CreateConceptContentRequest {
   readonly formationSteps: string[];
   readonly keyPoints: string[];
   readonly examples: string[];
+  readonly suggestedActivity?: string;
 }
 
 /** Payload para actualizar un contenido conceptual existente. */
@@ -75,4 +74,5 @@ export interface StudentConceptContentResponse {
   readonly formationSteps: string[];
   readonly keyPoints: string[];
   readonly examples: string[];
+  readonly suggestedActivity: string | null;
 }
