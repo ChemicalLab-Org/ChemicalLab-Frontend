@@ -262,6 +262,10 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                   <span class="fact__value">{{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'Una por una' : 'Todas juntas' }}</span>
                 </div>
                 <div class="fact">
+                  <span class="fact__label">Orden de preguntas</span>
+                  <span class="fact__value">{{ d.randomizeQuestions ? 'Aleatorio' : 'Normal' }}</span>
+                </div>
+                <div class="fact">
                   <span class="fact__label">Calculadora química</span>
                   <span class="fact__value">{{ d.allowChemicalCalculator ? 'Permitida' : 'No permitida' }}</span>
                 </div>
@@ -280,6 +284,16 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                     <span class="material-icons">help_outline</span>
                     {{ d.questions.length }} {{ d.questions.length === 1 ? 'pregunta' : 'preguntas' }},
                     {{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'una por pantalla' : 'todas en una pantalla' }}.
+                  </li>
+                  @if (d.questionDisplayMode === 'ONE_BY_ONE') {
+                    <li>
+                      <span class="material-icons">arrow_forward</span>
+                      Avanzas pregunta por pregunta y no podrás volver a una anterior.
+                    </li>
+                  }
+                  <li>
+                    <span class="material-icons">shuffle</span>
+                    Orden de preguntas: {{ d.randomizeQuestions ? 'aleatorio' : 'normal' }}.
                   </li>
                   <li>
                     <span class="material-icons">replay</span>
@@ -445,12 +459,19 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
               </div>
               <span class="ev-take__progress-label">
                 @if (isOneByOne()) {
-                  Pregunta {{ currentIndex() + 1 }} de {{ totalQuestions() }} ·
+                  Pregunta {{ sequentialComplete() ? totalQuestions() : currentIndex() + 1 }} de {{ totalQuestions() }} ·
                 }
                 {{ answeredCount() }} de {{ d.questions.length }} respondidas
               </span>
             </div>
 
+            @if (sequentialComplete()) {
+              <div class="ev-seq-done">
+                <span class="material-icons ev-seq-done__icon">task_alt</span>
+                <p class="ev-seq-done__title">Respondiste todas las preguntas</p>
+                <p class="ev-seq-done__desc">Revisa que estés listo y finaliza la evaluación.</p>
+              </div>
+            } @else {
             <div class="ev-questions">
               @for (q of visibleQuestions(); track q.id) {
                 <div class="q-card">
@@ -497,6 +518,7 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                 </div>
               }
             </div>
+            }
 
             @if (submitError()) {
               <div class="alert alert-danger">
@@ -506,27 +528,36 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
 
             <div class="ev-take__actions">
               @if (isOneByOne()) {
-                <button
-                  type="button"
-                  class="btn btn-secondary btn-lg"
-                  [disabled]="currentIndex() === 0"
-                  (click)="prevQuestion()"
-                >
-                  <span class="material-icons">arrow_back</span> Anterior
-                </button>
-                @if (isLastQuestion()) {
+                <!-- Flujo secuencial: sin botón "Anterior"; no se puede volver atrás. -->
+                @if (sequentialComplete()) {
                   <button
                     type="button"
                     class="btn btn-primary btn-lg"
                     [disabled]="submitting()"
-                    (click)="askSubmit()"
+                    (click)="finishSequential()"
                   >
-                    {{ submitting() ? 'Enviando...' : 'Enviar evaluación' }}
+                    {{ submitting() ? 'Enviando...' : 'Finalizar evaluación' }}
+                    <span class="material-icons">send</span>
+                  </button>
+                } @else if (isLastQuestion()) {
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-lg"
+                    [disabled]="advancing() || submitting()"
+                    (click)="advanceOrFinish()"
+                  >
+                    {{ advancing() || submitting() ? 'Enviando...' : 'Finalizar evaluación' }}
                     <span class="material-icons">send</span>
                   </button>
                 } @else {
-                  <button type="button" class="btn btn-primary btn-lg" (click)="nextQuestion()">
-                    Siguiente <span class="material-icons">arrow_forward</span>
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-lg"
+                    [disabled]="advancing()"
+                    (click)="advanceOrFinish()"
+                  >
+                    {{ advancing() ? 'Guardando...' : 'Guardar y continuar' }}
+                    <span class="material-icons">arrow_forward</span>
                   </button>
                 }
               } @else {
@@ -650,6 +681,8 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   readonly submitting = signal(false);
   readonly submitError = signal<string | null>(null);
   readonly submittedInfo = signal<SubmittedInfo | null>(null);
+  // Guardando+avanzando en el modo una por una.
+  readonly advancing = signal(false);
 
   // ── Configuración avanzada en la rendición ──
   // Modo una por una: índice de la pregunta visible.
@@ -736,20 +769,51 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     () => this.detail()?.allowChemicalCalculator === true
   );
   readonly tabExitTracked = computed(() => this.detail()?.trackTabExit === true);
-  readonly totalQuestions = computed(() => this.detail()?.questions.length ?? 0);
-  readonly currentQuestion = computed(() => {
+
+  /**
+   * Preguntas en el orden fijado para el intento. El backend entrega el orden en
+   * `attempt.questionOrder` (estable entre recargas); si por algún motivo no llega, se
+   * usa el orden natural del detalle.
+   */
+  readonly orderedQuestions = computed(() => {
     const questions = this.detail()?.questions ?? [];
+    const order = this.attempt()?.questionOrder ?? [];
+    if (order.length === 0) {
+      return questions;
+    }
+    const byId = new Map(questions.map((q) => [q.id, q]));
+    const ordered = order
+      .map((id) => byId.get(id))
+      .filter((q): q is (typeof questions)[number] => q !== undefined);
+    // Incluye al final cualquier pregunta no contemplada en el orden (robustez).
+    for (const q of questions) {
+      if (!order.includes(q.id)) {
+        ordered.push(q);
+      }
+    }
+    return ordered;
+  });
+
+  readonly totalQuestions = computed(() => this.orderedQuestions().length);
+  readonly currentQuestion = computed(() => {
+    const questions = this.orderedQuestions();
     const index = this.currentIndex();
     return index >= 0 && index < questions.length ? questions[index] : null;
   });
   readonly isLastQuestion = computed(
     () => this.currentIndex() >= this.totalQuestions() - 1
   );
+  /**
+   * En el modo una por una, el intento ya recorrió todas las preguntas (el índice del
+   * backend llegó al final) pero aún no se envía: se muestra la pantalla de finalizar.
+   */
+  readonly sequentialComplete = computed(
+    () => this.isOneByOne() && this.currentIndex() >= this.totalQuestions()
+  );
   /** Preguntas visibles: todas (ALL_AT_ONCE) o solo la actual (ONE_BY_ONE). */
   readonly visibleQuestions = computed(() => {
-    const questions = this.detail()?.questions ?? [];
     if (!this.isOneByOne()) {
-      return questions;
+      return this.orderedQuestions();
     }
     const current = this.currentQuestion();
     return current ? [current] : [];
@@ -986,8 +1050,9 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     }
     this.answers.set(map);
     this.submitError.set(null);
-    // Reiniciamos el estado de la sesión de rendición.
-    this.currentIndex.set(0);
+    // En el modo una por una, continuamos desde la pregunta pendiente que indica el
+    // backend (las anteriores quedan bloqueadas); en todas juntas el índice es indiferente.
+    this.currentIndex.set(attempt.currentQuestionIndex ?? 0);
     this.autoSubmitted = false;
     this.exited = false;
     this.suppressNextExit = false;
@@ -1037,6 +1102,13 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     const attempt = this.attempt();
     if (!attempt) return;
 
+    // En el modo una por una NO se guarda al seleccionar: la respuesta se confirma al
+    // pulsar "Guardar y continuar"/"Finalizar", que es cuando el backend la bloquea y
+    // avanza. Así evitamos avanzar antes de tiempo.
+    if (this.isOneByOne()) {
+      return;
+    }
+
     this.savedQuestionId.set(null);
     this.saveErrorQuestionId.set(null);
     this.savingQuestionId.set(questionId);
@@ -1061,18 +1133,48 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
       });
   }
 
-  // ═══════════════ Navegación una por una (ONE_BY_ONE) ═══════════════
+  // ═══════════════ Avance secuencial una por una (ONE_BY_ONE) ═══════════════
 
-  nextQuestion(): void {
-    if (this.currentIndex() < this.totalQuestions() - 1) {
-      this.currentIndex.update((i) => i + 1);
+  /**
+   * Confirma la respuesta de la pregunta actual y avanza. El backend guarda la respuesta
+   * y bloquea la pregunta (no hay retroceso). Si es la última, tras guardar se envía la
+   * evaluación. No existe acción para volver a una pregunta anterior.
+   */
+  advanceOrFinish(): void {
+    const attempt = this.attempt();
+    const current = this.currentQuestion();
+    if (!attempt || !current || this.advancing()) {
+      return;
     }
+    const wasLast = this.isLastQuestion();
+    const selectedOptionId = this.answers()[current.id] ?? null;
+
+    this.advancing.set(true);
+    this.submitError.set(null);
+    this.service
+      .saveAnswer(attempt.id, { questionId: current.id, selectedOptionId })
+      .subscribe({
+        next: (updated) => {
+          this.attempt.set(updated);
+          this.advancing.set(false);
+          if (wasLast) {
+            // La última respuesta ya quedó guardada: se finaliza el intento.
+            this.doSubmit();
+          } else {
+            // Continuamos desde la pregunta pendiente que indica el backend.
+            this.currentIndex.set(updated.currentQuestionIndex ?? this.currentIndex() + 1);
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.advancing.set(false);
+          this.submitError.set(this.extractError(err, 'No se pudo guardar la respuesta.'));
+        },
+      });
   }
 
-  prevQuestion(): void {
-    if (this.currentIndex() > 0) {
-      this.currentIndex.update((i) => i - 1);
-    }
+  /** Finaliza el intento desde la pantalla de "todas respondidas" (modo una por una). */
+  finishSequential(): void {
+    this.askFinalSubmit();
   }
 
   // ═══════════════ Contador de tiempo ═══════════════

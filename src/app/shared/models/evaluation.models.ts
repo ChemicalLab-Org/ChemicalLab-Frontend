@@ -30,6 +30,7 @@ export interface CreateEvaluationRequest {
   readonly allowChemicalCalculator?: boolean;
   readonly trackTabExit?: boolean;
   readonly questionDisplayMode?: QuestionDisplayMode;
+  readonly randomizeQuestions?: boolean;
 }
 
 /** Payload para actualizar los datos generales de una evaluación. */
@@ -109,6 +110,7 @@ export interface EvaluationResponse {
   readonly allowChemicalCalculator: boolean;
   readonly trackTabExit: boolean;
   readonly questionDisplayMode: QuestionDisplayMode;
+  readonly randomizeQuestions: boolean;
   readonly active: boolean;
   readonly questionCount: number;
   readonly assignmentCount: number;
@@ -129,6 +131,7 @@ export interface EvaluationDetailResponse {
   readonly allowChemicalCalculator: boolean;
   readonly trackTabExit: boolean;
   readonly questionDisplayMode: QuestionDisplayMode;
+  readonly randomizeQuestions: boolean;
   readonly active: boolean;
   readonly questions: QuestionResponse[];
   readonly assignments: EvaluationAssignmentResponse[];

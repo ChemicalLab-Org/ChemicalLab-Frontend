@@ -337,6 +337,14 @@ interface EvaluationLike {
                       <span class="config-toggle__desc">Se registrará cuando el estudiante cambie de pestaña o pierda el foco. Es una detección básica, no un bloqueo.</span>
                     </span>
                   </label>
+
+                  <label class="config-toggle">
+                    <input type="checkbox" formControlName="randomizeQuestions" />
+                    <span class="config-toggle__text">
+                      <span class="config-toggle__title">Orden aleatorio de preguntas</span>
+                      <span class="config-toggle__desc">Las preguntas se mostrarán en un orden distinto para cada intento.</span>
+                    </span>
+                  </label>
                 </div>
 
                 <div class="form-group config-grid__mode">
@@ -407,6 +415,10 @@ interface EvaluationLike {
               <div class="detail__fact">
                 <span class="detail__fact-label">Modo de preguntas</span>
                 <span class="detail__fact-value">{{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'Una por una' : 'Todas juntas' }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Orden de preguntas</span>
+                <span class="detail__fact-value">{{ d.randomizeQuestions ? 'Aleatorio' : 'Normal' }}</span>
               </div>
               <div class="detail__fact">
                 <span class="detail__fact-label">Calculadora química</span>
@@ -887,6 +899,7 @@ export class TeacherEvaluationsComponent {
     allowChemicalCalculator: [false],
     trackTabExit: [false],
     questionDisplayMode: ['ALL_AT_ONCE' as QuestionDisplayMode],
+    randomizeQuestions: [false],
   });
 
   readonly questionForm: FormGroup = this.fb.group({
@@ -1007,6 +1020,7 @@ export class TeacherEvaluationsComponent {
       allowChemicalCalculator: false,
       trackTabExit: false,
       questionDisplayMode: 'ALL_AT_ONCE',
+      randomizeQuestions: false,
     });
     this.detailEvaluation.set(null);
     this.formOpen.set(true);
@@ -1026,6 +1040,7 @@ export class TeacherEvaluationsComponent {
       allowChemicalCalculator: evaluation.allowChemicalCalculator ?? false,
       trackTabExit: evaluation.trackTabExit ?? false,
       questionDisplayMode: evaluation.questionDisplayMode ?? 'ALL_AT_ONCE',
+      randomizeQuestions: evaluation.randomizeQuestions ?? false,
     });
     this.detailEvaluation.set(null);
     this.formOpen.set(true);
@@ -1056,6 +1071,7 @@ export class TeacherEvaluationsComponent {
       allowChemicalCalculator: raw.allowChemicalCalculator === true,
       trackTabExit: raw.trackTabExit === true,
       questionDisplayMode: (raw.questionDisplayMode as QuestionDisplayMode) ?? 'ALL_AT_ONCE',
+      randomizeQuestions: raw.randomizeQuestions === true,
     };
 
     if (this.formMode() === 'create') {

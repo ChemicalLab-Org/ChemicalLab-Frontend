@@ -36,6 +36,7 @@ export interface StudentEvaluationResponse {
   readonly allowChemicalCalculator: boolean;
   readonly trackTabExit: boolean;
   readonly questionDisplayMode: QuestionDisplayMode;
+  readonly randomizeQuestions: boolean;
   readonly questionCount: number;
   readonly assignmentId: number;
   readonly startAt: string | null;
@@ -73,6 +74,7 @@ export interface StudentEvaluationDetailResponse {
   readonly allowChemicalCalculator: boolean;
   readonly trackTabExit: boolean;
   readonly questionDisplayMode: QuestionDisplayMode;
+  readonly randomizeQuestions: boolean;
   readonly questions: StudentQuestionResponse[];
   readonly assignmentId: number;
 }
@@ -98,6 +100,10 @@ export interface AttemptResponse {
   readonly attemptNumber: number;
   readonly startedAt: string;
   readonly submittedAt: string | null;
+  /** Orden de las preguntas fijado para este intento (IDs). */
+  readonly questionOrder: number[];
+  /** Modo una por una: índice de la pregunta actual; las anteriores quedan bloqueadas. */
+  readonly currentQuestionIndex: number;
   readonly answers: StudentAnswerResponse[];
 }
 

@@ -763,3 +763,16 @@
 }
 
 .ev-done__autonote { margin-bottom: var(--space-4); }
+
+.ev-seq-done {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  border: 1px dashed var(--color-primary-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-50);
+  margin-bottom: var(--space-4);
+
+  &__icon { font-size: 40px; color: var(--color-primary-600); }
+  &__title { margin: var(--space-2) 0 0; font-weight: 600; color: var(--color-neutral-800); }
+  &__desc { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-neutral-600); }
+}
