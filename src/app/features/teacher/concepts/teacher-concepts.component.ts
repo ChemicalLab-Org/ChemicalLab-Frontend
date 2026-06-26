@@ -11,17 +11,20 @@ import {
 } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { ConceptContentService } from '../../../core/services/concept-content.service';
+import { ConceptMaterialsService } from '../../../core/services/concept-materials.service';
 import { UserManagementService } from '../../../core/services/user-management.service';
 import {
   SidebarComponent,
   SidebarNavItem,
 } from '../../../shared/components/sidebar/sidebar.component';
+import { TEACHER_NAV_ITEMS } from '../../../shared/components/sidebar/teacher-nav';
 import {
   ApiError,
   AssignConceptContentRequest,
   ConceptAssignmentResponse,
   ConceptCategory,
   ConceptContentResponse,
+  ConceptMaterialResponse,
   ConceptStatus,
   CreateConceptContentRequest,
 } from '../../../shared/models';
@@ -30,10 +33,19 @@ type FormMode = 'create' | 'edit';
 type StatusFilter = 'all' | ConceptStatus;
 type ListField = 'formationSteps' | 'keyPoints' | 'examples';
 
-interface CategoryOption {
-  readonly value: ConceptCategory;
-  readonly label: string;
-}
+/**
+ * Etiquetas legibles para las categorías clásicas que se almacenaban como código en
+ * mayúsculas. Las categorías personalizadas se muestran tal cual las escribió el docente.
+ */
+const LEGACY_CATEGORY_LABELS: Readonly<Record<string, string>> = {
+  OXIDOS: 'Óxidos',
+  HIDROXIDOS: 'Hidróxidos',
+  ACIDOS: 'Ácidos',
+  SALES_BINARIAS: 'Sales binarias',
+  OXISALES: 'Oxisales',
+  NOMENCLATURA: 'Nomenclatura',
+  GENERAL: 'General',
+};
 
 @Component({
   selector: 'app-teacher-concepts',
@@ -216,6 +228,11 @@ interface CategoryOption {
           </header>
 
           <form [formGroup]="form" (ngSubmit)="submitForm()" class="modal__body">
+            <div class="alert alert-info modal__note">
+              <span class="material-icons">lightbulb</span>
+              Un contenido puede usar texto, archivos de apoyo o enlaces (o una combinación).
+              Tras guardarlo, abre su detalle para adjuntar archivos PDF, diapositivas o enlaces.
+            </div>
             <div class="form-grid">
               <div class="form-group form-group--full">
                 <label class="form-label" for="title">Título</label>
@@ -228,30 +245,42 @@ interface CategoryOption {
 
               <div class="form-group">
                 <label class="form-label" for="category">Categoría</label>
-                <select id="category" class="select" formControlName="category" [class.input-error]="isInvalid('category')">
-                  @for (opt of categoryOptions; track opt.value) {
-                    <option [value]="opt.value">{{ opt.label }}</option>
+                <input
+                  id="category"
+                  class="input"
+                  formControlName="category"
+                  list="category-suggestions"
+                  maxlength="100"
+                  placeholder="ej. Enlace químico, Tabla periódica…"
+                  [class.input-error]="isInvalid('category')"
+                />
+                <datalist id="category-suggestions">
+                  @for (cat of categorySuggestions(); track cat) {
+                    <option [value]="cat"></option>
                   }
-                </select>
+                </datalist>
+                <span class="form-hint">
+                  Escribe una categoría o elige una sugerida. Puedes usar temas libres, no solo tipos de compuestos.
+                </span>
+                @if (isInvalid('category')) {
+                  <span class="form-error">La categoría es obligatoria (máx. 100 caracteres).</span>
+                }
               </div>
 
               <div class="form-group form-group--full">
-                <label class="form-label" for="summary">Resumen</label>
+                <label class="form-label" for="summary">Resumen <span class="form-label__optional">(opcional)</span></label>
                 <input id="summary" class="input" formControlName="summary" placeholder="Breve descripción del contenido"
                   [class.input-error]="isInvalid('summary')" />
                 @if (isInvalid('summary')) {
-                  <span class="form-error">El resumen es obligatorio (máx. 500 caracteres).</span>
+                  <span class="form-error">El resumen no puede superar 500 caracteres.</span>
                 }
               </div>
 
               <div class="form-group form-group--full">
-                <label class="form-label" for="explanation">Explicación</label>
+                <label class="form-label" for="explanation">Explicación <span class="form-label__optional">(opcional)</span></label>
                 <textarea id="explanation" class="textarea" formControlName="explanation" rows="5"
-                  placeholder="Explica el concepto con el detalle que necesiten tus estudiantes"
+                  placeholder="Explica el concepto o, si prefieres, apóyate solo en un archivo o enlace"
                   [class.input-error]="isInvalid('explanation')"></textarea>
-                @if (isInvalid('explanation')) {
-                  <span class="form-error">La explicación es obligatoria.</span>
-                }
               </div>
 
               <!-- Listas dinámicas -->
@@ -307,6 +336,16 @@ interface CategoryOption {
                     <span class="material-icons">add</span> Agregar ejemplo
                   </button>
                 </div>
+              </div>
+
+              <div class="form-group form-group--full">
+                <label class="form-label" for="suggestedActivity">Actividad sugerida</label>
+                <textarea id="suggestedActivity" class="textarea" formControlName="suggestedActivity" rows="3"
+                  placeholder="Indicaciones o actividad sugerida para trabajar el tema (opcional)"
+                  [class.input-error]="isInvalid('suggestedActivity')"></textarea>
+                @if (isInvalid('suggestedActivity')) {
+                  <span class="form-error">La actividad sugerida no puede superar 2000 caracteres.</span>
+                }
               </div>
             </div>
 
@@ -394,6 +433,86 @@ interface CategoryOption {
                 </ul>
               </section>
             }
+
+            @if (d.suggestedActivity) {
+              <section class="detail__section">
+                <h3 class="detail__heading">Actividad sugerida</h3>
+                <p class="detail__text detail__text--pre">{{ d.suggestedActivity }}</p>
+              </section>
+            }
+
+            <section class="detail__section">
+              <h3 class="detail__heading">Materiales de apoyo</h3>
+
+              @if (d.materials.length === 0) {
+                <p class="detail__text detail__text--muted">Este contenido aún no tiene materiales de apoyo.</p>
+              } @else {
+                <div class="material-list">
+                  @for (m of d.materials; track m.materialId) {
+                    <div class="material-row">
+                      <span class="material-icons material-row__icon">{{ materialIcon(m) }}</span>
+                      <div class="material-row__info">
+                        <span class="material-row__title">{{ materialLabel(m) }}</span>
+                        <span class="material-row__meta">{{ materialMeta(m) }}</span>
+                      </div>
+                      <div class="material-row__actions">
+                        @if (m.type === 'LINK') {
+                          <a class="row-action" [href]="m.url" target="_blank" rel="noopener noreferrer"
+                            title="Abrir enlace" aria-label="Abrir enlace">
+                            <span class="material-icons">open_in_new</span>
+                          </a>
+                        } @else {
+                          <button type="button" class="row-action" title="Descargar" aria-label="Descargar"
+                            [disabled]="downloadingId() === m.materialId" (click)="downloadMaterial(m)">
+                            <span class="material-icons">download</span>
+                          </button>
+                        }
+                        <button type="button" class="row-action row-action--danger" title="Retirar" aria-label="Retirar"
+                          [disabled]="removingId() === m.materialId" (click)="removeMaterial(d, m)">
+                          <span class="material-icons">delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+
+              <div class="material-editor">
+                <div class="material-editor__block">
+                  <h4 class="material-subheading">{{ hasFileMaterial(d) ? 'Reemplazar archivo' : 'Agregar archivo' }}</h4>
+                  <p class="form-hint">PDF, diapositivas (PPT/PPTX) o imágenes (PNG/JPG). Máximo 10 MB.</p>
+                  <div class="material-upload">
+                    <input type="file" class="input" #fileInput
+                      accept=".pdf,.ppt,.pptx,.png,.jpg,.jpeg"
+                      (change)="onFileSelected($event)" />
+                    <button type="button" class="btn btn-primary btn-sm"
+                      [disabled]="!selectedFile() || uploadingFile()" (click)="uploadFile(d, fileInput)">
+                      {{ uploadingFile() ? 'Subiendo…' : 'Subir' }}
+                    </button>
+                  </div>
+                  @if (selectedFile(); as f) {
+                    <span class="material-selected">{{ f.name }} · {{ formatSize(f.size) }}</span>
+                  }
+                  @if (fileError()) {
+                    <span class="form-error">{{ fileError() }}</span>
+                  }
+                </div>
+
+                <div class="material-editor__block">
+                  <h4 class="material-subheading">Agregar enlace externo</h4>
+                  <form [formGroup]="linkForm" (ngSubmit)="addLink(d)" class="material-link-form">
+                    <input class="input" formControlName="title" placeholder="Título (opcional)" maxlength="150" />
+                    <input class="input" formControlName="url" placeholder="https://recurso-de-apoyo…" />
+                    <button type="submit" class="btn btn-secondary btn-sm" [disabled]="addingLink()">
+                      {{ addingLink() ? 'Agregando…' : 'Agregar enlace' }}
+                    </button>
+                  </form>
+                  @if (linkError()) {
+                    <span class="form-error">{{ linkError() }}</span>
+                  }
+                </div>
+              </div>
+            </section>
 
             <section class="detail__section">
               <h3 class="detail__heading">Asignaciones activas</h3>
@@ -574,30 +693,17 @@ interface CategoryOption {
 export class TeacherConceptsComponent {
   private readonly authService = inject(AuthService);
   private readonly conceptService = inject(ConceptContentService);
+  private readonly materialsService = inject(ConceptMaterialsService);
   private readonly userManagementService = inject(UserManagementService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
-    { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
-    { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
-    { label: 'Evaluaciones', icon: 'quiz', route: '/teacher/evaluations' },
-    { label: 'Resultados', icon: 'analytics', route: '/teacher-dashboard/results', disabled: true },
-    { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
 
   readonly userRole = 'Docente';
 
-  readonly categoryOptions: readonly CategoryOption[] = [
-    { value: 'OXIDOS', label: 'Óxidos' },
-    { value: 'HIDROXIDOS', label: 'Hidróxidos' },
-    { value: 'ACIDOS', label: 'Ácidos' },
-    { value: 'SALES_BINARIAS', label: 'Sales binarias' },
-    { value: 'OXISALES', label: 'Oxisales' },
-    { value: 'NOMENCLATURA', label: 'Nomenclatura' },
-    { value: 'GENERAL', label: 'General' },
-  ];
+  // Categorías sugeridas para el formulario (catálogo del backend + las ya usadas).
+  readonly categorySuggestions = signal<string[]>([]);
 
   readonly statusTabs: readonly { value: StatusFilter; label: string }[] = [
     { value: 'all', label: 'Todos' },
@@ -659,18 +765,37 @@ export class TeacherConceptsComponent {
 
   readonly form: FormGroup = this.fb.group({
     title: ['', [Validators.required, Validators.maxLength(150)]],
-    category: ['OXIDOS', [Validators.required]],
-    summary: ['', [Validators.required, Validators.maxLength(500)]],
-    explanation: ['', [Validators.required]],
+    category: ['', [Validators.required, Validators.maxLength(100)]],
+    summary: ['', [Validators.maxLength(500)]],
+    explanation: [''],
     formationSteps: this.fb.array<FormControl<string>>([]),
     keyPoints: this.fb.array<FormControl<string>>([]),
     examples: this.fb.array<FormControl<string>>([]),
+    suggestedActivity: ['', [Validators.maxLength(2000)]],
   });
 
   readonly assignForm: FormGroup = this.fb.group({
     grade: ['1', [Validators.required]],
     section: ['A', [Validators.required]],
   });
+
+  // Gestión de materiales de apoyo (en el modal de detalle)
+  readonly selectedFile = signal<File | null>(null);
+  readonly fileError = signal<string | null>(null);
+  readonly uploadingFile = signal<boolean>(false);
+  readonly addingLink = signal<boolean>(false);
+  readonly linkError = signal<string | null>(null);
+  readonly removingId = signal<number | null>(null);
+  readonly downloadingId = signal<number | null>(null);
+
+  readonly linkForm: FormGroup = this.fb.group({
+    title: [''],
+    url: ['', [Validators.required]],
+  });
+
+  // Tipos de archivo permitidos (alineados con el backend) y tamaño máximo (10 MB).
+  private readonly allowedFileExtensions = ['pdf', 'ppt', 'pptx', 'png', 'jpg', 'jpeg'];
+  private readonly maxFileSizeBytes = 10 * 1024 * 1024;
 
   // Usuario autenticado
   private readonly currentUser = this.authService.currentUser;
@@ -708,6 +833,15 @@ export class TeacherConceptsComponent {
   constructor() {
     this.loadConcepts();
     this.loadGradeSectionOptions();
+    this.loadCategorySuggestions();
+  }
+
+  /** Carga las categorías sugeridas; si falla no es bloqueante (el campo es libre). */
+  private loadCategorySuggestions(): void {
+    this.conceptService.listCategorySuggestions().subscribe({
+      next: (categories) => this.categorySuggestions.set(categories),
+      error: () => this.categorySuggestions.set([]),
+    });
   }
 
   // ===========================================================================
@@ -805,9 +939,10 @@ export class TeacherConceptsComponent {
     this.formError.set(null);
     this.form.reset({
       title: '',
-      category: 'OXIDOS',
+      category: '',
       summary: '',
       explanation: '',
+      suggestedActivity: '',
     });
     this.setListValues('formationSteps', []);
     this.setListValues('keyPoints', []);
@@ -824,7 +959,8 @@ export class TeacherConceptsComponent {
       title: concept.title,
       category: concept.category,
       summary: concept.summary ?? '',
-      explanation: concept.explanation,
+      explanation: concept.explanation ?? '',
+      suggestedActivity: concept.suggestedActivity ?? '',
     });
     this.setListValues('formationSteps', concept.formationSteps);
     this.setListValues('keyPoints', concept.keyPoints);
@@ -848,14 +984,18 @@ export class TeacherConceptsComponent {
     this.formError.set(null);
 
     const raw = this.form.getRawValue();
+    const summary = (raw.summary ?? '').trim();
+    const explanation = (raw.explanation ?? '').trim();
+    const suggestedActivity = (raw.suggestedActivity ?? '').trim();
     const request: CreateConceptContentRequest = {
       title: (raw.title ?? '').trim(),
-      category: raw.category as ConceptCategory,
-      summary: (raw.summary ?? '').trim(),
-      explanation: (raw.explanation ?? '').trim(),
+      category: (raw.category ?? '').trim(),
+      summary: summary.length > 0 ? summary : undefined,
+      explanation: explanation.length > 0 ? explanation : undefined,
       formationSteps: cleanList(raw.formationSteps),
       keyPoints: cleanList(raw.keyPoints),
       examples: cleanList(raw.examples),
+      suggestedActivity: suggestedActivity.length > 0 ? suggestedActivity : undefined,
     };
 
     if (this.formMode() === 'create') {
@@ -882,6 +1022,7 @@ export class TeacherConceptsComponent {
 
   openDetail(concept: ConceptContentResponse): void {
     // Se muestra de inmediato con los datos en memoria y se refresca desde el backend.
+    this.resetMaterialState();
     this.detailConcept.set(concept);
     this.conceptService.getTeacherConcept(concept.id).subscribe({
       next: (fresh) => {
@@ -896,6 +1037,7 @@ export class TeacherConceptsComponent {
 
   closeDetail(): void {
     this.detailConcept.set(null);
+    this.resetMaterialState();
   }
 
   // ===========================================================================
@@ -1057,11 +1199,215 @@ export class TeacherConceptsComponent {
   }
 
   // ===========================================================================
+  // Materiales de apoyo
+  // ===========================================================================
+
+  onFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    this.fileError.set(null);
+    if (file === null) {
+      this.selectedFile.set(null);
+      return;
+    }
+    const error = this.validateFile(file);
+    if (error !== null) {
+      this.fileError.set(error);
+      this.selectedFile.set(null);
+      input.value = '';
+      return;
+    }
+    this.selectedFile.set(file);
+  }
+
+  /** Valida tipo y tamaño del archivo antes de enviarlo (el backend repite la validación). */
+  private validateFile(file: File): string | null {
+    const extension = file.name.includes('.')
+      ? file.name.split('.').pop()!.toLowerCase()
+      : '';
+    if (!this.allowedFileExtensions.includes(extension)) {
+      return 'Tipo de archivo no permitido. Usa PDF, PPT/PPTX, PNG o JPG.';
+    }
+    if (file.size === 0) {
+      return 'El archivo está vacío.';
+    }
+    if (file.size > this.maxFileSizeBytes) {
+      return 'El archivo supera el tamaño máximo permitido (10 MB).';
+    }
+    return null;
+  }
+
+  uploadFile(concept: ConceptContentResponse, input: HTMLInputElement): void {
+    const file = this.selectedFile();
+    if (file === null) {
+      return;
+    }
+    this.uploadingFile.set(true);
+    this.fileError.set(null);
+    this.materialsService.uploadFile(concept.id, file).subscribe({
+      next: () => {
+        this.uploadingFile.set(false);
+        this.selectedFile.set(null);
+        input.value = '';
+        this.flashSuccess('Archivo de apoyo guardado.');
+        this.refreshConcept(concept.id);
+      },
+      error: (err: unknown) => {
+        this.uploadingFile.set(false);
+        this.fileError.set(this.extractError(err, 'No se pudo subir el archivo.'));
+      },
+    });
+  }
+
+  addLink(concept: ConceptContentResponse): void {
+    if (this.linkForm.invalid) {
+      this.linkForm.markAllAsTouched();
+      this.linkError.set('Ingresa una URL válida (http:// o https://).');
+      return;
+    }
+    const raw = this.linkForm.getRawValue();
+    const url = (raw.url ?? '').trim();
+    if (!/^https?:\/\//i.test(url)) {
+      this.linkError.set('La URL debe iniciar con http:// o https://.');
+      return;
+    }
+    const title = (raw.title ?? '').trim();
+
+    this.addingLink.set(true);
+    this.linkError.set(null);
+    this.materialsService
+      .addLink(concept.id, { url, title: title.length > 0 ? title : undefined })
+      .subscribe({
+        next: () => {
+          this.addingLink.set(false);
+          this.linkForm.reset({ title: '', url: '' });
+          this.flashSuccess('Enlace de apoyo agregado.');
+          this.refreshConcept(concept.id);
+        },
+        error: (err: unknown) => {
+          this.addingLink.set(false);
+          this.linkError.set(this.extractError(err, 'No se pudo agregar el enlace.'));
+        },
+      });
+  }
+
+  removeMaterial(concept: ConceptContentResponse, material: ConceptMaterialResponse): void {
+    this.removingId.set(material.materialId);
+    this.materialsService.deleteMaterial(concept.id, material.materialId).subscribe({
+      next: () => {
+        this.removingId.set(null);
+        this.flashSuccess('Material retirado.');
+        this.refreshConcept(concept.id);
+      },
+      error: (err: unknown) => {
+        this.removingId.set(null);
+        this.fileError.set(this.extractError(err, 'No se pudo retirar el material.'));
+      },
+    });
+  }
+
+  downloadMaterial(material: ConceptMaterialResponse): void {
+    const concept = this.detailConcept();
+    if (concept === null || material.type !== 'FILE') {
+      return;
+    }
+    this.downloadingId.set(material.materialId);
+    this.materialsService.downloadMaterial(concept.id, material.materialId).subscribe({
+      next: (blob) => {
+        this.downloadingId.set(null);
+        this.triggerDownload(blob, material.originalFileName ?? 'material');
+      },
+      error: (err: unknown) => {
+        this.downloadingId.set(null);
+        this.fileError.set(this.extractError(err, 'No se pudo descargar el material.'));
+      },
+    });
+  }
+
+  private triggerDownload(blob: Blob, fileName: string): void {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  private resetMaterialState(): void {
+    this.selectedFile.set(null);
+    this.fileError.set(null);
+    this.linkError.set(null);
+    this.uploadingFile.set(false);
+    this.addingLink.set(false);
+    this.removingId.set(null);
+    this.downloadingId.set(null);
+    this.linkForm.reset({ title: '', url: '' });
+  }
+
+  hasFileMaterial(concept: ConceptContentResponse): boolean {
+    return concept.materials.some((m) => m.type === 'FILE');
+  }
+
+  materialIcon(material: ConceptMaterialResponse): string {
+    if (material.type === 'LINK') {
+      return 'link';
+    }
+    const type = material.contentType ?? '';
+    if (type === 'application/pdf') {
+      return 'picture_as_pdf';
+    }
+    if (type.startsWith('image/')) {
+      return 'image';
+    }
+    return 'slideshow';
+  }
+
+  materialLabel(material: ConceptMaterialResponse): string {
+    return (
+      material.title ||
+      material.originalFileName ||
+      material.url ||
+      'Material de apoyo'
+    );
+  }
+
+  materialMeta(material: ConceptMaterialResponse): string {
+    if (material.type === 'LINK') {
+      return material.url ?? 'Enlace externo';
+    }
+    const parts: string[] = [];
+    if (material.originalFileName && material.title) {
+      parts.push(material.originalFileName);
+    }
+    if (material.fileSize) {
+      parts.push(this.formatSize(material.fileSize));
+    }
+    return parts.join(' · ');
+  }
+
+  formatSize(bytes: number): string {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  // ===========================================================================
   // Utilidades de presentación
   // ===========================================================================
 
   categoryLabel(category: ConceptCategory): string {
-    return this.categoryOptions.find((o) => o.value === category)?.label ?? category;
+    if (!category) {
+      return 'Sin categoría';
+    }
+    // Las categorías clásicas se guardaban como código en mayúsculas; se muestran con su
+    // etiqueta legible. Las personalizadas se muestran tal cual.
+    return LEGACY_CATEGORY_LABELS[category] ?? category;
   }
 
   statusLabel(status: ConceptStatus): string {

@@ -20,6 +20,6 @@ export const roleGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
     return true;
   }
 
-  router.navigate(['/auth/access-denied']);
+  router.navigate(['/forbidden']);
   return false;
 };

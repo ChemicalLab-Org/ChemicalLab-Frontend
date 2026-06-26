@@ -15,6 +15,7 @@ import {
   SidebarComponent,
   SidebarNavItem,
 } from '../../../shared/components/sidebar/sidebar.component';
+import { TEACHER_NAV_ITEMS } from '../../../shared/components/sidebar/teacher-nav';
 import {
   ApiError,
   AssignEvaluationRequest,
@@ -24,6 +25,7 @@ import {
   EvaluationDetailResponse,
   EvaluationResponse,
   EvaluationStatus,
+  QuestionDisplayMode,
   QuestionResponse,
 } from '../../../shared/models';
 
@@ -115,7 +117,7 @@ interface EvaluationLike {
           </div>
         } @else if (evaluations().length === 0) {
           <div class="empty-state">
-            <div class="empty-state__icon"><span class="material-icons">quiz</span></div>
+            <div class="empty-state__icon"><span class="material-icons">grading</span></div>
             <h2 class="empty-state__title">Aún no has creado evaluaciones.</h2>
             <p class="empty-state__desc">Crea tu primera evaluación para empezar a asignarla a tus estudiantes.</p>
             <button type="button" class="btn btn-primary" (click)="openCreate()">
@@ -173,6 +175,16 @@ interface EvaluationLike {
                 <div class="eval-card__actions">
                   <button type="button" class="row-action" title="Ver detalle" aria-label="Ver detalle" (click)="openDetail(e)">
                     <span class="material-icons">visibility</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="row-action"
+                    title="Ver resultados"
+                    aria-label="Ver resultados"
+                    [disabled]="e.status === 'DRAFT'"
+                    (click)="openResults(e)"
+                  >
+                    <span class="material-icons">analytics</span>
                   </button>
                   <button type="button" class="row-action" title="Editar datos generales" aria-label="Editar datos generales" (click)="openEdit(e)">
                     <span class="material-icons">edit</span>
@@ -265,19 +277,19 @@ interface EvaluationLike {
 
               <div class="form-group">
                 <label class="form-label" for="maxAttempts">Intentos máximos</label>
-                <input id="maxAttempts" class="input" type="number" min="1" formControlName="maxAttempts"
+                <input id="maxAttempts" class="input" type="number" min="1" max="10" formControlName="maxAttempts"
                   [class.input-error]="isInvalid('maxAttempts')" />
                 @if (isInvalid('maxAttempts')) {
-                  <span class="form-error">Debe ser un número mayor o igual a 1.</span>
+                  <span class="form-error">Debe ser un número entre 1 y 10.</span>
                 }
               </div>
 
               <div class="form-group">
                 <label class="form-label" for="timeLimitMinutes">Tiempo límite (min)</label>
-                <input id="timeLimitMinutes" class="input" type="number" min="1" formControlName="timeLimitMinutes"
+                <input id="timeLimitMinutes" class="input" type="number" min="1" max="240" formControlName="timeLimitMinutes"
                   placeholder="Opcional" [class.input-error]="isInvalid('timeLimitMinutes')" />
                 @if (isInvalid('timeLimitMinutes')) {
-                  <span class="form-error">Si se indica, debe ser un número positivo.</span>
+                  <span class="form-error">Si se indica, debe ser un número entre 1 y 240.</span>
                 }
               </div>
 
@@ -298,6 +310,58 @@ interface EvaluationLike {
                 @if (isInvalid('instructions')) {
                   <span class="form-error">Las instrucciones no pueden superar 2000 caracteres.</span>
                 }
+              </div>
+
+              <!-- Configuración avanzada del intento -->
+              <div class="form-group form-group--full">
+                <h3 class="form-section-title">
+                  <span class="material-icons">tune</span> Configuración del intento
+                </h3>
+                <p class="field-hint">
+                  Define las reglas que verán y deberán respetar los estudiantes al rendir.
+                </p>
+
+                <div class="config-grid">
+                  <label class="config-toggle">
+                    <input type="checkbox" formControlName="allowChemicalCalculator" />
+                    <span class="config-toggle__text">
+                      <span class="config-toggle__title">Permitir calculadora química</span>
+                      <span class="config-toggle__desc">El estudiante podrá abrir herramientas de apoyo químico durante el intento.</span>
+                    </span>
+                  </label>
+
+                  <label class="config-toggle">
+                    <input type="checkbox" formControlName="allowPeriodicTable" />
+                    <span class="config-toggle__text">
+                      <span class="config-toggle__title">Permitir tabla periódica</span>
+                      <span class="config-toggle__desc">El estudiante podrá consultar la tabla periódica durante el intento.</span>
+                    </span>
+                  </label>
+
+                  <label class="config-toggle">
+                    <input type="checkbox" formControlName="trackTabExit" />
+                    <span class="config-toggle__text">
+                      <span class="config-toggle__title">Detectar salida de pestaña</span>
+                      <span class="config-toggle__desc">Se registrará cuando el estudiante cambie de pestaña o pierda el foco. Es una detección básica, no un bloqueo.</span>
+                    </span>
+                  </label>
+
+                  <label class="config-toggle">
+                    <input type="checkbox" formControlName="randomizeQuestions" />
+                    <span class="config-toggle__text">
+                      <span class="config-toggle__title">Orden aleatorio de preguntas</span>
+                      <span class="config-toggle__desc">Las preguntas se mostrarán en un orden distinto para cada intento.</span>
+                    </span>
+                  </label>
+                </div>
+
+                <div class="form-group config-grid__mode">
+                  <label class="form-label" for="questionDisplayMode">Mostrar preguntas</label>
+                  <select id="questionDisplayMode" class="select" formControlName="questionDisplayMode">
+                    <option value="ALL_AT_ONCE">Todas juntas</option>
+                    <option value="ONE_BY_ONE">Una por una</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -355,6 +419,26 @@ interface EvaluationLike {
               <div class="detail__fact">
                 <span class="detail__fact-label">Preguntas</span>
                 <span class="detail__fact-value">{{ d.questions.length }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Modo de preguntas</span>
+                <span class="detail__fact-value">{{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'Una por una' : 'Todas juntas' }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Orden de preguntas</span>
+                <span class="detail__fact-value">{{ d.randomizeQuestions ? 'Aleatorio' : 'Normal' }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Calculadora química</span>
+                <span class="detail__fact-value">{{ d.allowChemicalCalculator ? 'Permitida' : 'Bloqueada' }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Tabla periódica</span>
+                <span class="detail__fact-value">{{ d.allowPeriodicTable ? 'Permitida' : 'Bloqueada' }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Salida de pestaña</span>
+                <span class="detail__fact-value">{{ d.trackTabExit ? 'Detección activada' : 'Sin detección' }}</span>
               </div>
             </div>
 
@@ -740,14 +824,7 @@ export class TeacherEvaluationsComponent {
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
-    { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
-    { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
-    { label: 'Evaluaciones', icon: 'quiz', route: '/teacher/evaluations' },
-    { label: 'Resultados', icon: 'analytics', route: '/teacher-dashboard/results', disabled: true },
-    { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
 
   readonly userRole = 'Docente';
 
@@ -829,8 +906,13 @@ export class TeacherEvaluationsComponent {
     topic: ['', [Validators.maxLength(120)]],
     description: ['', [Validators.maxLength(1000)]],
     instructions: ['', [Validators.maxLength(2000)]],
-    maxAttempts: [1, [Validators.required, Validators.min(1)]],
-    timeLimitMinutes: [null as number | null, [Validators.min(1)]],
+    maxAttempts: [1, [Validators.required, Validators.min(1), Validators.max(10)]],
+    timeLimitMinutes: [null as number | null, [Validators.min(1), Validators.max(240)]],
+    allowChemicalCalculator: [false],
+    allowPeriodicTable: [false],
+    trackTabExit: [false],
+    questionDisplayMode: ['ALL_AT_ONCE' as QuestionDisplayMode],
+    randomizeQuestions: [false],
   });
 
   readonly questionForm: FormGroup = this.fb.group({
@@ -948,6 +1030,11 @@ export class TeacherEvaluationsComponent {
       instructions: '',
       maxAttempts: 1,
       timeLimitMinutes: null,
+      allowChemicalCalculator: false,
+      allowPeriodicTable: false,
+      trackTabExit: false,
+      questionDisplayMode: 'ALL_AT_ONCE',
+      randomizeQuestions: false,
     });
     this.detailEvaluation.set(null);
     this.formOpen.set(true);
@@ -964,6 +1051,11 @@ export class TeacherEvaluationsComponent {
       instructions: evaluation.instructions ?? '',
       maxAttempts: evaluation.maxAttempts,
       timeLimitMinutes: evaluation.timeLimitMinutes ?? null,
+      allowChemicalCalculator: evaluation.allowChemicalCalculator ?? false,
+      allowPeriodicTable: evaluation.allowPeriodicTable ?? false,
+      trackTabExit: evaluation.trackTabExit ?? false,
+      questionDisplayMode: evaluation.questionDisplayMode ?? 'ALL_AT_ONCE',
+      randomizeQuestions: evaluation.randomizeQuestions ?? false,
     });
     this.detailEvaluation.set(null);
     this.formOpen.set(true);
@@ -991,6 +1083,11 @@ export class TeacherEvaluationsComponent {
       instructions: emptyToUndefined(raw.instructions),
       maxAttempts: Number(raw.maxAttempts),
       timeLimitMinutes: toPositiveOrNull(raw.timeLimitMinutes),
+      allowChemicalCalculator: raw.allowChemicalCalculator === true,
+      allowPeriodicTable: raw.allowPeriodicTable === true,
+      trackTabExit: raw.trackTabExit === true,
+      questionDisplayMode: (raw.questionDisplayMode as QuestionDisplayMode) ?? 'ALL_AT_ONCE',
+      randomizeQuestions: raw.randomizeQuestions === true,
     };
 
     if (this.formMode() === 'create') {
@@ -1025,6 +1122,11 @@ export class TeacherEvaluationsComponent {
 
   closeDetail(): void {
     this.detailEvaluation.set(null);
+  }
+
+  /** Abre la pantalla de resultados de la evaluación. */
+  openResults(evaluation: EvaluationLike): void {
+    void this.router.navigateByUrl(`/teacher/evaluations/${evaluation.id}/results`);
   }
 
   /** Refresca el detalle abierto desde el backend. */

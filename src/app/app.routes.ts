@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, temporaryPasswordGuard, roleGuard } from './core/guards';
+import { authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard } from './core/guards';
 import { LoginComponent } from './features/auth/login/login.component';
 import { ChangePasswordComponent } from './features/auth/change-password/change-password.component';
 import { AccessDeniedComponent } from './features/auth/access-denied/access-denied.component';
@@ -11,11 +11,20 @@ import { TeacherStudentsComponent } from './features/teacher/students/teacher-st
 import { TeacherPasswordsComponent } from './features/teacher/passwords/teacher-passwords.component';
 import { TeacherConceptsComponent } from './features/teacher/concepts/teacher-concepts.component';
 import { TeacherEvaluationsComponent } from './features/teacher/evaluations/teacher-evaluations.component';
+import { TeacherEvaluationResultsComponent } from './features/teacher/evaluations/teacher-evaluation-results.component';
+import { TeacherResultsComponent } from './features/teacher/evaluations/teacher-results.component';
 import { TeacherManagementComponent } from './features/admin/teachers/teacher-management.component';
+import { AdminUsersComponent } from './features/admin/users/admin-users.component';
+import { SystemStatusComponent } from './features/admin/system-status/system-status.component';
+import { AdminLogsComponent } from './features/admin/logs/admin-logs.component';
+import { UsageMetricsComponent } from './features/admin/usage-metrics/usage-metrics.component';
+import { AcademicSupervisionComponent } from './features/admin/academic-supervision/academic-supervision.component';
 import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
 import { CompoundsComponent } from './features/compounds/compounds.component';
 import { ConceptsComponent } from './features/concepts/concepts.component';
 import { StudentEvaluationsComponent } from './features/student/evaluations/student-evaluations.component';
+import { StudentResultsComponent } from './features/student/evaluations/student-results.component';
+import { NotFoundComponent } from './features/not-found/not-found.component';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
@@ -27,6 +36,8 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   { path: 'auth/access-denied', component: AccessDeniedComponent },
+  { path: 'forbidden', component: AccessDeniedComponent },
+  { path: 'not-found', component: NotFoundComponent },
 
   {
     path: 'dashboard',
@@ -37,7 +48,7 @@ export const routes: Routes = [
   {
     path: 'student-dashboard',
     component: StudentDashboardComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -71,6 +82,24 @@ export const routes: Routes = [
     data: { roles: ['DOCENTE'] },
   },
   {
+    path: 'teacher/results',
+    component: TeacherResultsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/results/:evaluationId',
+    component: TeacherEvaluationResultsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/evaluations/:evaluationId/results',
+    component: TeacherEvaluationResultsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
     path: 'admin-dashboard',
     component: AdminDashboardComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
@@ -83,21 +112,51 @@ export const routes: Routes = [
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
+    path: 'admin/users',
+    component: AdminUsersComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
+    path: 'admin/academic-supervision',
+    component: AcademicSupervisionComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
+    path: 'admin/system-status',
+    component: SystemStatusComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
+    path: 'admin/logs',
+    component: AdminLogsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
+    path: 'admin/usage-metrics',
+    component: UsageMetricsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
     path: 'periodic-table',
     component: PeriodicTableComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
   },
   {
     path: 'compounds',
     component: CompoundsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
   },
   {
     path: 'concepts',
     component: ConceptsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -106,6 +165,12 @@ export const routes: Routes = [
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
+  {
+    path: 'evaluations/results',
+    component: StudentResultsComponent,
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    data: { roles: ['ESTUDIANTE'] },
+  },
 
-  { path: '**', redirectTo: 'auth/login' },
+  { path: '**', component: NotFoundComponent },
 ];

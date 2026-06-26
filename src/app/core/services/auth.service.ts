@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, tap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { ExamSessionService } from './exam-session.service';
 import {
   AuthResponse,
   ChangePasswordRequest,
@@ -13,6 +14,7 @@ import {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly http = inject(HttpClient);
+  private readonly examSession = inject(ExamSessionService);
   private readonly baseUrl = `${environment.apiUrl}/auth`;
 
   private readonly _currentUser = signal<AuthResponse | null>(null);
@@ -70,6 +72,9 @@ export class AuthService {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     this._currentUser.set(null);
+    // Cerrar sesión termina cualquier modo examen pendiente para no dejar bloqueada la
+    // navegación tras un nuevo inicio de sesión.
+    this.examSession.end();
   }
 
   private loadUserFromStorage(): void {

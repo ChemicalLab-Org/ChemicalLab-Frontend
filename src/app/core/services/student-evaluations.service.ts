@@ -3,10 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  AttemptEventSummaryResponse,
   AttemptResponse,
+  RegisterAttemptEventRequest,
   StartEvaluationAttemptRequest,
+  StudentAttemptResultDetailResponse,
   StudentEvaluationDetailResponse,
   StudentEvaluationResponse,
+  StudentResultSummaryResponse,
   SubmitEvaluationAnswerRequest,
   SubmitEvaluationAttemptRequest,
 } from '../../shared/models';
@@ -60,7 +64,7 @@ export class StudentEvaluationsService {
     );
   }
 
-  /** Envía un intento. Tras esto el intento queda en SUBMITTED y no admite cambios. */
+  /** Envía un intento. Tras esto el intento queda calificado (GRADED) y no admite cambios. */
   submitAttempt(
     attemptId: number,
     request: SubmitEvaluationAttemptRequest = {}
@@ -68,6 +72,46 @@ export class StudentEvaluationsService {
     return this.http.post<AttemptResponse>(
       `${this.baseUrl}/attempts/${attemptId}/submit`,
       request
+    );
+  }
+
+  /**
+   * Finaliza el intento porque el estudiante decide salir de la evaluación. El backend lo
+   * califica con lo guardado y lo deja cerrado (no retomable, cuenta como usado).
+   */
+  exitAttempt(attemptId: number): Observable<AttemptResponse> {
+    return this.http.post<AttemptResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/exit`,
+      {}
+    );
+  }
+
+  /**
+   * Reporta una incidencia de foco (salida/retorno de pestaña o ventana) del intento.
+   * El backend solo la registra si la evaluación tiene activada la detección de salida
+   * de pestaña; en caso contrario responde con error y el frontend lo ignora.
+   */
+  registerAttemptEvent(
+    attemptId: number,
+    request: RegisterAttemptEventRequest
+  ): Observable<AttemptEventSummaryResponse> {
+    return this.http.post<AttemptEventSummaryResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/events`,
+      request
+    );
+  }
+
+  /** Lista las calificaciones de los intentos terminales del estudiante autenticado. */
+  listStudentResults(): Observable<StudentResultSummaryResponse[]> {
+    return this.http.get<StudentResultSummaryResponse[]>(`${this.baseUrl}/results`);
+  }
+
+  /** Obtiene el detalle del resultado de un intento propio. */
+  getStudentAttemptResult(
+    attemptId: number
+  ): Observable<StudentAttemptResultDetailResponse> {
+    return this.http.get<StudentAttemptResultDetailResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/result`
     );
   }
 }

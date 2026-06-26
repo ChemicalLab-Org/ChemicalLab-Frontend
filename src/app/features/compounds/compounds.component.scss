@@ -371,6 +371,14 @@
   }
 }
 
+// Texto guía bajo la vista previa de la simulación (antes de formar el compuesto).
+.result__hint {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+  color: var(--color-neutral-600);
+}
+
 // ─── Responsive ────────────────────────────────────────────────────────────
 @media (max-width: 900px) {
   .cmp-grid {

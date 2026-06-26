@@ -4,11 +4,21 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { TitleCasePipe } from '@angular/common';
 import { forkJoin } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
+import { UsageMetricsService } from '../../core/services/usage-metrics.service';
+import { ExamSessionService } from '../../core/services/exam-session.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
+import { EXAM_EXIT_ACTION, STUDENT_NAV_ITEMS, examNavItems } from '../../shared/components/sidebar/student-nav';
+import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
+import { ADMIN_NAV_ITEMS } from '../../shared/components/sidebar/admin-nav';
 import { UserRole } from '../../shared/models';
 import { PERIODIC_ELEMENTS, PeriodicElement } from '../periodic-table/data/elements-data';
 import { valenceOptionsFor } from './data/common-valences';
 import { allowedElementSymbols } from './data/compound-element-rules';
+import {
+  AnimComponent,
+  AnimKind,
+  CompoundAnimationComponent,
+} from './components/compound-animation/compound-animation.component';
 import { ChemicalEngineService } from './services/chemical-engine.service';
 import { ChemistryCatalogService } from './services/chemistry-catalog.service';
 import {
@@ -52,7 +62,7 @@ interface ElementChoice {
 @Component({
   selector: 'app-compounds',
   standalone: true,
-  imports: [SidebarComponent, TitleCasePipe],
+  imports: [SidebarComponent, TitleCasePipe, CompoundAnimationComponent],
   styleUrls: ['./compounds.component.scss'],
   template: `
     <div class="layout">
@@ -62,9 +72,20 @@ interface ElementChoice {
         [userRole]="userRoleLabel()"
         [userInitials]="userInitials()"
         (onLogout)="handleLogout()"
+        (onAction)="handleSidebarAction($event)"
       />
 
       <main class="main">
+        @if (examActive()) {
+          <div class="alert alert-info" role="status">
+            <span class="material-icons">science</span>
+            <span>
+              Estás usando esta herramienta durante una evaluación.
+              <button type="button" class="link-btn" (click)="backToAttempt()">Volver al intento</button>
+            </span>
+          </div>
+        }
+
         <header class="cmp-header">
           <h1 class="cmp-header__title">Formación de compuestos</h1>
           <p class="cmp-header__subtitle">
@@ -335,6 +356,12 @@ interface ElementChoice {
               }
               @case ('success') {
                 @if (result(); as r) {
+                  <!-- Simulación visual en bucle, junto al resultado real. -->
+                  <app-compound-animation
+                    [components]="animComponents()"
+                    [formula]="r.formula"
+                  />
+
                   <div class="result__head">
                     <h2 class="cmp-card__title">Resultado</h2>
                     <span class="badge badge-success">
@@ -384,10 +411,18 @@ interface ElementChoice {
                 }
               }
               @default {
-                <div class="result__placeholder">
-                  <span class="material-icons">science</span>
-                  <p>Configura el compuesto y presiona «Formar compuesto» para ver el resultado.</p>
-                </div>
+                @if (hasSelection()) {
+                  <!-- Vista previa: muestra los componentes seleccionados antes de formar. -->
+                  <app-compound-animation [components]="animComponents()" [formula]="null" />
+                  <p class="result__hint">
+                    Pulsa «Formar compuesto» para combinar los componentes y ver el resultado.
+                  </p>
+                } @else {
+                  <div class="result__placeholder">
+                    <span class="material-icons">science</span>
+                    <p>Configura el compuesto y presiona «Formar compuesto» para ver el resultado.</p>
+                  </div>
+                }
               }
             }
           </div>
@@ -401,6 +436,8 @@ export class CompoundsComponent {
   private readonly router = inject(Router);
   private readonly engine = inject(ChemicalEngineService);
   private readonly catalog = inject(ChemistryCatalogService);
+  private readonly usageMetrics = inject(UsageMetricsService);
+  private readonly examSession = inject(ExamSessionService);
 
   readonly compoundTypes = COMPOUND_TYPES;
   private readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
@@ -563,9 +600,17 @@ export class CompoundsComponent {
   private readonly currentUser = computed(() => this.authService.currentUser());
   readonly userName = computed<string>(() => this.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
-  readonly navItems = computed<readonly SidebarNavItem[]>(() =>
-    buildNavItems(this.authService.currentRole())
-  );
+  /** Durante un intento activo, el menú lateral pasa al modo examen. */
+  readonly examActive = computed<boolean>(() => this.examSession.isActive());
+  readonly navItems = computed<readonly SidebarNavItem[]>(() => {
+    if (this.examSession.isActive()) {
+      return examNavItems(
+        this.examSession.calculatorAllowed(),
+        this.examSession.periodicTableAllowed()
+      );
+    }
+    return buildNavItems(this.authService.currentRole());
+  });
   readonly userRoleLabel = computed<string>(() => {
     switch (this.authService.currentRole()) {
       case 'DOCENTE':
@@ -576,6 +621,81 @@ export class CompoundsComponent {
         return 'Estudiante';
     }
   });
+
+  // ===== Simulación didáctica (capa visual sobre el resultado real) =====
+
+  /**
+   * Los dos reactivos a representar en la simulación, derivados solo de la
+   * selección del usuario (símbolos, valencias y cargas ya presentes en el
+   * formulario y los catálogos). No recalcula química: la fórmula final sigue
+   * saliendo del backend. El `kind` solo determina el color de la partícula.
+   */
+  readonly animComponents = computed<readonly AnimComponent[]>(() => {
+    const valence = this.valence() ?? 0;
+    const mainPart: AnimComponent = {
+      symbol: this.elementSymbol(),
+      name: this.selectedElementName(),
+      value: valence,
+      sign: '+',
+      kind: this.selectedType() === 'oxides' ? this.oxideElementKind(this.elementSymbol()) : 'metal',
+    };
+    switch (this.selectedType()) {
+      case 'oxides':
+        return [mainPart, { symbol: 'O', name: 'oxígeno', value: 2, sign: '-', kind: 'oxygen' }];
+      case 'hydroxides':
+        return [mainPart, { symbol: 'OH', name: 'hidroxilo', value: 1, sign: '-', kind: 'group' }];
+      case 'salts': {
+        const nm = this.selectedNonMetal();
+        return [
+          mainPart,
+          { symbol: nm?.symbol ?? '', name: nm?.name ?? '', value: nm?.charge ?? 0, sign: '-', kind: 'nonmetal' },
+        ];
+      }
+      case 'oxisalts': {
+        const g = this.selectedOxoanion();
+        return [
+          mainPart,
+          { symbol: g?.formula ?? '', name: g?.name ?? '', value: g?.charge ?? 0, sign: '-', kind: 'group' },
+        ];
+      }
+      case 'acids': {
+        const hydrogen: AnimComponent = { symbol: 'H', name: 'hidrógeno', value: 1, sign: '+', kind: 'hydrogen' };
+        if (this.acidType() === 'HYDRACID') {
+          const a = this.selectedAcidNonMetal();
+          return [
+            hydrogen,
+            { symbol: a?.symbol ?? '', name: a?.name ?? '', value: a?.charge ?? 0, sign: '-', kind: 'nonmetal' },
+          ];
+        }
+        const g = this.selectedOxoanion();
+        return [
+          hydrogen,
+          { symbol: g?.formula ?? '', name: g?.name ?? '', value: g?.charge ?? 0, sign: '-', kind: 'group' },
+        ];
+      }
+      default:
+        return [];
+    }
+  });
+
+  /** Hay una selección suficiente para mostrar la vista previa de la simulación. */
+  readonly hasSelection = computed<boolean>(() => {
+    const comps = this.animComponents();
+    return comps.length === 2 && comps[0].symbol !== '' && comps[1].symbol !== '';
+  });
+
+  /** Color de un elemento de óxido según su categoría en la tabla periódica. */
+  private oxideElementKind(symbol: string): AnimKind {
+    const element = this.elements.find((el) => el.symbol === symbol);
+    if (element === undefined) {
+      return 'metal';
+    }
+    return element.category === 'nonmetal' ||
+      element.category === 'halogen' ||
+      element.category === 'metalloid'
+      ? 'nonmetal'
+      : 'metal';
+  }
 
   selectType(type: CompoundType): void {
     if (type === this.selectedType()) {
@@ -677,9 +797,14 @@ export class CompoundsComponent {
     this.result.set(null);
     this.errorMessage.set('');
 
+    const compoundType = this.selectedType();
     request$.subscribe({
       next: (response) => {
+        // Métrica de uso: el usuario intentó formar/validar un compuesto. Solo se registra
+        // el tipo y el resultado (true/false); nunca el payload ni datos sensibles.
+        this.usageMetrics.trackCompoundFormation(response.compoundType ?? compoundType, response.valid);
         if (response.valid) {
+          // El resultado real y la simulación visual (en bucle) se muestran juntos.
           this.result.set(response);
           this.status.set('success');
         } else {
@@ -820,37 +945,28 @@ export class CompoundsComponent {
     this.authService.logout();
     void this.router.navigateByUrl('/auth/login');
   }
+
+  /** Vuelve al intento sin finalizarlo (no se pierde el progreso). */
+  backToAttempt(): void {
+    void this.router.navigateByUrl('/evaluations');
+  }
+
+  /** "Salir del intento" desde el menú de examen: lo gestiona la pantalla del intento. */
+  handleSidebarAction(action: string): void {
+    if (action === EXAM_EXIT_ACTION) {
+      void this.router.navigate(['/evaluations'], { queryParams: { exit: '1' } });
+    }
+  }
 }
 
 function buildNavItems(role: UserRole | null): readonly SidebarNavItem[] {
   switch (role) {
     case 'DOCENTE':
-      return [
-        { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
-        { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
-        { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
-        { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
-        { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
-        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-        { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
-      ];
+      return TEACHER_NAV_ITEMS;
     case 'ADMINISTRADOR':
-      return [
-        { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
-        { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
-        { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
-        { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
-        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-      ];
+      return ADMIN_NAV_ITEMS;
     default:
-      return [
-        { label: 'Inicio', icon: 'home', route: '/student-dashboard' },
-        { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
-        { label: 'Conceptos químicos', icon: 'menu_book', route: '/concepts' },
-        { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
-        { label: 'Mis evaluaciones', icon: 'assignment', route: '/evaluations' },
-        { label: 'Mis resultados', icon: 'bar_chart', route: '/student-dashboard/results', disabled: true },
-      ];
+      return STUDENT_NAV_ITEMS;
   }
 }
 

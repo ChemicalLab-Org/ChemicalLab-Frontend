@@ -13,6 +13,7 @@ import {
   SidebarComponent,
   SidebarNavItem,
 } from '../../../shared/components/sidebar/sidebar.component';
+import { ADMIN_NAV_ITEMS } from '../../../shared/components/sidebar/admin-nav';
 import {
   ApiError,
   CreateTeacherRequest,
@@ -358,16 +359,7 @@ export class TeacherManagementComponent {
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
-    { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
-    { label: 'Usuarios y roles', icon: 'manage_accounts', route: '/admin-dashboard/users', disabled: true },
-    { label: 'Contenidos químicos', icon: 'auto_stories', route: '/admin-dashboard/content', disabled: true },
-    { label: 'Elementos químicos', icon: 'table_chart', route: '/admin-dashboard/elements', disabled: true },
-    { label: 'Grupos químicos', icon: 'hub', route: '/admin-dashboard/groups', disabled: true },
-    { label: 'Logs del sistema', icon: 'terminal', route: '/admin-dashboard/logs', disabled: true },
-    { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin-dashboard/system', disabled: true },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = ADMIN_NAV_ITEMS;
 
   readonly userRole = 'Admin';
 

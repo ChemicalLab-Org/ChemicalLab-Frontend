@@ -1,9 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
-import { UserManagementService } from '../../core/services/user-management.service';
+import { AdminService } from '../../core/services/admin.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
-import { AuthResponse } from '../../shared/models';
+import { ADMIN_NAV_ITEMS } from '../../shared/components/sidebar/admin-nav';
+import { AdminSummary, AuthResponse } from '../../shared/models';
 
 interface MetricCard {
   readonly id: string;
@@ -17,7 +18,7 @@ interface ShortcutCard {
   readonly title: string;
   readonly description: string;
   readonly icon: string;
-  readonly tone: 'mint' | 'violet' | 'blue' | 'amber' | 'teal' | 'green';
+  readonly tone: 'mint' | 'violet' | 'amber' | 'green';
   readonly cta: string;
   /** Ruta a la que navega la card. Si no se define, la card aún no es funcional. */
   readonly route?: string;
@@ -100,19 +101,10 @@ interface ShortcutCard {
 })
 export class AdminDashboardComponent {
   private readonly authService = inject(AuthService);
-  private readonly userManagementService = inject(UserManagementService);
+  private readonly adminService = inject(AdminService);
   private readonly router = inject(Router);
 
-  readonly navItems: readonly SidebarNavItem[] = [
-    { label: 'Inicio', icon: 'home', route: '/admin-dashboard' },
-    { label: 'Gestión de docentes', icon: 'badge', route: '/admin/teachers' },
-    { label: 'Usuarios y roles', icon: 'manage_accounts', route: '/admin-dashboard/users', disabled: true },
-    { label: 'Contenidos químicos', icon: 'auto_stories', route: '/admin-dashboard/content', disabled: true },
-    { label: 'Elementos químicos', icon: 'table_chart', route: '/periodic-table' },
-    { label: 'Grupos químicos', icon: 'hub', route: '/admin-dashboard/groups', disabled: true },
-    { label: 'Logs del sistema', icon: 'terminal', route: '/admin-dashboard/logs', disabled: true },
-    { label: 'Estado del sistema', icon: 'monitor_heart', route: '/admin-dashboard/system', disabled: true },
-  ];
+  readonly navItems: readonly SidebarNavItem[] = ADMIN_NAV_ITEMS;
 
   readonly userRole = 'Admin';
 
@@ -122,17 +114,18 @@ export class AdminDashboardComponent {
 
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
-  // El total de docentes se obtiene del backend; el resto de métricas aún no
-  // tiene origen de datos y se muestra como «—» hasta que exista su módulo.
-  private readonly teacherCount = signal<number | null>(null);
+  // Las métricas provienen del resumen administrativo (/api/admin/summary).
+  // Si la carga falla, cada métrica se muestra como «—» y el dashboard sigue siendo usable.
+  private readonly summary = signal<AdminSummary | null>(null);
 
   readonly metrics = computed<readonly MetricCard[]>(() => {
-    const teachers = this.teacherCount();
+    const s = this.summary();
+    const v = (n: number | undefined): number | string => (s ? n ?? 0 : '—');
     return [
-      { id: 'teachers', label: 'Total docentes', value: teachers ?? '—', icon: 'badge' },
-      { id: 'students', label: 'Total estudiantes', value: '—', icon: 'group' },
-      { id: 'active', label: 'Evaluaciones activas', value: '—', icon: 'quiz' },
-      { id: 'events', label: 'Últimos eventos', value: '—', icon: 'bolt' },
+      { id: 'users', label: 'Total usuarios', value: v(s?.totalUsers), icon: 'group' },
+      { id: 'teachers', label: 'Total docentes', value: v(s?.totalTeachers), icon: 'badge' },
+      { id: 'students', label: 'Total estudiantes', value: v(s?.totalStudents), icon: 'school' },
+      { id: 'evaluations', label: 'Evaluaciones', value: v(s?.totalEvaluations), icon: 'grading' },
     ];
   });
 
@@ -153,14 +146,16 @@ export class AdminDashboardComponent {
       icon: 'manage_accounts',
       tone: 'violet',
       cta: 'Ver usuarios',
+      route: '/admin/users',
     },
     {
-      id: 'content',
-      title: 'Contenidos químicos',
-      description: 'Edita definiciones, reglas y ejemplos.',
-      icon: 'auto_stories',
-      tone: 'blue',
-      cta: 'Editar contenidos',
+      id: 'academic-supervision',
+      title: 'Supervisión académica',
+      description: 'Supervisa contenidos, evaluaciones, asignaciones y actividad.',
+      icon: 'school',
+      tone: 'green',
+      cta: 'Ir a supervisión',
+      route: '/admin/academic-supervision',
     },
     {
       id: 'logs',
@@ -169,14 +164,7 @@ export class AdminDashboardComponent {
       icon: 'terminal',
       tone: 'amber',
       cta: 'Ver logs',
-    },
-    {
-      id: 'elements',
-      title: 'Elementos químicos',
-      description: 'Consulta y edita los datos de los 118 elementos.',
-      icon: 'table_chart',
-      tone: 'teal',
-      cta: 'Ver elementos',
+      route: '/admin/logs',
     },
     {
       id: 'system',
@@ -185,11 +173,12 @@ export class AdminDashboardComponent {
       icon: 'monitor_heart',
       tone: 'green',
       cta: 'Ver estado',
+      route: '/admin/system-status',
     },
   ];
 
   constructor() {
-    this.loadTeacherCount();
+    this.loadSummary();
   }
 
   openShortcut(shortcut: ShortcutCard): void {
@@ -203,11 +192,11 @@ export class AdminDashboardComponent {
     void this.router.navigateByUrl('/auth/login');
   }
 
-  private loadTeacherCount(): void {
-    this.userManagementService.listTeachers().subscribe({
-      next: (teachers) => this.teacherCount.set(teachers.length),
-      // Si falla, la métrica se mantiene como «—»; el dashboard sigue siendo usable.
-      error: () => this.teacherCount.set(null),
+  private loadSummary(): void {
+    this.adminService.getSummary().subscribe({
+      next: (summary) => this.summary.set(summary),
+      // Si falla, las métricas se mantienen como «—»; el dashboard sigue siendo usable.
+      error: () => this.summary.set(null),
     });
   }
 
