@@ -25,6 +25,7 @@ import {
   EvaluationDetailResponse,
   EvaluationResponse,
   EvaluationStatus,
+  QuestionDisplayMode,
   QuestionResponse,
 } from '../../../shared/models';
 
@@ -276,19 +277,19 @@ interface EvaluationLike {
 
               <div class="form-group">
                 <label class="form-label" for="maxAttempts">Intentos máximos</label>
-                <input id="maxAttempts" class="input" type="number" min="1" formControlName="maxAttempts"
+                <input id="maxAttempts" class="input" type="number" min="1" max="10" formControlName="maxAttempts"
                   [class.input-error]="isInvalid('maxAttempts')" />
                 @if (isInvalid('maxAttempts')) {
-                  <span class="form-error">Debe ser un número mayor o igual a 1.</span>
+                  <span class="form-error">Debe ser un número entre 1 y 10.</span>
                 }
               </div>
 
               <div class="form-group">
                 <label class="form-label" for="timeLimitMinutes">Tiempo límite (min)</label>
-                <input id="timeLimitMinutes" class="input" type="number" min="1" formControlName="timeLimitMinutes"
+                <input id="timeLimitMinutes" class="input" type="number" min="1" max="240" formControlName="timeLimitMinutes"
                   placeholder="Opcional" [class.input-error]="isInvalid('timeLimitMinutes')" />
                 @if (isInvalid('timeLimitMinutes')) {
-                  <span class="form-error">Si se indica, debe ser un número positivo.</span>
+                  <span class="form-error">Si se indica, debe ser un número entre 1 y 240.</span>
                 }
               </div>
 
@@ -309,6 +310,42 @@ interface EvaluationLike {
                 @if (isInvalid('instructions')) {
                   <span class="form-error">Las instrucciones no pueden superar 2000 caracteres.</span>
                 }
+              </div>
+
+              <!-- Configuración avanzada del intento -->
+              <div class="form-group form-group--full">
+                <h3 class="form-section-title">
+                  <span class="material-icons">tune</span> Configuración del intento
+                </h3>
+                <p class="field-hint">
+                  Define las reglas que verán y deberán respetar los estudiantes al rendir.
+                </p>
+
+                <div class="config-grid">
+                  <label class="config-toggle">
+                    <input type="checkbox" formControlName="allowChemicalCalculator" />
+                    <span class="config-toggle__text">
+                      <span class="config-toggle__title">Permitir calculadora química</span>
+                      <span class="config-toggle__desc">El estudiante podrá abrir herramientas de apoyo químico durante el intento.</span>
+                    </span>
+                  </label>
+
+                  <label class="config-toggle">
+                    <input type="checkbox" formControlName="trackTabExit" />
+                    <span class="config-toggle__text">
+                      <span class="config-toggle__title">Detectar salida de pestaña</span>
+                      <span class="config-toggle__desc">Se registrará cuando el estudiante cambie de pestaña o pierda el foco. Es una detección básica, no un bloqueo.</span>
+                    </span>
+                  </label>
+                </div>
+
+                <div class="form-group config-grid__mode">
+                  <label class="form-label" for="questionDisplayMode">Mostrar preguntas</label>
+                  <select id="questionDisplayMode" class="select" formControlName="questionDisplayMode">
+                    <option value="ALL_AT_ONCE">Todas juntas</option>
+                    <option value="ONE_BY_ONE">Una por una</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -366,6 +403,18 @@ interface EvaluationLike {
               <div class="detail__fact">
                 <span class="detail__fact-label">Preguntas</span>
                 <span class="detail__fact-value">{{ d.questions.length }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Modo de preguntas</span>
+                <span class="detail__fact-value">{{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'Una por una' : 'Todas juntas' }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Calculadora química</span>
+                <span class="detail__fact-value">{{ d.allowChemicalCalculator ? 'Permitida' : 'Bloqueada' }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Salida de pestaña</span>
+                <span class="detail__fact-value">{{ d.trackTabExit ? 'Detección activada' : 'Sin detección' }}</span>
               </div>
             </div>
 
@@ -833,8 +882,11 @@ export class TeacherEvaluationsComponent {
     topic: ['', [Validators.maxLength(120)]],
     description: ['', [Validators.maxLength(1000)]],
     instructions: ['', [Validators.maxLength(2000)]],
-    maxAttempts: [1, [Validators.required, Validators.min(1)]],
-    timeLimitMinutes: [null as number | null, [Validators.min(1)]],
+    maxAttempts: [1, [Validators.required, Validators.min(1), Validators.max(10)]],
+    timeLimitMinutes: [null as number | null, [Validators.min(1), Validators.max(240)]],
+    allowChemicalCalculator: [false],
+    trackTabExit: [false],
+    questionDisplayMode: ['ALL_AT_ONCE' as QuestionDisplayMode],
   });
 
   readonly questionForm: FormGroup = this.fb.group({
@@ -952,6 +1004,9 @@ export class TeacherEvaluationsComponent {
       instructions: '',
       maxAttempts: 1,
       timeLimitMinutes: null,
+      allowChemicalCalculator: false,
+      trackTabExit: false,
+      questionDisplayMode: 'ALL_AT_ONCE',
     });
     this.detailEvaluation.set(null);
     this.formOpen.set(true);
@@ -968,6 +1023,9 @@ export class TeacherEvaluationsComponent {
       instructions: evaluation.instructions ?? '',
       maxAttempts: evaluation.maxAttempts,
       timeLimitMinutes: evaluation.timeLimitMinutes ?? null,
+      allowChemicalCalculator: evaluation.allowChemicalCalculator ?? false,
+      trackTabExit: evaluation.trackTabExit ?? false,
+      questionDisplayMode: evaluation.questionDisplayMode ?? 'ALL_AT_ONCE',
     });
     this.detailEvaluation.set(null);
     this.formOpen.set(true);
@@ -995,6 +1053,9 @@ export class TeacherEvaluationsComponent {
       instructions: emptyToUndefined(raw.instructions),
       maxAttempts: Number(raw.maxAttempts),
       timeLimitMinutes: toPositiveOrNull(raw.timeLimitMinutes),
+      allowChemicalCalculator: raw.allowChemicalCalculator === true,
+      trackTabExit: raw.trackTabExit === true,
+      questionDisplayMode: (raw.questionDisplayMode as QuestionDisplayMode) ?? 'ALL_AT_ONCE',
     };
 
     if (this.formMode() === 'create') {

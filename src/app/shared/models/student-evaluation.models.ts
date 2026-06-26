@@ -10,10 +10,17 @@
  * rellene tras enviar el intento, el frontend no lo modela ni lo muestra.
  */
 
-import { QuestionType } from './evaluation.models';
+import { QuestionDisplayMode, QuestionType } from './evaluation.models';
 
 /** Estado de un intento de evaluación. */
 export type AttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
+
+/** Tipo de incidencia de foco reportada durante un intento. */
+export type AttemptEventType =
+  | 'TAB_HIDDEN'
+  | 'TAB_VISIBLE'
+  | 'WINDOW_BLUR'
+  | 'WINDOW_FOCUS';
 
 // ─── Responses ──────────────────────────────────────────────────────────────
 
@@ -26,6 +33,9 @@ export interface StudentEvaluationResponse {
   readonly topic: string | null;
   readonly timeLimitMinutes: number | null;
   readonly maxAttempts: number;
+  readonly allowChemicalCalculator: boolean;
+  readonly trackTabExit: boolean;
+  readonly questionDisplayMode: QuestionDisplayMode;
   readonly questionCount: number;
   readonly assignmentId: number;
   readonly startAt: string | null;
@@ -60,6 +70,9 @@ export interface StudentEvaluationDetailResponse {
   readonly instructions: string | null;
   readonly topic: string | null;
   readonly timeLimitMinutes: number | null;
+  readonly allowChemicalCalculator: boolean;
+  readonly trackTabExit: boolean;
+  readonly questionDisplayMode: QuestionDisplayMode;
   readonly questions: StudentQuestionResponse[];
   readonly assignmentId: number;
 }
@@ -108,4 +121,24 @@ export interface SubmitEvaluationAnswerRequest {
 /** Envío de un intento. Las respuestas son opcionales (pueden haberse guardado antes). */
 export interface SubmitEvaluationAttemptRequest {
   readonly answers?: SubmitEvaluationAnswerRequest[];
+}
+
+/**
+ * Cuerpo para reportar una incidencia de foco durante un intento (salida/retorno de
+ * pestaña o ventana). El backend solo la registra si la evaluación tiene activada la
+ * detección de salida de pestaña y el intento es del propio estudiante.
+ */
+export interface RegisterAttemptEventRequest {
+  readonly eventType: AttemptEventType;
+  readonly description?: string;
+}
+
+/** Resumen devuelto tras reportar una incidencia de foco. */
+export interface AttemptEventSummaryResponse {
+  readonly attemptId: number;
+  /** true si el evento se registró; false si se descartó por duplicado/throttling. */
+  readonly recorded: boolean;
+  readonly totalEvents: number;
+  /** Cantidad de "salidas" (pestaña oculta o ventana sin foco) del intento. */
+  readonly tabExitCount: number;
 }

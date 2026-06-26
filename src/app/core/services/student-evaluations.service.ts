@@ -3,7 +3,9 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  AttemptEventSummaryResponse,
   AttemptResponse,
+  RegisterAttemptEventRequest,
   StartEvaluationAttemptRequest,
   StudentAttemptResultDetailResponse,
   StudentEvaluationDetailResponse,
@@ -69,6 +71,21 @@ export class StudentEvaluationsService {
   ): Observable<AttemptResponse> {
     return this.http.post<AttemptResponse>(
       `${this.baseUrl}/attempts/${attemptId}/submit`,
+      request
+    );
+  }
+
+  /**
+   * Reporta una incidencia de foco (salida/retorno de pestaña o ventana) del intento.
+   * El backend solo la registra si la evaluación tiene activada la detección de salida
+   * de pestaña; en caso contrario responde con error y el frontend lo ignora.
+   */
+  registerAttemptEvent(
+    attemptId: number,
+    request: RegisterAttemptEventRequest
+  ): Observable<AttemptEventSummaryResponse> {
+    return this.http.post<AttemptEventSummaryResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/events`,
       request
     );
   }

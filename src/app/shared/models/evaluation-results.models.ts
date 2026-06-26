@@ -30,6 +30,8 @@ export interface TeacherStudentResultResponse {
   readonly percentage: number | null;
   readonly submittedAt: string | null;
   readonly gradedAt: string | null;
+  /** Cantidad de salidas de pestaña detectadas en el intento (0 si no aplica). */
+  readonly tabExitCount: number;
 }
 
 /** Resultados de una evaluación: agregados + lista de intentos, para el docente. */
@@ -95,6 +97,8 @@ export interface TeacherAttemptResultDetailResponse {
   readonly startedAt: string | null;
   readonly submittedAt: string | null;
   readonly gradedAt: string | null;
+  /** Cantidad de salidas de pestaña detectadas en el intento (0 si no aplica). */
+  readonly tabExitCount: number;
   readonly answers: TeacherAnswerResultResponse[];
 }
 

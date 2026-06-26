@@ -163,6 +163,7 @@ const APPROVAL_PERCENTAGE = 60;
                       <th>Puntaje</th>
                       <th>%</th>
                       <th>Estado</th>
+                      <th>Salidas</th>
                       <th>Enviado</th>
                       <th></th>
                     </tr>
@@ -185,6 +186,16 @@ const APPROVAL_PERCENTAGE = 60;
                           </span>
                         </td>
                         <td><span class="badge badge-success">{{ statusLabel(r.status) }}</span></td>
+                        <td>
+                          @if (r.tabExitCount > 0) {
+                            <span class="badge badge-warning" title="Salidas de pestaña detectadas">
+                              <span class="material-icons" style="font-size:14px">visibility_off</span>
+                              {{ r.tabExitCount }}
+                            </span>
+                          } @else {
+                            <span class="text-muted">—</span>
+                          }
+                        </td>
                         <td>{{ r.submittedAt ? formatDate(r.submittedAt) : '—' }}</td>
                         <td>
                           <button type="button" class="btn btn-secondary btn-sm" (click)="openDetail(r)">
@@ -245,6 +256,13 @@ const APPROVAL_PERCENTAGE = 60;
                   <span class="detail-head__points">{{ dt.score ?? 0 }} / {{ dt.maxScore ?? 0 }}</span>
                 </div>
               </div>
+
+              @if (dt.tabExitCount > 0) {
+                <div class="alert alert-warning">
+                  <span class="material-icons">visibility_off</span>
+                  Se detectaron {{ dt.tabExitCount }} salida(s) de pestaña durante este intento.
+                </div>
+              }
 
               <div class="answers">
                 @for (a of dt.answers; track a.questionId; let i = $index) {

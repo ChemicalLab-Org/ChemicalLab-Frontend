@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -11,6 +11,7 @@ import {
 import { STUDENT_NAV_ITEMS } from '../../../shared/components/sidebar/student-nav';
 import {
   ApiError,
+  AttemptEventType,
   AttemptResponse,
   StudentEvaluationDetailResponse,
   StudentEvaluationResponse,
@@ -30,6 +31,8 @@ interface SubmittedInfo {
   readonly title: string;
   readonly submittedAt: string | null;
   readonly attemptNumber: number;
+  /** true si el envío se disparó automáticamente al agotarse el tiempo. */
+  readonly autoSubmitted: boolean;
 }
 
 /** Prefijo de las claves de localStorage que recuerdan el intento en progreso. */
@@ -254,6 +257,49 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                   <span class="fact__label">Fecha límite</span>
                   <span class="fact__value">{{ selectedDueAt() ? formatDate(selectedDueAt()!) : 'Sin fecha' }}</span>
                 </div>
+                <div class="fact">
+                  <span class="fact__label">Modo de preguntas</span>
+                  <span class="fact__value">{{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'Una por una' : 'Todas juntas' }}</span>
+                </div>
+                <div class="fact">
+                  <span class="fact__label">Calculadora química</span>
+                  <span class="fact__value">{{ d.allowChemicalCalculator ? 'Permitida' : 'No permitida' }}</span>
+                </div>
+                <div class="fact">
+                  <span class="fact__label">Salida de pestaña</span>
+                  <span class="fact__value">{{ d.trackTabExit ? 'Se registrará' : 'Sin detección' }}</span>
+                </div>
+              </div>
+
+              <div class="ev-rules">
+                <div class="ev-rules__title">
+                  <span class="material-icons">rule</span> Reglas de esta evaluación
+                </div>
+                <ul class="ev-rules__list">
+                  <li>
+                    <span class="material-icons">help_outline</span>
+                    {{ d.questions.length }} {{ d.questions.length === 1 ? 'pregunta' : 'preguntas' }},
+                    {{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'una por pantalla' : 'todas en una pantalla' }}.
+                  </li>
+                  <li>
+                    <span class="material-icons">replay</span>
+                    Intentos: usaste {{ selectedAttemptsUsed() }} de {{ selectedMaxAttempts() }}.
+                  </li>
+                  <li>
+                    <span class="material-icons">schedule</span>
+                    {{ d.timeLimitMinutes ? 'Tiempo límite: ' + d.timeLimitMinutes + ' min (al agotarse se enviará automáticamente).' : 'Sin tiempo límite.' }}
+                  </li>
+                  <li>
+                    <span class="material-icons">{{ d.allowChemicalCalculator ? 'calculate' : 'block' }}</span>
+                    {{ d.allowChemicalCalculator ? 'Puedes usar la calculadora química durante el intento.' : 'No se permite la calculadora química.' }}
+                  </li>
+                  @if (d.trackTabExit) {
+                    <li>
+                      <span class="material-icons">visibility</span>
+                      Si sales de la pestaña, quedará registrado.
+                    </li>
+                  }
+                </ul>
               </div>
 
               @if (d.instructions) {
@@ -335,6 +381,21 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                   <span class="badge badge-neutral">{{ d.topic }}</span>
                 }
                 <span class="badge badge-primary"><span class="dot"></span>En curso</span>
+                @if (remainingLabel(); as time) {
+                  <span
+                    class="ev-timer"
+                    [class.ev-timer--low]="timeRunningLow()"
+                    role="timer"
+                    aria-label="Tiempo restante"
+                  >
+                    <span class="material-icons">timer</span> {{ time }}
+                  </span>
+                }
+                @if (calculatorAllowed()) {
+                  <button type="button" class="btn btn-secondary btn-sm ev-calc-btn" (click)="toggleCalculator()">
+                    <span class="material-icons">calculate</span> Calculadora química
+                  </button>
+                }
               </div>
             </header>
 
@@ -343,20 +404,58 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
               Lee cada pregunta con atención. Una vez enviada, no podrás modificar tus respuestas.
             </div>
 
+            @if (tabExitWarning(); as warning) {
+              <div class="alert alert-warning ev-take__notice">
+                <span class="material-icons">visibility_off</span>
+                {{ warning }}
+                <button type="button" class="ev-warning-dismiss" (click)="dismissTabExitWarning()" aria-label="Cerrar aviso">
+                  <span class="material-icons">close</span>
+                </button>
+              </div>
+            }
+
+            @if (calculatorAllowed() && calculatorOpen()) {
+              <div class="ev-calc-panel">
+                <div class="ev-calc-panel__head">
+                  <span class="ev-calc-panel__title">
+                    <span class="material-icons">science</span> Herramientas de apoyo químico
+                  </span>
+                  <button type="button" class="ev-calc-panel__close" (click)="toggleCalculator()" aria-label="Cerrar">
+                    <span class="material-icons">close</span>
+                  </button>
+                </div>
+                <p class="ev-calc-panel__hint">
+                  Tu docente habilitó el uso de herramientas químicas. Se abren en una pestaña nueva
+                  para que no pierdas tu intento. No revelan las respuestas de la evaluación.
+                </p>
+                <div class="ev-calc-panel__actions">
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="openChemistryTool('/periodic-table')">
+                    <span class="material-icons">grid_on</span> Tabla periódica
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="openChemistryTool('/compounds')">
+                    <span class="material-icons">science</span> Formación de compuestos
+                  </button>
+                </div>
+              </div>
+            }
+
             <div class="ev-take__progress">
               <div class="ev-take__progress-bar">
                 <div class="ev-take__progress-fill" [style.width.%]="progressPct()"></div>
               </div>
               <span class="ev-take__progress-label">
+                @if (isOneByOne()) {
+                  Pregunta {{ currentIndex() + 1 }} de {{ totalQuestions() }} ·
+                }
                 {{ answeredCount() }} de {{ d.questions.length }} respondidas
               </span>
             </div>
 
             <div class="ev-questions">
-              @for (q of d.questions; track q.id; let qi = $index) {
+              @for (q of visibleQuestions(); track q.id) {
                 <div class="q-card">
                   <div class="q-card__head">
-                    <div class="q-card__num">{{ qi + 1 }}</div>
+                    <div class="q-card__num">{{ isOneByOne() ? currentIndex() + 1 : ($index + 1) }}</div>
                     <div class="q-card__text">{{ q.questionText }}</div>
                   </div>
 
@@ -406,15 +505,41 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
             }
 
             <div class="ev-take__actions">
-              <button
-                type="button"
-                class="btn btn-primary btn-lg"
-                [disabled]="submitting()"
-                (click)="askSubmit()"
-              >
-                {{ submitting() ? 'Enviando...' : 'Enviar evaluación' }}
-                <span class="material-icons">send</span>
-              </button>
+              @if (isOneByOne()) {
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-lg"
+                  [disabled]="currentIndex() === 0"
+                  (click)="prevQuestion()"
+                >
+                  <span class="material-icons">arrow_back</span> Anterior
+                </button>
+                @if (isLastQuestion()) {
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-lg"
+                    [disabled]="submitting()"
+                    (click)="askSubmit()"
+                  >
+                    {{ submitting() ? 'Enviando...' : 'Enviar evaluación' }}
+                    <span class="material-icons">send</span>
+                  </button>
+                } @else {
+                  <button type="button" class="btn btn-primary btn-lg" (click)="nextQuestion()">
+                    Siguiente <span class="material-icons">arrow_forward</span>
+                  </button>
+                }
+              } @else {
+                <button
+                  type="button"
+                  class="btn btn-primary btn-lg"
+                  [disabled]="submitting()"
+                  (click)="askSubmit()"
+                >
+                  {{ submitting() ? 'Enviando...' : 'Enviar evaluación' }}
+                  <span class="material-icons">send</span>
+                </button>
+              }
             </div>
           }
         }
@@ -427,6 +552,13 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
             </div>
             <h1 class="ev-done__title">Evaluación enviada</h1>
             <p class="ev-done__subtitle">Tus respuestas fueron registradas correctamente.</p>
+
+            @if (info.autoSubmitted) {
+              <div class="alert alert-warning ev-done__autonote">
+                <span class="material-icons">timer_off</span>
+                Se agotó el tiempo y la evaluación se envió automáticamente.
+              </div>
+            }
 
             <div class="ev-done__card">
               <div class="ev-done__row">
@@ -475,7 +607,7 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
     }
   `,
 })
-export class StudentEvaluationsComponent implements OnInit {
+export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly service = inject(StudentEvaluationsService);
   private readonly router = inject(Router);
@@ -518,6 +650,33 @@ export class StudentEvaluationsComponent implements OnInit {
   readonly submitting = signal(false);
   readonly submitError = signal<string | null>(null);
   readonly submittedInfo = signal<SubmittedInfo | null>(null);
+
+  // ── Configuración avanzada en la rendición ──
+  // Modo una por una: índice de la pregunta visible.
+  readonly currentIndex = signal(0);
+  // Tiempo restante (segundos) cuando la evaluación tiene límite; null si no aplica.
+  readonly remainingSeconds = signal<number | null>(null);
+  private timerId: ReturnType<typeof setInterval> | null = null;
+  private autoSubmitted = false;
+  // Detección de salida de pestaña.
+  readonly tabExitCount = signal(0);
+  readonly tabExitWarning = signal<string | null>(null);
+  private exited = false; // evita contar varias veces una misma salida
+  private suppressNextExit = false; // no penalizar el uso de una herramienta permitida
+  private listenersAttached = false;
+  // Panel de la calculadora química (si la evaluación la permite).
+  readonly calculatorOpen = signal(false);
+
+  // Handlers enlazados (se agregan/quitan en pares para limpiar correctamente).
+  private readonly onVisibilityChange = (): void => {
+    if (document.hidden) {
+      this.handleExit('TAB_HIDDEN');
+    } else {
+      this.handleReturn();
+    }
+  };
+  private readonly onWindowBlur = (): void => this.handleExit('WINDOW_BLUR');
+  private readonly onWindowFocus = (): void => this.handleReturn();
 
   // ── Diálogo de confirmación ──
   readonly confirmState = signal<ConfirmState | null>(null);
@@ -569,8 +728,55 @@ export class StudentEvaluationsComponent implements OnInit {
     return Math.round((this.answeredCount() / total) * 100);
   });
 
+  // ── Derivados de la configuración avanzada ──
+  readonly isOneByOne = computed(
+    () => this.detail()?.questionDisplayMode === 'ONE_BY_ONE'
+  );
+  readonly calculatorAllowed = computed(
+    () => this.detail()?.allowChemicalCalculator === true
+  );
+  readonly tabExitTracked = computed(() => this.detail()?.trackTabExit === true);
+  readonly totalQuestions = computed(() => this.detail()?.questions.length ?? 0);
+  readonly currentQuestion = computed(() => {
+    const questions = this.detail()?.questions ?? [];
+    const index = this.currentIndex();
+    return index >= 0 && index < questions.length ? questions[index] : null;
+  });
+  readonly isLastQuestion = computed(
+    () => this.currentIndex() >= this.totalQuestions() - 1
+  );
+  /** Preguntas visibles: todas (ALL_AT_ONCE) o solo la actual (ONE_BY_ONE). */
+  readonly visibleQuestions = computed(() => {
+    const questions = this.detail()?.questions ?? [];
+    if (!this.isOneByOne()) {
+      return questions;
+    }
+    const current = this.currentQuestion();
+    return current ? [current] : [];
+  });
+  /** Tiempo restante en formato mm:ss para el contador regresivo. */
+  readonly remainingLabel = computed(() => {
+    const seconds = this.remainingSeconds();
+    if (seconds === null) return null;
+    const safe = Math.max(0, seconds);
+    const mm = Math.floor(safe / 60)
+      .toString()
+      .padStart(2, '0');
+    const ss = (safe % 60).toString().padStart(2, '0');
+    return `${mm}:${ss}`;
+  });
+  /** Aviso visual cuando queda poco tiempo (≤ 60 s). */
+  readonly timeRunningLow = computed(() => {
+    const seconds = this.remainingSeconds();
+    return seconds !== null && seconds <= 60;
+  });
+
   ngOnInit(): void {
     this.loadEvaluations();
+  }
+
+  ngOnDestroy(): void {
+    this.stopAttemptSession();
   }
 
   // ═══════════════ Lista ═══════════════
@@ -780,6 +986,14 @@ export class StudentEvaluationsComponent implements OnInit {
     }
     this.answers.set(map);
     this.submitError.set(null);
+    // Reiniciamos el estado de la sesión de rendición.
+    this.currentIndex.set(0);
+    this.autoSubmitted = false;
+    this.exited = false;
+    this.suppressNextExit = false;
+    this.tabExitCount.set(0);
+    this.tabExitWarning.set(null);
+    this.calculatorOpen.set(false);
 
     const loaded = this.detail();
     if (!loaded || loaded.id !== attempt.evaluationId) {
@@ -789,7 +1003,7 @@ export class StudentEvaluationsComponent implements OnInit {
         next: (d) => {
           this.detail.set(d);
           this.detailLoading.set(false);
-          this.view.set('take');
+          this.beginTake();
         },
         error: () => {
           this.detailLoading.set(false);
@@ -799,8 +1013,15 @@ export class StudentEvaluationsComponent implements OnInit {
         },
       });
     } else {
-      this.view.set('take');
+      this.beginTake();
     }
+  }
+
+  /** Entra a la vista de rendición y arranca el contador y la detección de salida. */
+  private beginTake(): void {
+    this.view.set('take');
+    this.startTimer();
+    this.attachTabExitListeners();
   }
 
   // ═══════════════ Rendición ═══════════════
@@ -840,6 +1061,162 @@ export class StudentEvaluationsComponent implements OnInit {
       });
   }
 
+  // ═══════════════ Navegación una por una (ONE_BY_ONE) ═══════════════
+
+  nextQuestion(): void {
+    if (this.currentIndex() < this.totalQuestions() - 1) {
+      this.currentIndex.update((i) => i + 1);
+    }
+  }
+
+  prevQuestion(): void {
+    if (this.currentIndex() > 0) {
+      this.currentIndex.update((i) => i - 1);
+    }
+  }
+
+  // ═══════════════ Contador de tiempo ═══════════════
+
+  /**
+   * Arranca el contador regresivo si la evaluación tiene tiempo límite. El tiempo se
+   * calcula desde la hora de inicio del intento (la entrega el backend), no desde que
+   * se abre la pantalla, para que recargar no regale tiempo. El backend valida el
+   * tiempo al enviar: este contador es solo la experiencia de usuario.
+   */
+  private startTimer(): void {
+    const limit = this.detail()?.timeLimitMinutes ?? null;
+    const attempt = this.attempt();
+    if (!limit || limit <= 0 || !attempt) {
+      this.remainingSeconds.set(null);
+      return;
+    }
+    const startedAt = new Date(attempt.startedAt).getTime();
+    const deadline = startedAt + limit * 60 * 1000;
+    this.tick(deadline);
+    this.timerId = setInterval(() => this.tick(deadline), 1000);
+  }
+
+  private tick(deadline: number): void {
+    const remaining = Math.round((deadline - Date.now()) / 1000);
+    this.remainingSeconds.set(Math.max(0, remaining));
+    if (remaining <= 0) {
+      this.handleTimeUp();
+    }
+  }
+
+  /** Al agotarse el tiempo, se envía el intento automáticamente una sola vez. */
+  private handleTimeUp(): void {
+    if (this.timerId !== null) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+    }
+    if (this.autoSubmitted || this.submitting()) {
+      return;
+    }
+    this.autoSubmitted = true;
+    this.confirmState.set(null);
+    this.doSubmit(true);
+  }
+
+  // ═══════════════ Detección de salida de pestaña ═══════════════
+
+  private attachTabExitListeners(): void {
+    if (!this.tabExitTracked() || this.listenersAttached) {
+      return;
+    }
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    window.addEventListener('blur', this.onWindowBlur);
+    window.addEventListener('focus', this.onWindowFocus);
+    this.listenersAttached = true;
+  }
+
+  private detachTabExitListeners(): void {
+    if (!this.listenersAttached) {
+      return;
+    }
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    window.removeEventListener('blur', this.onWindowBlur);
+    window.removeEventListener('focus', this.onWindowFocus);
+    this.listenersAttached = false;
+  }
+
+  /** Registra una única salida por "abandono" (varios eventos seguidos cuentan como uno). */
+  private handleExit(eventType: AttemptEventType): void {
+    if (this.exited) {
+      return;
+    }
+    this.exited = true;
+    // Si la salida proviene de abrir una herramienta permitida, no se penaliza.
+    if (this.suppressNextExit) {
+      this.suppressNextExit = false;
+      return;
+    }
+    const attempt = this.attempt();
+    if (!attempt) {
+      return;
+    }
+    this.service
+      .registerAttemptEvent(attempt.id, {
+        eventType,
+        description: 'Salida detectada durante el intento.',
+      })
+      .subscribe({
+        next: (summary) => {
+          this.tabExitCount.set(summary.tabExitCount);
+          this.tabExitWarning.set(
+            'Se detectó que saliste de la evaluación. Este evento quedará registrado.'
+          );
+        },
+        // Si el backend rechaza el registro (p. ej. detección desactivada), se ignora.
+        error: () => {
+          /* sin acción: no se interrumpe el intento */
+        },
+      });
+  }
+
+  /** Al regresar el foco, se rearma la detección para la siguiente salida. */
+  private handleReturn(): void {
+    this.exited = false;
+  }
+
+  dismissTabExitWarning(): void {
+    this.tabExitWarning.set(null);
+  }
+
+  // ═══════════════ Calculadora química ═══════════════
+
+  toggleCalculator(): void {
+    this.calculatorOpen.update((open) => !open);
+  }
+
+  /**
+   * Abre una herramienta de apoyo químico existente en una pestaña nueva, sin sacar al
+   * estudiante del intento. Reutiliza las vistas del motor químico del proyecto; no se
+   * duplica lógica química ni se exponen las respuestas de la evaluación. Si la
+   * evaluación detecta salidas de pestaña, esta acción permitida no se contabiliza.
+   */
+  openChemistryTool(path: string): void {
+    if (!this.calculatorAllowed()) {
+      return;
+    }
+    if (this.tabExitTracked()) {
+      this.suppressNextExit = true;
+    }
+    window.open(path, '_blank', 'noopener');
+  }
+
+  // ═══════════════ Limpieza de la sesión de rendición ═══════════════
+
+  /** Detiene el contador y quita los listeners de salida de pestaña. */
+  private stopAttemptSession(): void {
+    if (this.timerId !== null) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+    }
+    this.detachTabExitListeners();
+    this.remainingSeconds.set(null);
+  }
+
   // ═══════════════ Envío ═══════════════
 
   askSubmit(): void {
@@ -870,12 +1247,14 @@ export class StudentEvaluationsComponent implements OnInit {
     });
   }
 
-  private doSubmit(): void {
+  private doSubmit(auto = false): void {
     const attempt = this.attempt();
     const ev = this.selected();
     const d = this.detail();
     if (!attempt || !d) return;
 
+    // El intento se cierra: detenemos contador y detección de salida de pestaña.
+    this.stopAttemptSession();
     this.submitting.set(true);
     this.submitError.set(null);
 
@@ -896,6 +1275,7 @@ export class StudentEvaluationsComponent implements OnInit {
           title: d.title,
           submittedAt: result.submittedAt,
           attemptNumber: result.attemptNumber,
+          autoSubmitted: auto,
         });
         this.view.set('submitted');
       },
@@ -909,11 +1289,16 @@ export class StudentEvaluationsComponent implements OnInit {
   // ═══════════════ Navegación entre vistas ═══════════════
 
   backToList(): void {
+    this.stopAttemptSession();
     this.view.set('list');
     this.selected.set(null);
     this.detail.set(null);
     this.attempt.set(null);
     this.answers.set({});
+    this.currentIndex.set(0);
+    this.tabExitWarning.set(null);
+    this.tabExitCount.set(0);
+    this.calculatorOpen.set(false);
     this.startError.set(null);
     this.submitError.set(null);
     this.submittedInfo.set(null);
