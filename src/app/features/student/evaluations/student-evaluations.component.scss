@@ -716,77 +716,11 @@
   &--low { background: var(--color-warning-light); color: var(--color-warning-text); }
 }
 
-.ev-tool-btn {
-  .material-icons { font-size: 18px; }
-  &--active { background: var(--color-primary-100); border-color: var(--color-primary-300); }
-}
-
 .ev-warning-dismiss {
   margin-left: auto; background: none; border: none; cursor: pointer;
   color: inherit; display: inline-flex; align-items: center; opacity: 0.7;
   &:hover { opacity: 1; }
   .material-icons { font-size: 18px; }
-}
-
-// Paneles de herramientas embebidas (calculadora / tabla periódica).
-.ev-tool-panel {
-  border: 1px solid var(--color-primary-200); background: var(--color-primary-50);
-  border-radius: var(--radius-lg); padding: var(--space-4); margin-bottom: var(--space-4);
-
-  &__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
-  &__title {
-    display: inline-flex; align-items: center; gap: var(--space-2);
-    font-weight: 600; color: var(--color-primary-700);
-    .material-icons { font-size: 20px; }
-  }
-  &__close {
-    background: none; border: none; cursor: pointer; color: var(--color-neutral-500); display: inline-flex;
-    &:hover { color: var(--color-neutral-800); }
-  }
-  &__hint { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--color-neutral-600); }
-  &__error { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--color-danger); }
-}
-
-.ev-tool-form {
-  display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center;
-  .select { min-width: 120px; }
-}
-
-.ev-tool-result {
-  margin-top: var(--space-3); padding: var(--space-3); background: #fff;
-  border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md);
-
-  &__formula { font-size: var(--text-lg); font-weight: 700; color: var(--color-neutral-900); }
-  &__names { list-style: none; margin: var(--space-2) 0 0; padding: 0; font-size: var(--text-sm); color: var(--color-neutral-700); }
-}
-
-// Panel de tabla periódica.
-.ev-pt__search { margin-bottom: var(--space-3); }
-.ev-pt__body { display: flex; gap: var(--space-3); flex-wrap: wrap; }
-.ev-pt__list {
-  display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 320px;
-  max-height: 220px; overflow-y: auto; align-content: flex-start;
-}
-.ev-pt__chip {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  width: 48px; height: 48px; border: 1px solid var(--color-neutral-200);
-  border-radius: var(--radius-md); background: #fff; cursor: pointer;
-  &:hover { border-color: var(--color-primary-300); }
-  &--active { background: var(--color-primary-100); border-color: var(--color-primary-400); }
-}
-.ev-pt__num { font-size: 10px; color: var(--color-neutral-500); }
-.ev-pt__sym { font-size: var(--text-sm); font-weight: 700; color: var(--color-neutral-900); }
-.ev-pt__detail {
-  flex: 1 1 220px; padding: var(--space-3); background: #fff;
-  border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md);
-
-  &-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-2); }
-  &-sym { font-size: 28px; font-weight: 700; color: var(--color-primary-700); }
-  &-name { font-weight: 600; color: var(--color-neutral-900); }
-  &-num { font-size: var(--text-xs); color: var(--color-neutral-500); }
-}
-.ev-pt__props {
-  list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); color: var(--color-neutral-700);
 }
 
 .ev-rules {

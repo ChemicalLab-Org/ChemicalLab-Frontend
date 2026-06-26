@@ -1,27 +1,15 @@
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { UsageMetricsService } from '../../../core/services/usage-metrics.service';
 import { StudentEvaluationsService } from '../../../core/services/student-evaluations.service';
 import { ExamSessionService } from '../../../core/services/exam-session.service';
-import { ChemistryCatalogService } from '../../compounds/services/chemistry-catalog.service';
-import { ChemicalEngineService } from '../../compounds/services/chemical-engine.service';
-import {
-  CompoundResponse,
-  MetalCatalogItem,
-} from '../../compounds/models/chemistry.models';
-import {
-  ELEMENT_DETAILS,
-  ElementDetail,
-  PERIODIC_ELEMENTS,
-  PeriodicElement,
-} from '../../periodic-table/data/elements-data';
 import {
   SidebarComponent,
   SidebarNavItem,
 } from '../../../shared/components/sidebar/sidebar.component';
-import { STUDENT_NAV_ITEMS } from '../../../shared/components/sidebar/student-nav';
+import { EXAM_EXIT_ACTION, STUDENT_NAV_ITEMS, examNavItems } from '../../../shared/components/sidebar/student-nav';
 import {
   ApiError,
   AttemptEventType,
@@ -57,17 +45,17 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
   imports: [SidebarComponent],
   styleUrls: ['./student-evaluations.component.scss'],
   template: `
-    <div class="layout" [class.layout--exam]="view() === 'take'">
-      <!-- Durante el intento se oculta la navegación lateral: modo examen sin salida libre. -->
-      @if (view() !== 'take') {
-        <app-sidebar
-          [navItems]="navItems"
-          [userName]="userName()"
-          [userRole]="userRoleLabel()"
-          [userInitials]="userInitials()"
-          (onLogout)="handleLogout()"
-        />
-      }
+    <div class="layout">
+      <!-- Durante el intento, el menú lateral se reduce al modo examen: volver al intento,
+           herramientas permitidas y salir. Fuera del intento, navegación normal. -->
+      <app-sidebar
+        [navItems]="navItems()"
+        [userName]="userName()"
+        [userRole]="userRoleLabel()"
+        [userInitials]="userInitials()"
+        (onLogout)="handleLogout()"
+        (onAction)="handleSidebarAction($event)"
+      />
 
       <main class="main">
         <!-- ════════════════════ VISTA: LISTA ════════════════════ -->
@@ -434,16 +422,14 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                   </span>
                 }
                 @if (calculatorAllowed()) {
-                  <button type="button" class="btn btn-secondary btn-sm ev-tool-btn"
-                    [class.ev-tool-btn--active]="calculatorOpen()" (click)="toggleCalculator()">
-                    <span class="material-icons">calculate</span> Calculadora química
-                  </button>
+                  <span class="badge badge-neutral">
+                    <span class="material-icons">biotech</span> Formación de compuestos
+                  </span>
                 }
                 @if (periodicTableAllowed()) {
-                  <button type="button" class="btn btn-secondary btn-sm ev-tool-btn"
-                    [class.ev-tool-btn--active]="periodicTableOpen()" (click)="togglePeriodicTable()">
-                    <span class="material-icons">grid_on</span> Tabla periódica
-                  </button>
+                  <span class="badge badge-neutral">
+                    <span class="material-icons">science</span> Tabla periódica
+                  </span>
                 }
               </div>
             </header>
@@ -453,6 +439,14 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
               Lee cada pregunta con atención. Una vez enviada, no podrás modificar tus respuestas.
             </div>
 
+            @if (calculatorAllowed() || periodicTableAllowed()) {
+              <div class="alert alert-info ev-take__notice">
+                <span class="material-icons">construction</span>
+                Puedes abrir las herramientas permitidas desde el menú lateral y volver al
+                intento cuando quieras, sin perder tus respuestas.
+              </div>
+            }
+
             @if (tabExitWarning(); as warning) {
               <div class="alert alert-warning ev-take__notice">
                 <span class="material-icons">visibility_off</span>
@@ -460,105 +454,6 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                 <button type="button" class="ev-warning-dismiss" (click)="dismissTabExitWarning()" aria-label="Cerrar aviso">
                   <span class="material-icons">close</span>
                 </button>
-              </div>
-            }
-
-            <!-- Calculadora química embebida (formación de óxidos/hidróxidos). -->
-            @if (calculatorAllowed() && calculatorOpen()) {
-              <div class="ev-tool-panel">
-                <div class="ev-tool-panel__head">
-                  <span class="ev-tool-panel__title">
-                    <span class="material-icons">calculate</span> Calculadora química
-                  </span>
-                  <button type="button" class="ev-tool-panel__close" (click)="toggleCalculator()" aria-label="Cerrar">
-                    <span class="material-icons">close</span>
-                  </button>
-                </div>
-                <p class="ev-tool-panel__hint">
-                  Forma un óxido o hidróxido a partir de un elemento y su valencia. Es una herramienta
-                  de apoyo: no revela las respuestas de la evaluación.
-                </p>
-                <div class="ev-tool-form">
-                  <select class="select" [value]="calcType()" (change)="onCalcTypeChange($any($event.target).value)">
-                    <option value="oxides">Óxido</option>
-                    <option value="hydroxides">Hidróxido</option>
-                  </select>
-                  <select class="select" [value]="calcMetalSymbol()" (change)="onCalcMetalChange($any($event.target).value)">
-                    <option value="">Elemento…</option>
-                    @for (m of calcMetals(); track m.symbol) {
-                      <option [value]="m.symbol">{{ m.name }} ({{ m.symbol }})</option>
-                    }
-                  </select>
-                  <select class="select" [value]="calcValence() ?? ''" (change)="onCalcValenceChange($any($event.target).value)"
-                    [disabled]="calcValences().length === 0">
-                    <option value="">Valencia…</option>
-                    @for (v of calcValences(); track v) {
-                      <option [value]="v">{{ v }}</option>
-                    }
-                  </select>
-                  <button type="button" class="btn btn-primary btn-sm" [disabled]="calcLoading()" (click)="computeCompound()">
-                    {{ calcLoading() ? 'Formando…' : 'Formar' }}
-                  </button>
-                </div>
-                @if (calcError()) {
-                  <p class="ev-tool-panel__error">{{ calcError() }}</p>
-                }
-                @if (calcResult(); as r) {
-                  <div class="ev-tool-result">
-                    <div class="ev-tool-result__formula">{{ r.formula }}</div>
-                    <ul class="ev-tool-result__names">
-                      <li><strong>Tradicional:</strong> {{ r.nomenclature.traditional }}</li>
-                      <li><strong>Stock:</strong> {{ r.nomenclature.stock }}</li>
-                      <li><strong>Sistemática:</strong> {{ r.nomenclature.systematic }}</li>
-                    </ul>
-                  </div>
-                }
-              </div>
-            }
-
-            <!-- Tabla periódica embebida (consulta de referencia). -->
-            @if (periodicTableAllowed() && periodicTableOpen()) {
-              <div class="ev-tool-panel">
-                <div class="ev-tool-panel__head">
-                  <span class="ev-tool-panel__title">
-                    <span class="material-icons">grid_on</span> Tabla periódica
-                  </span>
-                  <button type="button" class="ev-tool-panel__close" (click)="togglePeriodicTable()" aria-label="Cerrar">
-                    <span class="material-icons">close</span>
-                  </button>
-                </div>
-                <input class="input ev-pt__search" type="search" placeholder="Buscar por símbolo, nombre o número…"
-                  [value]="ptQuery()" (input)="onPtSearch($event)" />
-                <div class="ev-pt__body">
-                  <div class="ev-pt__list">
-                    @for (e of ptFiltered(); track e.atomicNumber) {
-                      <button type="button" class="ev-pt__chip" [class.ev-pt__chip--active]="ptSelected()?.atomicNumber === e.atomicNumber"
-                        (click)="selectElement(e)">
-                        <span class="ev-pt__num">{{ e.atomicNumber }}</span>
-                        <span class="ev-pt__sym">{{ e.symbol }}</span>
-                      </button>
-                    }
-                  </div>
-                  @if (ptSelected(); as el) {
-                    <div class="ev-pt__detail">
-                      <div class="ev-pt__detail-head">
-                        <span class="ev-pt__detail-sym">{{ el.symbol }}</span>
-                        <div>
-                          <div class="ev-pt__detail-name">{{ el.name }}</div>
-                          <div class="ev-pt__detail-num">N.º {{ el.atomicNumber }}</div>
-                        </div>
-                      </div>
-                      @if (ptSelectedDetail(); as det) {
-                        <ul class="ev-pt__props">
-                          @if (det.atomicMass) { <li><strong>Masa atómica:</strong> {{ det.atomicMass }}</li> }
-                          @if (det.state) { <li><strong>Estado:</strong> {{ det.state }}</li> }
-                          @if (det.valence) { <li><strong>Valencias:</strong> {{ det.valence }}</li> }
-                          @if (det.electronegativity) { <li><strong>Electronegatividad:</strong> {{ det.electronegativity }}</li> }
-                        </ul>
-                      }
-                    </div>
-                  }
-                </div>
               </div>
             }
 
@@ -751,10 +646,9 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly service = inject(StudentEvaluationsService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly usageMetrics = inject(UsageMetricsService);
   private readonly examSession = inject(ExamSessionService);
-  private readonly catalogService = inject(ChemistryCatalogService);
-  private readonly engineService = inject(ChemicalEngineService);
 
   // ── Estado general ──
   readonly view = signal<View>('list');
@@ -807,50 +701,7 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   readonly tabExitCount = signal(0);
   readonly tabExitWarning = signal<string | null>(null);
   private exited = false; // evita contar varias veces una misma salida
-  private suppressNextExit = false; // no penalizar el uso de una herramienta permitida
   private listenersAttached = false;
-  // Panel de la calculadora química (si la evaluación la permite).
-  readonly calculatorOpen = signal(false);
-  // Calculadora: reutiliza el motor químico del backend (óxidos/hidróxidos a partir de
-  // un metal del catálogo). No duplica lógica química ni expone respuestas correctas.
-  readonly calcType = signal<'oxides' | 'hydroxides'>('oxides');
-  readonly calcMetals = signal<MetalCatalogItem[]>([]);
-  readonly calcMetalSymbol = signal<string>('');
-  readonly calcValence = signal<number | null>(null);
-  readonly calcResult = signal<CompoundResponse | null>(null);
-  readonly calcLoading = signal(false);
-  readonly calcError = signal<string | null>(null);
-
-  // Panel de la tabla periódica (si la evaluación la permite). Reutiliza los datos de
-  // elementos existentes; es solo consulta de referencia.
-  readonly periodicTableOpen = signal(false);
-  readonly ptQuery = signal('');
-  readonly ptSelected = signal<PeriodicElement | null>(null);
-  readonly periodicElements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
-
-  /** Valencias disponibles del metal elegido en la calculadora. */
-  readonly calcValences = computed<readonly number[]>(() => {
-    const metal = this.calcMetals().find((m) => m.symbol === this.calcMetalSymbol());
-    return metal?.valences ?? [];
-  });
-
-  /** Elementos filtrados por símbolo, nombre o número atómico en el panel de tabla periódica. */
-  readonly ptFiltered = computed<readonly PeriodicElement[]>(() => {
-    const q = this.ptQuery().trim().toLowerCase();
-    if (!q) return this.periodicElements;
-    return this.periodicElements.filter(
-      (e) =>
-        e.symbol.toLowerCase().includes(q) ||
-        e.name.toLowerCase().includes(q) ||
-        String(e.atomicNumber) === q
-    );
-  });
-
-  /** Detalle del elemento seleccionado en el panel de tabla periódica. */
-  readonly ptSelectedDetail = computed<ElementDetail | null>(() => {
-    const el = this.ptSelected();
-    return el ? ELEMENT_DETAILS[el.atomicNumber] ?? null : null;
-  });
 
   // Handlers enlazados (se agregan/quitan en pares para limpiar correctamente).
   private readonly onVisibilityChange = (): void => {
@@ -870,7 +721,19 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   private readonly currentUser = computed(() => this.authService.currentUser());
   readonly userName = computed<string>(() => this.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
-  readonly navItems: readonly SidebarNavItem[] = STUDENT_NAV_ITEMS;
+  /**
+   * Menú lateral: el normal del estudiante, salvo durante un intento activo, cuando se
+   * reduce al menú de examen (volver al intento, herramientas permitidas y salir).
+   */
+  readonly navItems = computed<readonly SidebarNavItem[]>(() => {
+    if (this.examSession.isActive()) {
+      return examNavItems(
+        this.examSession.calculatorAllowed(),
+        this.examSession.periodicTableAllowed()
+      );
+    }
+    return STUDENT_NAV_ITEMS;
+  });
   readonly userRoleLabel = computed<string>(() => {
     switch (this.authService.currentRole()) {
       case 'DOCENTE':
@@ -992,10 +855,58 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadEvaluations();
+    // Si veníamos de una herramienta permitida (o nos redirigió el guard), seguimos con el
+    // intento activo y lo retomamos donde estaba, sin reiniciarlo.
+    if (this.examSession.isActive()) {
+      const exitRequested = this.route.snapshot.queryParamMap.get('exit') === '1';
+      this.resumeActiveAttempt(exitRequested);
+    }
   }
 
   ngOnDestroy(): void {
-    this.stopAttemptSession();
+    // Al navegar a una herramienta permitida el componente se destruye, pero el intento
+    // sigue activo: solo detenemos el contador y los listeners locales. El modo examen se
+    // cierra explícitamente al enviar o al salir del intento.
+    this.stopLocalSession();
+  }
+
+  /**
+   * Retoma el intento en curso indicado por la sesión de examen (al volver de una
+   * herramienta permitida). Si ya no está en progreso, libera el modo examen.
+   */
+  private resumeActiveAttempt(exitRequested: boolean): void {
+    const attemptId = this.examSession.attemptId();
+    if (attemptId === null) {
+      this.examSession.end();
+      return;
+    }
+    this.starting.set(true);
+    this.service.getAttempt(attemptId).subscribe({
+      next: (attempt) => {
+        this.starting.set(false);
+        if (attempt.status !== 'IN_PROGRESS') {
+          this.examSession.end();
+          return;
+        }
+        this.enterTake(attempt);
+        // "Salir del intento" desde una herramienta llega aquí con ?exit=1: tras retomar,
+        // mostramos la confirmación de salida.
+        if (exitRequested) {
+          this.leaveAttempt();
+        }
+      },
+      error: () => {
+        this.starting.set(false);
+        this.examSession.end();
+      },
+    });
+  }
+
+  /** Acciones del menú de examen que no son navegación (p. ej. "Salir del intento"). */
+  handleSidebarAction(action: string): void {
+    if (action === EXAM_EXIT_ACTION) {
+      this.leaveAttempt();
+    }
   }
 
   // ═══════════════ Lista ═══════════════
@@ -1210,15 +1121,8 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.currentIndex.set(attempt.currentQuestionIndex ?? 0);
     this.autoSubmitted = false;
     this.exited = false;
-    this.suppressNextExit = false;
     this.tabExitCount.set(0);
     this.tabExitWarning.set(null);
-    this.calculatorOpen.set(false);
-    this.periodicTableOpen.set(false);
-    this.calcResult.set(null);
-    this.calcError.set(null);
-    this.ptSelected.set(null);
-    this.ptQuery.set('');
 
     const loaded = this.detail();
     if (!loaded || loaded.id !== attempt.evaluationId) {
@@ -1245,8 +1149,18 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   /** Entra a la vista de rendición y arranca el contador y la detección de salida. */
   private beginTake(): void {
     this.view.set('take');
-    // Modo examen: se bloquea la navegación libre a otros módulos mientras dure el intento.
-    this.examSession.start();
+    // Modo examen: el menú lateral se reduce a las herramientas permitidas y se controla
+    // la navegación a otros módulos mientras dure el intento.
+    const attempt = this.attempt();
+    const d = this.detail();
+    if (attempt) {
+      this.examSession.start({
+        attemptId: attempt.id,
+        evaluationId: d?.id ?? attempt.evaluationId,
+        allowChemicalCalculator: d?.allowChemicalCalculator === true,
+        allowPeriodicTable: d?.allowPeriodicTable === true,
+      });
+    }
     this.startTimer();
     this.attachTabExitListeners();
   }
@@ -1410,11 +1324,6 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
       return;
     }
     this.exited = true;
-    // Si la salida proviene de abrir una herramienta permitida, no se penaliza.
-    if (this.suppressNextExit) {
-      this.suppressNextExit = false;
-      return;
-    }
     const attempt = this.attempt();
     if (!attempt) {
       return;
@@ -1447,16 +1356,45 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.tabExitWarning.set(null);
   }
 
-  /** Pide confirmación antes de abandonar un intento en curso desde la vista de examen. */
+  /**
+   * Pide confirmación antes de salir del intento. Salir finaliza el intento: ya no se podrá
+   * continuar respondiendo ni retomarlo.
+   */
   leaveAttempt(): void {
     this.confirmState.set({
-      title: 'Salir del intento',
+      title: 'Salir de la evaluación',
       message:
-        'Tu progreso quedó guardado y podrás retomar el intento más tarde. ¿Deseas salir de la evaluación?',
-      confirmLabel: 'Salir',
-      onConfirm: () => {
-        this.registerNavigationBlocked();
+        'Si sales de la evaluación, tu intento se dará por finalizado y no podrás continuar respondiendo. ¿Deseas salir?',
+      confirmLabel: 'Finalizar intento',
+      onConfirm: () => this.doExit(),
+    });
+  }
+
+  /**
+   * Finaliza el intento en el backend (lo califica con lo guardado y lo cierra). El intento
+   * queda usado y no retomable. Si falla, se mantiene al estudiante en el intento.
+   */
+  private doExit(): void {
+    const attempt = this.attempt();
+    if (!attempt) {
+      this.examSession.end();
+      this.backToList();
+      return;
+    }
+    this.registerNavigationBlocked();
+    this.stopLocalSession();
+    this.submitting.set(true);
+    this.submitError.set(null);
+    this.service.exitAttempt(attempt.id).subscribe({
+      next: () => {
+        this.forgetAttempt(attempt.evaluationId);
+        this.submitting.set(false);
+        // backToList libera el modo examen y refresca la lista (intento ya finalizado).
         this.backToList();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.submitting.set(false);
+        this.submitError.set(this.extractError(err, 'No se pudo finalizar el intento.'));
       },
     });
   }
@@ -1478,103 +1416,19 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
       .subscribe({ error: () => { /* no interrumpe el intento */ } });
   }
 
-  // ═══════════════ Calculadora química (panel embebido) ═══════════════
-
-  toggleCalculator(): void {
-    if (!this.calculatorAllowed()) return;
-    const open = !this.calculatorOpen();
-    this.calculatorOpen.set(open);
-    if (open) {
-      this.periodicTableOpen.set(false);
-      this.loadCalculatorMetals();
-    }
-  }
-
-  /** Carga el catálogo de metales del backend una sola vez (fuente de verdad química). */
-  private loadCalculatorMetals(): void {
-    if (this.calcMetals().length > 0) return;
-    this.catalogService.metals().subscribe({
-      next: (metals) => this.calcMetals.set(metals),
-      error: () => this.calcError.set('No se pudo cargar el catálogo de elementos.'),
-    });
-  }
-
-  onCalcTypeChange(value: string): void {
-    this.calcType.set(value === 'hydroxides' ? 'hydroxides' : 'oxides');
-    this.calcResult.set(null);
-  }
-
-  onCalcMetalChange(symbol: string): void {
-    this.calcMetalSymbol.set(symbol);
-    this.calcValence.set(null);
-    this.calcResult.set(null);
-  }
-
-  onCalcValenceChange(value: string): void {
-    const v = Number(value);
-    this.calcValence.set(Number.isFinite(v) ? v : null);
-    this.calcResult.set(null);
-  }
-
-  /** Forma el compuesto usando el motor del backend; no revela respuestas de la evaluación. */
-  computeCompound(): void {
-    const metal = this.calcMetals().find((m) => m.symbol === this.calcMetalSymbol());
-    const valence = this.calcValence();
-    if (!metal || valence === null) {
-      this.calcError.set('Selecciona un elemento y su valencia.');
-      return;
-    }
-    this.calcError.set(null);
-    this.calcLoading.set(true);
-    const request = { elementSymbol: metal.symbol, elementName: metal.name, valence };
-    const call =
-      this.calcType() === 'hydroxides'
-        ? this.engineService.generateHydroxide(request)
-        : this.engineService.generateOxide(request);
-    call.subscribe({
-      next: (result) => {
-        this.calcResult.set(result);
-        this.calcLoading.set(false);
-      },
-      error: () => {
-        this.calcLoading.set(false);
-        this.calcError.set('No se pudo formar el compuesto.');
-      },
-    });
-  }
-
-  // ═══════════════ Tabla periódica (panel embebido) ═══════════════
-
-  togglePeriodicTable(): void {
-    if (!this.periodicTableAllowed()) return;
-    const open = !this.periodicTableOpen();
-    this.periodicTableOpen.set(open);
-    if (open) {
-      this.calculatorOpen.set(false);
-    }
-  }
-
-  onPtSearch(event: Event): void {
-    this.ptQuery.set((event.target as HTMLInputElement).value);
-  }
-
-  selectElement(element: PeriodicElement): void {
-    this.ptSelected.set(element);
-  }
-
   // ═══════════════ Limpieza de la sesión de rendición ═══════════════
 
-  /** Detiene el contador, los listeners y el modo examen (libera la navegación). */
-  private stopAttemptSession(): void {
+  /**
+   * Detiene el contador y los listeners locales. No libera el modo examen: eso ocurre solo
+   * al enviar o salir del intento, para que navegar a una herramienta permitida no lo corte.
+   */
+  private stopLocalSession(): void {
     if (this.timerId !== null) {
       clearInterval(this.timerId);
       this.timerId = null;
     }
     this.detachTabExitListeners();
     this.remainingSeconds.set(null);
-    this.calculatorOpen.set(false);
-    this.periodicTableOpen.set(false);
-    this.examSession.end();
   }
 
   // ═══════════════ Envío ═══════════════
@@ -1609,12 +1463,11 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
 
   private doSubmit(auto = false): void {
     const attempt = this.attempt();
-    const ev = this.selected();
     const d = this.detail();
     if (!attempt || !d) return;
 
     // El intento se cierra: detenemos contador y detección de salida de pestaña.
-    this.stopAttemptSession();
+    this.stopLocalSession();
     this.submitting.set(true);
     this.submitError.set(null);
 
@@ -1629,7 +1482,9 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
 
     this.service.submitAttempt(attempt.id, { answers }).subscribe({
       next: (result) => {
-        if (ev) this.forgetAttempt(ev.id);
+        this.forgetAttempt(attempt.evaluationId);
+        // El intento quedó enviado: se libera el modo examen y la navegación normal.
+        this.examSession.end();
         this.submitting.set(false);
         this.submittedInfo.set({
           title: d.title,
@@ -1649,7 +1504,9 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   // ═══════════════ Navegación entre vistas ═══════════════
 
   backToList(): void {
-    this.stopAttemptSession();
+    this.stopLocalSession();
+    // Salir a la lista cierra el modo examen y libera la navegación normal.
+    this.examSession.end();
     this.view.set('list');
     this.selected.set(null);
     this.detail.set(null);
@@ -1658,7 +1515,6 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.currentIndex.set(0);
     this.tabExitWarning.set(null);
     this.tabExitCount.set(0);
-    this.calculatorOpen.set(false);
     this.startError.set(null);
     this.submitError.set(null);
     this.submittedInfo.set(null);

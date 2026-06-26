@@ -76,6 +76,17 @@ export class StudentEvaluationsService {
   }
 
   /**
+   * Finaliza el intento porque el estudiante decide salir de la evaluación. El backend lo
+   * califica con lo guardado y lo deja cerrado (no retomable, cuenta como usado).
+   */
+  exitAttempt(attemptId: number): Observable<AttemptResponse> {
+    return this.http.post<AttemptResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/exit`,
+      {}
+    );
+  }
+
+  /**
    * Reporta una incidencia de foco (salida/retorno de pestaña o ventana) del intento.
    * El backend solo la registra si la evaluación tiene activada la detección de salida
    * de pestaña; en caso contrario responde con error y el frontend lo ignora.

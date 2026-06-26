@@ -5,8 +5,9 @@ import { TitleCasePipe } from '@angular/common';
 import { forkJoin } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { UsageMetricsService } from '../../core/services/usage-metrics.service';
+import { ExamSessionService } from '../../core/services/exam-session.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
-import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
+import { EXAM_EXIT_ACTION, STUDENT_NAV_ITEMS, examNavItems } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
 import { ADMIN_NAV_ITEMS } from '../../shared/components/sidebar/admin-nav';
 import { UserRole } from '../../shared/models';
@@ -71,9 +72,20 @@ interface ElementChoice {
         [userRole]="userRoleLabel()"
         [userInitials]="userInitials()"
         (onLogout)="handleLogout()"
+        (onAction)="handleSidebarAction($event)"
       />
 
       <main class="main">
+        @if (examActive()) {
+          <div class="alert alert-info" role="status">
+            <span class="material-icons">science</span>
+            <span>
+              Estás usando esta herramienta durante una evaluación.
+              <button type="button" class="link-btn" (click)="backToAttempt()">Volver al intento</button>
+            </span>
+          </div>
+        }
+
         <header class="cmp-header">
           <h1 class="cmp-header__title">Formación de compuestos</h1>
           <p class="cmp-header__subtitle">
@@ -425,6 +437,7 @@ export class CompoundsComponent {
   private readonly engine = inject(ChemicalEngineService);
   private readonly catalog = inject(ChemistryCatalogService);
   private readonly usageMetrics = inject(UsageMetricsService);
+  private readonly examSession = inject(ExamSessionService);
 
   readonly compoundTypes = COMPOUND_TYPES;
   private readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
@@ -587,9 +600,17 @@ export class CompoundsComponent {
   private readonly currentUser = computed(() => this.authService.currentUser());
   readonly userName = computed<string>(() => this.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
-  readonly navItems = computed<readonly SidebarNavItem[]>(() =>
-    buildNavItems(this.authService.currentRole())
-  );
+  /** Durante un intento activo, el menú lateral pasa al modo examen. */
+  readonly examActive = computed<boolean>(() => this.examSession.isActive());
+  readonly navItems = computed<readonly SidebarNavItem[]>(() => {
+    if (this.examSession.isActive()) {
+      return examNavItems(
+        this.examSession.calculatorAllowed(),
+        this.examSession.periodicTableAllowed()
+      );
+    }
+    return buildNavItems(this.authService.currentRole());
+  });
   readonly userRoleLabel = computed<string>(() => {
     switch (this.authService.currentRole()) {
       case 'DOCENTE':
@@ -923,6 +944,18 @@ export class CompoundsComponent {
   handleLogout(): void {
     this.authService.logout();
     void this.router.navigateByUrl('/auth/login');
+  }
+
+  /** Vuelve al intento sin finalizarlo (no se pierde el progreso). */
+  backToAttempt(): void {
+    void this.router.navigateByUrl('/evaluations');
+  }
+
+  /** "Salir del intento" desde el menú de examen: lo gestiona la pantalla del intento. */
+  handleSidebarAction(action: string): void {
+    if (action === EXAM_EXIT_ACTION) {
+      void this.router.navigate(['/evaluations'], { queryParams: { exit: '1' } });
+    }
   }
 }
 

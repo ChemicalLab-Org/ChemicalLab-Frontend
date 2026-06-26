@@ -107,6 +107,10 @@ export interface AttemptResponse {
   readonly questionOrder: number[];
   /** Modo una por una: índice de la pregunta actual; las anteriores quedan bloqueadas. */
   readonly currentQuestionIndex: number;
+  /** Si el estudiante puede usar el módulo de Formación de compuestos durante este intento. */
+  readonly allowChemicalCalculator: boolean;
+  /** Si el estudiante puede usar el módulo de Tabla periódica durante este intento. */
+  readonly allowPeriodicTable: boolean;
   readonly answers: StudentAnswerResponse[];
 }
 
