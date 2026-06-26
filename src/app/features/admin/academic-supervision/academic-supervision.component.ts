@@ -211,6 +211,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
                       <th>Docente creador</th>
                       <th>Categoría</th>
                       <th>Estado</th>
+                      <th>Materiales</th>
                       <th>Grados / secciones</th>
                       <th>Creado</th>
                     </tr>
@@ -222,6 +223,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
                         <td>{{ c.createdByTeacher ?? '—' }}</td>
                         <td><span class="badge badge-neutral">{{ categoryLabel(c.category) }}</span></td>
                         <td><span class="badge" [class]="statusBadgeClass(c.status)">{{ statusLabel(c.status) }}</span></td>
+                        <td>{{ materialsLabel(c) }}</td>
                         <td>{{ sectionsLabel(c.sections) }}</td>
                         <td class="mono">{{ formatDate(c.createdAt) }}</td>
                       </tr>
@@ -936,6 +938,14 @@ export class AcademicSupervisionComponent implements OnInit {
     const active = sections.filter((s) => s.active);
     if (active.length === 0) return 'Sin asignar';
     return active.map((s) => `${s.grade} ${s.section}`).join(', ');
+  }
+
+  /** Resumen de solo lectura de los materiales de apoyo de un contenido. */
+  materialsLabel(concept: SupervisionConcept): string {
+    if (concept.materialCount === 0) return 'Sin materiales';
+    const parts = [`${concept.materialCount} material(es)`];
+    if (concept.hasAttachment) parts.push('con archivo');
+    return parts.join(' · ');
   }
 
   /** Verdadero si el término está vacío o aparece en alguno de los valores dados. */
