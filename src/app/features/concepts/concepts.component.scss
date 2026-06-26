@@ -602,6 +602,11 @@
   color: var(--color-neutral-500);
 }
 
+.material-preview {
+  // Margen al desplazar con scrollIntoView para que el visor no quede pegado al borde.
+  scroll-margin-top: var(--space-4);
+}
+
 .material-preview__name {
   display: flex;
   align-items: center;

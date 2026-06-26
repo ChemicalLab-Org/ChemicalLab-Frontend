@@ -1,4 +1,13 @@
-import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  OnDestroy,
+  OnInit,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
@@ -294,7 +303,7 @@ const LEGACY_CATEGORY_ORDER: string[] = [
                     <p class="material-preview__error">{{ previewError() }}</p>
                   }
                   @if (previewSafeUrl(); as safeUrl) {
-                    <div class="material-preview">
+                    <div class="material-preview" #previewSection>
                       <div class="material-preview__bar">
                         <span class="material-preview__name">
                           <span class="material-icons">picture_as_pdf</span>
@@ -509,6 +518,9 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   // URL de objeto activa, necesaria para liberarla al cerrar/cambiar de contenido.
   private currentObjectUrl: string | null = null;
 
+  // Referencia al contenedor del visor para desplazar la página hasta él al previsualizar.
+  @ViewChild('previewSection') private previewSection?: ElementRef<HTMLElement>;
+
   readonly availableCategoryKeys = computed<ConceptCategory[]>(() => {
     const present = [...new Set(this.concepts().map((c) => c.category))];
     // Primero las clásicas en su orden preferente, luego las personalizadas alfabéticamente.
@@ -633,6 +645,7 @@ export class ConceptsComponent implements OnInit, OnDestroy {
         this.currentObjectUrl = url;
         this.previewSafeUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
         this.previewMaterial.set(material);
+        this.scrollToPreview();
       },
       error: () => {
         this.downloadingId.set(null);
@@ -675,6 +688,19 @@ export class ConceptsComponent implements OnInit, OnDestroy {
 
   closePreview(): void {
     this.clearPreview();
+  }
+
+  /**
+   * Desplaza la página suavemente hasta el visor del PDF. Se espera un ciclo para que
+   * Angular renderice el contenedor (`@if` recién activado) antes de hacer scroll.
+   */
+  private scrollToPreview(): void {
+    setTimeout(() => {
+      this.previewSection?.nativeElement.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 50);
   }
 
   private clearPreview(): void {
