@@ -7,6 +7,12 @@ export interface SidebarNavItem {
   readonly icon: string;
   readonly route: string;
   readonly disabled?: boolean;
+  /**
+   * Identificador de acción para ítems que no navegan a una ruta (p. ej. "Salir del
+   * intento"). Si está presente, al pulsar el ítem se emite `onAction` con este valor en
+   * vez de navegar.
+   */
+  readonly action?: string;
 }
 
 @Component({
@@ -33,9 +39,9 @@ export interface SidebarNavItem {
             class="sidebar__nav-item"
             [class.sidebar__nav-item--active]="isActive(item.route)"
             [class.sidebar__nav-item--disabled]="item.disabled"
-            [attr.href]="item.disabled ? null : item.route"
+            [attr.href]="item.disabled || item.action ? null : item.route"
             [attr.title]="item.disabled ? 'Próximamente' : null"
-            (click)="onNavClick($event, item.route, item.disabled)"
+            (click)="onNavClick($event, item)"
           >
             @if (isActive(item.route)) {
               <span class="sidebar__nav-indicator"></span>
@@ -72,6 +78,8 @@ export class SidebarComponent {
   @Input({ required: true }) userInitials = '';
 
   @Output() readonly onLogout = new EventEmitter<void>();
+  /** Se emite cuando se pulsa un ítem con `action` (en vez de navegar). */
+  @Output() readonly onAction = new EventEmitter<string>();
 
   private readonly router = inject(Router);
   private readonly currentUrl = signal<string>(this.router.url);
@@ -92,12 +100,16 @@ export class SidebarComponent {
     return current === route || current.startsWith(route + '/');
   }
 
-  onNavClick(event: MouseEvent, route: string, disabled?: boolean): void {
+  onNavClick(event: MouseEvent, item: SidebarNavItem): void {
     event.preventDefault();
-    if (disabled) {
+    if (item.disabled) {
       return;
     }
-    void this.router.navigateByUrl(route);
+    if (item.action) {
+      this.onAction.emit(item.action);
+      return;
+    }
+    void this.router.navigateByUrl(item.route);
   }
 
   handleLogout(): void {

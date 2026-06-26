@@ -10,10 +10,18 @@
  * rellene tras enviar el intento, el frontend no lo modela ni lo muestra.
  */
 
-import { QuestionType } from './evaluation.models';
+import { QuestionDisplayMode, QuestionType } from './evaluation.models';
 
 /** Estado de un intento de evaluación. */
 export type AttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
+
+/** Tipo de incidencia de foco reportada durante un intento. */
+export type AttemptEventType =
+  | 'TAB_HIDDEN'
+  | 'TAB_VISIBLE'
+  | 'WINDOW_BLUR'
+  | 'WINDOW_FOCUS'
+  | 'NAVIGATION_BLOCKED';
 
 // ─── Responses ──────────────────────────────────────────────────────────────
 
@@ -26,6 +34,11 @@ export interface StudentEvaluationResponse {
   readonly topic: string | null;
   readonly timeLimitMinutes: number | null;
   readonly maxAttempts: number;
+  readonly allowChemicalCalculator: boolean;
+  readonly allowPeriodicTable: boolean;
+  readonly trackTabExit: boolean;
+  readonly questionDisplayMode: QuestionDisplayMode;
+  readonly randomizeQuestions: boolean;
   readonly questionCount: number;
   readonly assignmentId: number;
   readonly startAt: string | null;
@@ -60,6 +73,11 @@ export interface StudentEvaluationDetailResponse {
   readonly instructions: string | null;
   readonly topic: string | null;
   readonly timeLimitMinutes: number | null;
+  readonly allowChemicalCalculator: boolean;
+  readonly allowPeriodicTable: boolean;
+  readonly trackTabExit: boolean;
+  readonly questionDisplayMode: QuestionDisplayMode;
+  readonly randomizeQuestions: boolean;
   readonly questions: StudentQuestionResponse[];
   readonly assignmentId: number;
 }
@@ -85,6 +103,14 @@ export interface AttemptResponse {
   readonly attemptNumber: number;
   readonly startedAt: string;
   readonly submittedAt: string | null;
+  /** Orden de las preguntas fijado para este intento (IDs). */
+  readonly questionOrder: number[];
+  /** Modo una por una: índice de la pregunta actual; las anteriores quedan bloqueadas. */
+  readonly currentQuestionIndex: number;
+  /** Si el estudiante puede usar el módulo de Formación de compuestos durante este intento. */
+  readonly allowChemicalCalculator: boolean;
+  /** Si el estudiante puede usar el módulo de Tabla periódica durante este intento. */
+  readonly allowPeriodicTable: boolean;
   readonly answers: StudentAnswerResponse[];
 }
 
@@ -108,4 +134,24 @@ export interface SubmitEvaluationAnswerRequest {
 /** Envío de un intento. Las respuestas son opcionales (pueden haberse guardado antes). */
 export interface SubmitEvaluationAttemptRequest {
   readonly answers?: SubmitEvaluationAnswerRequest[];
+}
+
+/**
+ * Cuerpo para reportar una incidencia de foco durante un intento (salida/retorno de
+ * pestaña o ventana). El backend solo la registra si la evaluación tiene activada la
+ * detección de salida de pestaña y el intento es del propio estudiante.
+ */
+export interface RegisterAttemptEventRequest {
+  readonly eventType: AttemptEventType;
+  readonly description?: string;
+}
+
+/** Resumen devuelto tras reportar una incidencia de foco. */
+export interface AttemptEventSummaryResponse {
+  readonly attemptId: number;
+  /** true si el evento se registró; false si se descartó por duplicado/throttling. */
+  readonly recorded: boolean;
+  readonly totalEvents: number;
+  /** Cantidad de "salidas" (pestaña oculta o ventana sin foco) del intento. */
+  readonly tabExitCount: number;
 }

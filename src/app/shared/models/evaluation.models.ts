@@ -13,6 +13,9 @@ export type EvaluationStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 /** Tipo de pregunta. En el MVP solo se admite alternativa única. */
 export type QuestionType = 'MULTIPLE_CHOICE';
 
+/** Modo de presentación de las preguntas durante el intento. */
+export type QuestionDisplayMode = 'ALL_AT_ONCE' | 'ONE_BY_ONE';
+
 // ─── Requests ───────────────────────────────────────────────────────────────
 
 /** Payload para crear una evaluación (queda en estado DRAFT). */
@@ -23,6 +26,12 @@ export interface CreateEvaluationRequest {
   readonly topic?: string;
   readonly maxAttempts: number;
   readonly timeLimitMinutes?: number | null;
+  /** Configuración avanzada del intento. */
+  readonly allowChemicalCalculator?: boolean;
+  readonly allowPeriodicTable?: boolean;
+  readonly trackTabExit?: boolean;
+  readonly questionDisplayMode?: QuestionDisplayMode;
+  readonly randomizeQuestions?: boolean;
 }
 
 /** Payload para actualizar los datos generales de una evaluación. */
@@ -99,6 +108,11 @@ export interface EvaluationResponse {
   readonly status: EvaluationStatus;
   readonly maxAttempts: number;
   readonly timeLimitMinutes: number | null;
+  readonly allowChemicalCalculator: boolean;
+  readonly allowPeriodicTable: boolean;
+  readonly trackTabExit: boolean;
+  readonly questionDisplayMode: QuestionDisplayMode;
+  readonly randomizeQuestions: boolean;
   readonly active: boolean;
   readonly questionCount: number;
   readonly assignmentCount: number;
@@ -116,6 +130,11 @@ export interface EvaluationDetailResponse {
   readonly status: EvaluationStatus;
   readonly maxAttempts: number;
   readonly timeLimitMinutes: number | null;
+  readonly allowChemicalCalculator: boolean;
+  readonly allowPeriodicTable: boolean;
+  readonly trackTabExit: boolean;
+  readonly questionDisplayMode: QuestionDisplayMode;
+  readonly randomizeQuestions: boolean;
   readonly active: boolean;
   readonly questions: QuestionResponse[];
   readonly assignments: EvaluationAssignmentResponse[];

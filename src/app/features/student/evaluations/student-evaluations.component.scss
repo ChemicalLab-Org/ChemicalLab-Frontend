@@ -704,3 +704,55 @@
   .q-card__options,
   .q-card__feedback { padding-left: 0; }
 }
+
+// ════════ Configuración avanzada de la rendición ════════
+.ev-timer {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 4px var(--space-2); border-radius: 999px;
+  background: var(--color-primary-50); color: var(--color-primary-700);
+  font-variant-numeric: tabular-nums; font-weight: 600; font-size: var(--text-sm);
+
+  .material-icons { font-size: 18px; }
+  &--low { background: var(--color-warning-light); color: var(--color-warning-text); }
+}
+
+.ev-warning-dismiss {
+  margin-left: auto; background: none; border: none; cursor: pointer;
+  color: inherit; display: inline-flex; align-items: center; opacity: 0.7;
+  &:hover { opacity: 1; }
+  .material-icons { font-size: 18px; }
+}
+
+.ev-rules {
+  margin-top: var(--space-4); border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg); padding: var(--space-4); background: var(--color-neutral-50);
+
+  &__title {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    font-weight: 600; color: var(--color-neutral-800); margin-bottom: var(--space-2);
+    .material-icons { font-size: 20px; color: var(--color-primary-600); }
+  }
+  &__list {
+    list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2);
+    li {
+      display: flex; align-items: flex-start; gap: var(--space-2);
+      font-size: var(--text-sm); color: var(--color-neutral-700);
+      .material-icons { font-size: 18px; color: var(--color-neutral-500); }
+    }
+  }
+}
+
+.ev-done__autonote { margin-bottom: var(--space-4); }
+
+.ev-seq-done {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  border: 1px dashed var(--color-primary-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-50);
+  margin-bottom: var(--space-4);
+
+  &__icon { font-size: 40px; color: var(--color-primary-600); }
+  &__title { margin: var(--space-2) 0 0; font-weight: 600; color: var(--color-neutral-800); }
+  &__desc { margin: var(--space-1) 0 0; font-size: var(--text-sm); color: var(--color-neutral-600); }
+}

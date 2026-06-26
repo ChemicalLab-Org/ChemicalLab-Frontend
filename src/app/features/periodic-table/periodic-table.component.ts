@@ -2,8 +2,9 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { UsageMetricsService } from '../../core/services/usage-metrics.service';
+import { ExamSessionService } from '../../core/services/exam-session.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
-import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
+import { EXAM_EXIT_ACTION, STUDENT_NAV_ITEMS, examNavItems } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
 import { ADMIN_NAV_ITEMS } from '../../shared/components/sidebar/admin-nav';
 import { UserRole } from '../../shared/models';
@@ -91,9 +92,20 @@ const ORBIT_3D_ROTATIONS: readonly number[] = [-22, 18, -8, 26, -16, 10, -24];
         [userRole]="userRole()"
         [userInitials]="userInitials()"
         (onLogout)="handleLogout()"
+        (onAction)="handleSidebarAction($event)"
       />
 
       <main class="main">
+        @if (examActive()) {
+          <div class="alert alert-info" role="status">
+            <span class="material-icons">science</span>
+            <span>
+              Estás consultando la tabla periódica durante una evaluación.
+              <button type="button" class="link-btn" (click)="backToAttempt()">Volver al intento</button>
+            </span>
+          </div>
+        }
+
         <div class="periodic-table-page" [class.periodic-table-page--split]="selectedElement() !== null">
           <!-- ===== Columna principal: tabla ===== -->
           <div class="periodic-main">
@@ -446,6 +458,7 @@ export class PeriodicTableComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly usageMetrics = inject(UsageMetricsService);
+  private readonly examSession = inject(ExamSessionService);
 
   readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
   readonly filters: readonly ElementFilter[] = ELEMENT_FILTERS;
@@ -615,9 +628,17 @@ export class PeriodicTableComponent {
 
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
-  readonly navItems = computed<readonly SidebarNavItem[]>(() =>
-    buildNavItems(this.authService.currentRole())
-  );
+  /** Durante un intento activo, el menú lateral pasa al modo examen. */
+  readonly examActive = computed<boolean>(() => this.examSession.isActive());
+  readonly navItems = computed<readonly SidebarNavItem[]>(() => {
+    if (this.examSession.isActive()) {
+      return examNavItems(
+        this.examSession.calculatorAllowed(),
+        this.examSession.periodicTableAllowed()
+      );
+    }
+    return buildNavItems(this.authService.currentRole());
+  });
 
   matches(element: PeriodicElement): boolean {
     const categories = this.activeCategories();
@@ -674,6 +695,18 @@ export class PeriodicTableComponent {
   handleLogout(): void {
     this.authService.logout();
     void this.router.navigateByUrl('/auth/login');
+  }
+
+  /** Vuelve al intento sin finalizarlo (no se pierde el progreso). */
+  backToAttempt(): void {
+    void this.router.navigateByUrl('/evaluations');
+  }
+
+  /** "Salir del intento" desde el menú de examen: lo gestiona la pantalla del intento. */
+  handleSidebarAction(action: string): void {
+    if (action === EXAM_EXIT_ACTION) {
+      void this.router.navigate(['/evaluations'], { queryParams: { exit: '1' } });
+    }
   }
 
   private detailFor(element: PeriodicElement): ElementDetail {
