@@ -75,16 +75,14 @@ const LEGACY_CATEGORY_ORDER: string[] = [
       />
 
       <main class="main">
-        <!-- Encabezado -->
-        <header class="concepts-header">
-          <h1 class="concepts-header__title">Contenidos conceptuales</h1>
-          <p class="concepts-header__subtitle">
-            Repasa los conceptos asignados por tu docente antes de formar compuestos químicos.
-          </p>
-        </header>
-
         <!-- Estado: cargando -->
         @if (loading()) {
+          <header class="concepts-header">
+            <h1 class="concepts-header__title">Contenidos conceptuales</h1>
+            <p class="concepts-header__subtitle">
+              Repasa los conceptos asignados por tu docente antes de formar compuestos químicos.
+            </p>
+          </header>
           <div class="page-state">
             <div class="page-state__spinner" role="status" aria-label="Cargando">
               <span class="material-icons page-state__spin-icon">autorenew</span>
@@ -95,6 +93,9 @@ const LEGACY_CATEGORY_ORDER: string[] = [
 
         <!-- Estado: error de carga -->
         @else if (loadError()) {
+          <header class="concepts-header">
+            <h1 class="concepts-header__title">Contenidos conceptuales</h1>
+          </header>
           <div class="page-state page-state--error">
             <div class="page-state__icon">
               <span class="material-icons">cloud_off</span>
@@ -110,6 +111,9 @@ const LEGACY_CATEGORY_ORDER: string[] = [
 
         <!-- Estado: sin contenidos asignados -->
         @else if (concepts().length === 0) {
+          <header class="concepts-header">
+            <h1 class="concepts-header__title">Contenidos conceptuales</h1>
+          </header>
           <div class="page-state page-state--empty">
             <div class="page-state__icon">
               <span class="material-icons">library_books</span>
@@ -121,8 +125,232 @@ const LEGACY_CATEGORY_ORDER: string[] = [
           </div>
         }
 
-        <!-- Contenido principal -->
+        <!-- ════════ VISTA DE DETALLE AMPLIA ════════ -->
+        @else if (selectedConcept(); as concept) {
+          <section class="detail-view">
+            <button type="button" class="detail-view__back" (click)="closeConcept()">
+              <span class="material-icons">arrow_back</span>
+              Volver a contenidos
+            </button>
+
+            <div class="detail-head">
+              <div class="detail-head__left">
+                <div
+                  class="detail-head__icon"
+                  [style.background]="conceptBg(concept.category)"
+                  [style.color]="conceptFg(concept.category)"
+                >
+                  <span class="material-icons">{{ conceptIcon(concept.category) }}</span>
+                </div>
+                <div>
+                  <h2 class="detail-head__title">{{ concept.title }}</h2>
+                  <span class="badge badge-primary">{{ categoryLabel(concept.category) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-body">
+
+              <!-- Resumen -->
+              @if (concept.summary) {
+                <div class="content-section">
+                  <div class="content-section__label">Resumen</div>
+                  <p class="content-section__text">{{ concept.summary }}</p>
+                </div>
+              }
+
+              <!-- ¿Qué es? -->
+              @if (concept.explanation) {
+                <div class="content-section">
+                  <div class="content-section__label">¿Qué es?</div>
+                  <p class="content-section__text">{{ concept.explanation }}</p>
+                </div>
+              }
+
+              <!-- ¿Cómo se forma? -->
+              @if (concept.formationSteps.length > 0) {
+                <div class="content-section">
+                  <div class="content-section__label">¿Cómo se forma?</div>
+                  <ol class="steps-list">
+                    @for (step of concept.formationSteps; track step; let i = $index) {
+                      <li class="steps-list__item">
+                        <div class="steps-list__number">{{ i + 1 }}</div>
+                        <div class="steps-list__text">{{ step }}</div>
+                      </li>
+                    }
+                  </ol>
+                </div>
+              }
+
+              <!-- Puntos clave -->
+              @if (concept.keyPoints.length > 0) {
+                <div class="content-section">
+                  <div class="content-section__label">Puntos clave</div>
+                  <ul class="key-points">
+                    @for (point of concept.keyPoints; track point) {
+                      <li class="key-points__item">
+                        <span class="material-icons key-points__check">check_circle</span>
+                        <span>{{ point }}</span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              <!-- Ejemplos -->
+              @if (concept.examples.length > 0) {
+                <div class="content-section">
+                  <div class="content-section__label">Ejemplos</div>
+                  <ul class="examples-text-list">
+                    @for (ex of concept.examples; track ex) {
+                      <li class="examples-text-list__item">
+                        <span class="material-icons examples-text-list__icon">science</span>
+                        <span>{{ ex }}</span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              <!-- Actividad sugerida -->
+              @if (concept.suggestedActivity) {
+                <div class="content-section">
+                  <div class="content-section__label">Actividad sugerida</div>
+                  <p class="content-section__text">{{ concept.suggestedActivity }}</p>
+                </div>
+              }
+
+              <!-- Materiales de apoyo -->
+              @if (concept.materials.length > 0) {
+                <div class="content-section">
+                  <div class="content-section__label">Materiales de apoyo</div>
+
+                  <!-- Archivos -->
+                  @if (fileMaterials().length > 0) {
+                    <h4 class="materials-subheading">
+                      <span class="material-icons">folder</span> Archivos
+                    </h4>
+                    <div class="materials-grid">
+                      @for (m of fileMaterials(); track m.materialId) {
+                        <div class="material-card">
+                          <div class="material-card__head">
+                            <span class="material-icons material-card__icon">{{ materialIcon(m) }}</span>
+                            <span class="material-card__title">{{ materialLabel(m) }}</span>
+                          </div>
+                          @if (m.fileSize) {
+                            <span class="material-card__meta">{{ formatSize(m.fileSize) }}</span>
+                          }
+                          @if (m.previewAvailable) {
+                            <div class="material-card__actions">
+                              <button type="button" class="btn btn-primary btn-sm"
+                                [disabled]="downloadingId() === m.materialId" (click)="previewFile(m)">
+                                <span class="material-icons">visibility</span> Visualizar
+                              </button>
+                              <button type="button" class="btn btn-secondary btn-sm"
+                                [disabled]="downloadingId() === m.materialId" (click)="downloadFile(m)">
+                                <span class="material-icons">download</span> Descargar
+                              </button>
+                            </div>
+                          } @else {
+                            <p class="material-card__hint">
+                              Este material contiene diapositivas. Puedes descargarlo para revisarlo.
+                            </p>
+                            <button type="button" class="btn btn-secondary btn-sm"
+                              [disabled]="downloadingId() === m.materialId" (click)="downloadFile(m)">
+                              <span class="material-icons">download</span> Descargar diapositivas
+                            </button>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  <!-- Enlaces -->
+                  @if (linkMaterials().length > 0) {
+                    <h4 class="materials-subheading">
+                      <span class="material-icons">link</span> Enlaces de apoyo
+                    </h4>
+                    <div class="materials-grid">
+                      @for (m of linkMaterials(); track m.materialId) {
+                        <div class="material-card">
+                          <div class="material-card__head">
+                            <span class="material-icons material-card__icon">link</span>
+                            <span class="material-card__title">{{ materialLabel(m) }}</span>
+                          </div>
+                          <p class="material-card__hint">Recurso externo de apoyo.</p>
+                          <a class="btn btn-secondary btn-sm" [href]="m.url" target="_blank" rel="noopener noreferrer">
+                            <span class="material-icons">open_in_new</span> Abrir enlace
+                          </a>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  <!-- Estado / visor del material seleccionado -->
+                  @if (previewLoading()) {
+                    <p class="material-card__hint">Cargando vista previa…</p>
+                  }
+                  @if (previewError()) {
+                    <p class="material-preview__error">{{ previewError() }}</p>
+                  }
+                  @if (previewSafeUrl(); as safeUrl) {
+                    <div class="material-preview">
+                      <div class="material-preview__bar">
+                        <span class="material-preview__name">
+                          <span class="material-icons">picture_as_pdf</span>
+                          {{ previewMaterial()?.originalFileName || 'Vista previa' }}
+                        </span>
+                        <div class="material-preview__tools">
+                          <button type="button" class="btn btn-secondary btn-sm" (click)="openFullscreen()">
+                            <span class="material-icons">fullscreen</span> Vista amplia
+                          </button>
+                          @if (previewMaterial(); as pm) {
+                            <button type="button" class="btn btn-secondary btn-sm" (click)="downloadFile(pm)">
+                              <span class="material-icons">download</span> Descargar
+                            </button>
+                          }
+                          <button type="button" class="btn btn-ghost btn-sm" (click)="closePreview()"
+                            aria-label="Cerrar vista previa">
+                            <span class="material-icons">close</span>
+                          </button>
+                        </div>
+                      </div>
+                      <iframe class="material-preview__frame" [src]="safeUrl"
+                        title="Vista previa del material"></iframe>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- CTA a formación de compuestos -->
+              @if (hasRelatedCompounds(concept.category)) {
+                <div class="detail-cta">
+                  <div class="detail-cta__text">
+                    <span class="material-icons">biotech</span>
+                    <span>
+                      ¿Quieres practicar la formación de
+                      <strong>{{ concept.title }}</strong>?
+                    </span>
+                  </div>
+                  <button type="button" class="btn btn-primary" (click)="goToCompounds()">
+                    Ir a formación de compuestos
+                    <span class="material-icons">arrow_forward</span>
+                  </button>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- ════════ VISTA DE LISTADO ════════ -->
         @else {
+          <header class="concepts-header">
+            <h1 class="concepts-header__title">Contenidos conceptuales</h1>
+            <p class="concepts-header__subtitle">
+              Repasa los conceptos asignados por tu docente antes de formar compuestos químicos.
+            </p>
+          </header>
+
           <!-- Buscador + filtros -->
           <div class="concepts-controls">
             <div class="search-bar">
@@ -168,271 +396,90 @@ const LEGACY_CATEGORY_ORDER: string[] = [
             </div>
           </div>
 
-          <!-- Workspace: lista izquierda + detalle derecho -->
-          <div class="concepts-workspace" [class.concepts-workspace--open]="selectedConcept() !== null">
-
-            <!-- ── Lista de conceptos (columna izquierda) ── -->
-            <div class="concepts-list" role="list">
-              @if (filtered().length > 0) {
-                @for (concept of filtered(); track concept.id) {
-                  <button
-                    type="button"
-                    role="listitem"
-                    class="concept-row"
-                    [class.concept-row--active]="selectedId() === concept.id"
-                    (click)="selectConcept(concept.id)"
-                    [attr.aria-pressed]="selectedId() === concept.id"
-                  >
-                    <div
-                      class="concept-row__icon"
-                      [style.background]="conceptBg(concept.category)"
-                      [style.color]="conceptFg(concept.category)"
-                    >
-                      <span class="material-icons">{{ conceptIcon(concept.category) }}</span>
-                    </div>
-                    <div class="concept-row__body">
-                      <div class="concept-row__title">{{ concept.title }}</div>
-                      <div class="concept-row__desc">{{ concept.summary }}</div>
-                      <div class="concept-row__chips">
-                        @for (ex of concept.examples.slice(0, 3); track ex) {
-                          <span class="concept-row__chip">{{ truncate(ex, 24) }}</span>
-                        }
-                      </div>
-                    </div>
-                    <span
-                      class="material-icons concept-row__arrow"
-                      [class.concept-row__arrow--active]="selectedId() === concept.id"
-                    >
-                      chevron_right
-                    </span>
-                  </button>
-                }
-              } @else {
-                <div class="list-empty">
-                  <div class="list-empty__icon">
-                    <span class="material-icons">search_off</span>
-                  </div>
-                  <p class="list-empty__title">No se encontraron contenidos relacionados.</p>
-                  <p class="list-empty__desc">
-                    Intenta con otra palabra clave o categoría.
-                  </p>
-                  <button
-                    type="button"
-                    class="btn btn-secondary btn-sm"
-                    (click)="resetFilters()"
-                  >
-                    Ver todos
-                  </button>
-                </div>
-              }
-            </div>
-
-            <!-- ── Panel de detalle (columna derecha) ── -->
-            <div class="concepts-detail">
-              @if (selectedConcept(); as concept) {
-
-                <!-- Botón "Volver" visible solo en móvil -->
+          <!-- Listado de conceptos a ancho completo -->
+          <div class="concepts-list" role="list">
+            @if (filtered().length > 0) {
+              @for (concept of filtered(); track concept.id) {
                 <button
                   type="button"
-                  class="detail-back"
-                  (click)="closeConcept()"
+                  role="listitem"
+                  class="concept-row"
+                  (click)="selectConcept(concept.id)"
                 >
-                  <span class="material-icons">arrow_back</span>
-                  Volver a la lista
-                </button>
-
-                <!-- Encabezado del detalle -->
-                <div class="detail-head">
-                  <div class="detail-head__left">
-                    <div
-                      class="detail-head__icon"
-                      [style.background]="conceptBg(concept.category)"
-                      [style.color]="conceptFg(concept.category)"
-                    >
-                      <span class="material-icons">{{ conceptIcon(concept.category) }}</span>
-                    </div>
-                    <div>
-                      <h2 class="detail-head__title">{{ concept.title }}</h2>
-                      <span class="badge badge-primary">{{ categoryLabel(concept.category) }}</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    class="btn btn-secondary btn-sm detail-head__close"
-                    (click)="closeConcept()"
-                    aria-label="Cerrar detalle"
+                  <div
+                    class="concept-row__icon"
+                    [style.background]="conceptBg(concept.category)"
+                    [style.color]="conceptFg(concept.category)"
                   >
-                    <span class="material-icons">close</span>
-                  </button>
-                </div>
-
-                <!-- Cuerpo del detalle -->
-                <div class="detail-body">
-
-                  <!-- ¿Qué es? -->
-                  @if (concept.explanation) {
-                    <div class="content-section">
-                      <div class="content-section__label">¿Qué es?</div>
-                      <p class="content-section__text">{{ concept.explanation }}</p>
-                    </div>
-                  }
-
-                  <!-- ¿Cómo se forma? -->
-                  @if (concept.formationSteps.length > 0) {
-                    <div class="content-section">
-                      <div class="content-section__label">¿Cómo se forma?</div>
-                      <ol class="steps-list">
-                        @for (step of concept.formationSteps; track step; let i = $index) {
-                          <li class="steps-list__item">
-                            <div class="steps-list__number">{{ i + 1 }}</div>
-                            <div class="steps-list__text">{{ step }}</div>
-                          </li>
-                        }
-                      </ol>
-                    </div>
-                  }
-
-                  <!-- Puntos clave -->
-                  @if (concept.keyPoints.length > 0) {
-                    <div class="content-section">
-                      <div class="content-section__label">Puntos clave</div>
-                      <ul class="key-points">
-                        @for (point of concept.keyPoints; track point) {
-                          <li class="key-points__item">
-                            <span class="material-icons key-points__check">check_circle</span>
-                            <span>{{ point }}</span>
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  }
-
-                  <!-- Ejemplos -->
-                  @if (concept.examples.length > 0) {
-                    <div class="content-section">
-                      <div class="content-section__label">Ejemplos</div>
-                      <ul class="examples-text-list">
-                        @for (ex of concept.examples; track ex) {
-                          <li class="examples-text-list__item">
-                            <span class="material-icons examples-text-list__icon">science</span>
-                            <span>{{ ex }}</span>
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  }
-
-                  <!-- Actividad sugerida -->
-                  @if (concept.suggestedActivity) {
-                    <div class="content-section">
-                      <div class="content-section__label">Actividad sugerida</div>
-                      <p class="content-section__text">{{ concept.suggestedActivity }}</p>
-                    </div>
-                  }
-
-                  <!-- Materiales de apoyo -->
-                  @if (concept.materials.length > 0) {
-                    <div class="content-section">
-                      <div class="content-section__label">Materiales de apoyo</div>
-                      <div class="materials-grid">
-                        @for (m of concept.materials; track m.materialId) {
-                          <div class="material-card">
-                            <div class="material-card__head">
-                              <span class="material-icons material-card__icon">{{ materialIcon(m) }}</span>
-                              <span class="material-card__title">{{ materialLabel(m) }}</span>
-                            </div>
-
-                            @if (m.type === 'LINK') {
-                              <p class="material-card__hint">Recurso externo de apoyo.</p>
-                              <a class="btn btn-secondary btn-sm" [href]="m.url" target="_blank" rel="noopener noreferrer">
-                                <span class="material-icons">open_in_new</span> Abrir enlace
-                              </a>
-                            } @else if (m.previewAvailable) {
-                              <div class="material-card__actions">
-                                <button type="button" class="btn btn-primary btn-sm"
-                                  [disabled]="downloadingId() === m.materialId" (click)="previewFile(m)">
-                                  <span class="material-icons">visibility</span> Visualizar
-                                </button>
-                                <button type="button" class="btn btn-secondary btn-sm"
-                                  [disabled]="downloadingId() === m.materialId" (click)="downloadFile(m)">
-                                  <span class="material-icons">download</span> Descargar
-                                </button>
-                              </div>
-                            } @else {
-                              <p class="material-card__hint">
-                                Este material contiene diapositivas. Puedes descargarlo para revisarlo.
-                              </p>
-                              <button type="button" class="btn btn-secondary btn-sm"
-                                [disabled]="downloadingId() === m.materialId" (click)="downloadFile(m)">
-                                <span class="material-icons">download</span> Descargar
-                              </button>
-                            }
-                          </div>
-                        }
-                      </div>
-
-                      @if (previewLoading()) {
-                        <p class="material-card__hint">Cargando vista previa…</p>
-                      }
-                      @if (previewError()) {
-                        <p class="material-preview__error">{{ previewError() }}</p>
-                      }
-                      @if (previewSafeUrl(); as safeUrl) {
-                        <div class="material-preview">
-                          <div class="material-preview__bar">
-                            <span>Vista previa</span>
-                            <button type="button" class="btn btn-secondary btn-sm" (click)="closePreview()">
-                              <span class="material-icons">close</span> Cerrar
-                            </button>
-                          </div>
-                          <iframe class="material-preview__frame" [src]="safeUrl"
-                            title="Vista previa del material"></iframe>
-                        </div>
-                      }
-                    </div>
-                  }
-
-                  <!-- CTA a formación de compuestos -->
-                  @if (hasRelatedCompounds(concept.category)) {
-                    <div class="detail-cta">
-                      <div class="detail-cta__text">
-                        <span class="material-icons">biotech</span>
-                        <span>
-                          ¿Quieres practicar la formación de
-                          <strong>{{ concept.title }}</strong>?
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        class="btn btn-primary"
-                        (click)="goToCompounds()"
-                      >
-                        Ir a formación de compuestos
-                        <span class="material-icons">arrow_forward</span>
-                      </button>
-                    </div>
-                  }
-
-                </div>
-
-              } @else {
-                <!-- Placeholder cuando no hay selección -->
-                <div class="detail-placeholder">
-                  <div class="detail-placeholder__icon">
-                    <span class="material-icons">menu_book</span>
+                    <span class="material-icons">{{ conceptIcon(concept.category) }}</span>
                   </div>
-                  <p class="detail-placeholder__title">Selecciona un contenido para revisarlo.</p>
-                  <p class="detail-placeholder__desc">
-                    Elige un tema de la lista para ver su explicación completa, pasos de formación y ejemplos.
-                  </p>
-                </div>
+                  <div class="concept-row__body">
+                    <div class="concept-row__title">{{ concept.title }}</div>
+                    <div class="concept-row__desc">{{ concept.summary }}</div>
+                    <div class="concept-row__chips">
+                      @if (materialCount(concept) > 0) {
+                        <span class="concept-row__chip concept-row__chip--material">
+                          <span class="material-icons">attach_file</span>
+                          {{ materialCount(concept) }} material(es)
+                        </span>
+                      }
+                      @for (ex of concept.examples.slice(0, 2); track ex) {
+                        <span class="concept-row__chip">{{ truncate(ex, 24) }}</span>
+                      }
+                    </div>
+                  </div>
+                  <span class="material-icons concept-row__arrow">chevron_right</span>
+                </button>
               }
-            </div>
-
+            } @else {
+              <div class="list-empty">
+                <div class="list-empty__icon">
+                  <span class="material-icons">search_off</span>
+                </div>
+                <p class="list-empty__title">No se encontraron contenidos relacionados.</p>
+                <p class="list-empty__desc">
+                  Intenta con otra palabra clave o categoría.
+                </p>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  (click)="resetFilters()"
+                >
+                  Ver todos
+                </button>
+              </div>
+            }
           </div>
         }
       </main>
     </div>
+
+    <!-- ════════ MODAL: vista amplia del PDF ════════ -->
+    @if (previewFullscreen()) {
+      @if (previewSafeUrl(); as safeUrl) {
+        <div class="pdf-modal" (click)="closeFullscreen()">
+          <div class="pdf-modal__panel" (click)="$event.stopPropagation()">
+            <div class="pdf-modal__bar">
+              <span class="pdf-modal__name">
+                <span class="material-icons">picture_as_pdf</span>
+                {{ previewMaterial()?.originalFileName || 'Vista previa' }}
+              </span>
+              <div class="pdf-modal__tools">
+                @if (previewMaterial(); as pm) {
+                  <button type="button" class="btn btn-secondary btn-sm" (click)="downloadFile(pm)">
+                    <span class="material-icons">download</span> Descargar
+                  </button>
+                }
+                <button type="button" class="btn btn-secondary btn-sm" (click)="closeFullscreen()">
+                  <span class="material-icons">close</span> Cerrar
+                </button>
+              </div>
+            </div>
+            <iframe class="pdf-modal__frame" [src]="safeUrl" title="Vista amplia del material"></iframe>
+          </div>
+        </div>
+      }
+    }
   `,
 })
 export class ConceptsComponent implements OnInit, OnDestroy {
@@ -453,6 +500,8 @@ export class ConceptsComponent implements OnInit, OnDestroy {
 
   // Vista previa de materiales (PDF/imágenes) y estado de descarga.
   readonly previewSafeUrl = signal<SafeResourceUrl | null>(null);
+  readonly previewMaterial = signal<ConceptMaterialResponse | null>(null);
+  readonly previewFullscreen = signal(false);
   readonly previewLoading = signal(false);
   readonly previewError = signal<string | null>(null);
   readonly downloadingId = signal<number | null>(null);
@@ -494,8 +543,16 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   readonly selectedConcept = computed<StudentConceptContentResponse | null>(() => {
     const id = this.selectedId();
     if (id === null) return null;
-    return this.filtered().find((c) => c.id === id) ?? null;
+    return this.concepts().find((c) => c.id === id) ?? null;
   });
+
+  // Materiales separados por tipo para la vista de detalle.
+  readonly fileMaterials = computed<ConceptMaterialResponse[]>(
+    () => this.selectedConcept()?.materials.filter((m) => m.type === 'FILE') ?? []
+  );
+  readonly linkMaterials = computed<ConceptMaterialResponse[]>(
+    () => this.selectedConcept()?.materials.filter((m) => m.type === 'LINK') ?? []
+  );
 
   private readonly currentUser = computed(() => this.authService.currentUser());
   readonly userName = computed<string>(() => this.currentUser()?.username ?? 'Usuario');
@@ -526,8 +583,6 @@ export class ConceptsComponent implements OnInit, OnDestroy {
 
   onSearch(event: Event): void {
     this.query.set((event.target as HTMLInputElement).value);
-    this.selectedId.set(null);
-    this.clearPreview();
   }
 
   clearSearch(): void {
@@ -536,14 +591,12 @@ export class ConceptsComponent implements OnInit, OnDestroy {
 
   setCategory(cat: ConceptCategory | null): void {
     this.activeCategory.set(cat);
-    this.selectedId.set(null);
-    this.clearPreview();
   }
 
   selectConcept(id: number): void {
     this.clearPreview();
     this.selectedId.set(id);
-    const concept = this.filtered().find((c) => c.id === id);
+    const concept = this.concepts().find((c) => c.id === id);
     if (concept) {
       this.usageMetrics.trackContentView(concept.id, concept.category);
     }
@@ -557,8 +610,6 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   resetFilters(): void {
     this.query.set('');
     this.activeCategory.set(null);
-    this.selectedId.set(null);
-    this.clearPreview();
   }
 
   // ===========================================================================
@@ -581,6 +632,7 @@ export class ConceptsComponent implements OnInit, OnDestroy {
         const url = URL.createObjectURL(blob);
         this.currentObjectUrl = url;
         this.previewSafeUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+        this.previewMaterial.set(material);
       },
       error: () => {
         this.downloadingId.set(null);
@@ -610,6 +662,17 @@ export class ConceptsComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Abre el visor del PDF a pantalla completa dentro del sistema. */
+  openFullscreen(): void {
+    if (this.previewSafeUrl() !== null) {
+      this.previewFullscreen.set(true);
+    }
+  }
+
+  closeFullscreen(): void {
+    this.previewFullscreen.set(false);
+  }
+
   closePreview(): void {
     this.clearPreview();
   }
@@ -620,6 +683,8 @@ export class ConceptsComponent implements OnInit, OnDestroy {
       this.currentObjectUrl = null;
     }
     this.previewSafeUrl.set(null);
+    this.previewMaterial.set(null);
+    this.previewFullscreen.set(false);
     this.previewLoading.set(false);
     this.previewError.set(null);
     this.downloadingId.set(null);
@@ -634,6 +699,10 @@ export class ConceptsComponent implements OnInit, OnDestroy {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  }
+
+  materialCount(concept: StudentConceptContentResponse): number {
+    return concept.materials.length;
   }
 
   materialIcon(material: ConceptMaterialResponse): string {
@@ -657,6 +726,16 @@ export class ConceptsComponent implements OnInit, OnDestroy {
       material.url ||
       'Material de apoyo'
     );
+  }
+
+  formatSize(bytes: number): string {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   ngOnDestroy(): void {
