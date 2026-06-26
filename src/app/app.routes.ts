@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, temporaryPasswordGuard, roleGuard } from './core/guards';
+import { authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard } from './core/guards';
 import { LoginComponent } from './features/auth/login/login.component';
 import { ChangePasswordComponent } from './features/auth/change-password/change-password.component';
 import { AccessDeniedComponent } from './features/auth/access-denied/access-denied.component';
@@ -48,7 +48,7 @@ export const routes: Routes = [
   {
     path: 'student-dashboard',
     component: StudentDashboardComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -144,19 +144,19 @@ export const routes: Routes = [
   {
     path: 'periodic-table',
     component: PeriodicTableComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
   },
   {
     path: 'compounds',
     component: CompoundsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
   },
   {
     path: 'concepts',
     component: ConceptsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -168,7 +168,7 @@ export const routes: Routes = [
   {
     path: 'evaluations/results',
     component: StudentResultsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
 

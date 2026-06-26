@@ -331,6 +331,14 @@ interface EvaluationLike {
                   </label>
 
                   <label class="config-toggle">
+                    <input type="checkbox" formControlName="allowPeriodicTable" />
+                    <span class="config-toggle__text">
+                      <span class="config-toggle__title">Permitir tabla periódica</span>
+                      <span class="config-toggle__desc">El estudiante podrá consultar la tabla periódica durante el intento.</span>
+                    </span>
+                  </label>
+
+                  <label class="config-toggle">
                     <input type="checkbox" formControlName="trackTabExit" />
                     <span class="config-toggle__text">
                       <span class="config-toggle__title">Detectar salida de pestaña</span>
@@ -423,6 +431,10 @@ interface EvaluationLike {
               <div class="detail__fact">
                 <span class="detail__fact-label">Calculadora química</span>
                 <span class="detail__fact-value">{{ d.allowChemicalCalculator ? 'Permitida' : 'Bloqueada' }}</span>
+              </div>
+              <div class="detail__fact">
+                <span class="detail__fact-label">Tabla periódica</span>
+                <span class="detail__fact-value">{{ d.allowPeriodicTable ? 'Permitida' : 'Bloqueada' }}</span>
               </div>
               <div class="detail__fact">
                 <span class="detail__fact-label">Salida de pestaña</span>
@@ -897,6 +909,7 @@ export class TeacherEvaluationsComponent {
     maxAttempts: [1, [Validators.required, Validators.min(1), Validators.max(10)]],
     timeLimitMinutes: [null as number | null, [Validators.min(1), Validators.max(240)]],
     allowChemicalCalculator: [false],
+    allowPeriodicTable: [false],
     trackTabExit: [false],
     questionDisplayMode: ['ALL_AT_ONCE' as QuestionDisplayMode],
     randomizeQuestions: [false],
@@ -1018,6 +1031,7 @@ export class TeacherEvaluationsComponent {
       maxAttempts: 1,
       timeLimitMinutes: null,
       allowChemicalCalculator: false,
+      allowPeriodicTable: false,
       trackTabExit: false,
       questionDisplayMode: 'ALL_AT_ONCE',
       randomizeQuestions: false,
@@ -1038,6 +1052,7 @@ export class TeacherEvaluationsComponent {
       maxAttempts: evaluation.maxAttempts,
       timeLimitMinutes: evaluation.timeLimitMinutes ?? null,
       allowChemicalCalculator: evaluation.allowChemicalCalculator ?? false,
+      allowPeriodicTable: evaluation.allowPeriodicTable ?? false,
       trackTabExit: evaluation.trackTabExit ?? false,
       questionDisplayMode: evaluation.questionDisplayMode ?? 'ALL_AT_ONCE',
       randomizeQuestions: evaluation.randomizeQuestions ?? false,
@@ -1069,6 +1084,7 @@ export class TeacherEvaluationsComponent {
       maxAttempts: Number(raw.maxAttempts),
       timeLimitMinutes: toPositiveOrNull(raw.timeLimitMinutes),
       allowChemicalCalculator: raw.allowChemicalCalculator === true,
+      allowPeriodicTable: raw.allowPeriodicTable === true,
       trackTabExit: raw.trackTabExit === true,
       questionDisplayMode: (raw.questionDisplayMode as QuestionDisplayMode) ?? 'ALL_AT_ONCE',
       randomizeQuestions: raw.randomizeQuestions === true,

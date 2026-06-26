@@ -20,7 +20,8 @@ export type AttemptEventType =
   | 'TAB_HIDDEN'
   | 'TAB_VISIBLE'
   | 'WINDOW_BLUR'
-  | 'WINDOW_FOCUS';
+  | 'WINDOW_FOCUS'
+  | 'NAVIGATION_BLOCKED';
 
 // ─── Responses ──────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ export interface StudentEvaluationResponse {
   readonly timeLimitMinutes: number | null;
   readonly maxAttempts: number;
   readonly allowChemicalCalculator: boolean;
+  readonly allowPeriodicTable: boolean;
   readonly trackTabExit: boolean;
   readonly questionDisplayMode: QuestionDisplayMode;
   readonly randomizeQuestions: boolean;
@@ -72,6 +74,7 @@ export interface StudentEvaluationDetailResponse {
   readonly topic: string | null;
   readonly timeLimitMinutes: number | null;
   readonly allowChemicalCalculator: boolean;
+  readonly allowPeriodicTable: boolean;
   readonly trackTabExit: boolean;
   readonly questionDisplayMode: QuestionDisplayMode;
   readonly randomizeQuestions: boolean;

@@ -28,6 +28,7 @@ export interface CreateEvaluationRequest {
   readonly timeLimitMinutes?: number | null;
   /** Configuración avanzada del intento. */
   readonly allowChemicalCalculator?: boolean;
+  readonly allowPeriodicTable?: boolean;
   readonly trackTabExit?: boolean;
   readonly questionDisplayMode?: QuestionDisplayMode;
   readonly randomizeQuestions?: boolean;
@@ -108,6 +109,7 @@ export interface EvaluationResponse {
   readonly maxAttempts: number;
   readonly timeLimitMinutes: number | null;
   readonly allowChemicalCalculator: boolean;
+  readonly allowPeriodicTable: boolean;
   readonly trackTabExit: boolean;
   readonly questionDisplayMode: QuestionDisplayMode;
   readonly randomizeQuestions: boolean;
@@ -129,6 +131,7 @@ export interface EvaluationDetailResponse {
   readonly maxAttempts: number;
   readonly timeLimitMinutes: number | null;
   readonly allowChemicalCalculator: boolean;
+  readonly allowPeriodicTable: boolean;
   readonly trackTabExit: boolean;
   readonly questionDisplayMode: QuestionDisplayMode;
   readonly randomizeQuestions: boolean;
