@@ -9,7 +9,6 @@ import {
 } from '../../../shared/components/sidebar/sidebar.component';
 import { STUDENT_NAV_ITEMS } from '../../../shared/components/sidebar/student-nav';
 import {
-  AttemptStatus,
   StudentAttemptResultDetailResponse,
   StudentResultSummaryResponse,
 } from '../../../shared/models';
@@ -92,12 +91,12 @@ const APPROVAL_PERCENTAGE = 60;
                   </div>
 
                   <div class="result-card__score">
-                    @if (isPending(r.status)) {
+                    @if (!r.gradeClosed) {
                       <span class="badge badge-warning">
                         <span class="material-icons">hourglass_top</span> Pendiente de revisión
                       </span>
                     } @else {
-                      <span class="result-card__points">{{ r.score ?? 0 }} / {{ r.maxScore ?? 0 }}</span>
+                      <span class="result-card__points">{{ formatGrade(r.finalScore) }} / 20</span>
                       <span class="badge" [class]="pctBadge(r.percentage)">{{ formatPct(r.percentage) }}</span>
                     }
                   </div>
@@ -138,44 +137,50 @@ const APPROVAL_PERCENTAGE = 60;
               }
             </header>
 
-            @if (isPending(d.status)) {
+            @if (!d.gradeClosed) {
               <div class="alert alert-info feedback-locked">
                 <span class="material-icons">hourglass_top</span>
-                Tu evaluación fue enviada y está pendiente de calificación manual por el
-                docente. La nota mostrada es parcial y aún no es definitiva.
+                Tu evaluación fue enviada y está pendiente de calificación por el docente.
+                Cuando cierre la calificación verás aquí tu nota final y su retroalimentación.
               </div>
-            }
+            } @else {
+              <div class="score-panel">
+                <div class="score-panel__big">
+                  <span class="score-panel__points">{{ formatGrade(d.finalScore) }}</span>
+                  <span class="score-panel__max">/ 20</span>
+                </div>
+                <div class="score-panel__bar">
+                  <div class="score-panel__bar-fill" [style.width.%]="d.percentage ?? 0"></div>
+                </div>
+                <div class="score-panel__facts">
+                  <div class="fact">
+                    <span class="fact__label">Puntaje</span>
+                    <span class="fact__value">{{ d.score ?? 0 }} / {{ d.maxScore ?? 0 }}</span>
+                  </div>
+                  <div class="fact">
+                    <span class="fact__label">Porcentaje</span>
+                    <span class="badge" [class]="pctBadge(d.percentage)">{{ formatPct(d.percentage) }}</span>
+                  </div>
+                  <div class="fact">
+                    <span class="fact__label">Intento</span>
+                    <span class="fact__value">N.° {{ d.attemptNumber }}</span>
+                  </div>
+                  <div class="fact">
+                    <span class="fact__label">Enviado</span>
+                    <span class="fact__value">{{ d.submittedAt ? formatDate(d.submittedAt) : '—' }}</span>
+                  </div>
+                </div>
+              </div>
 
-            <div class="score-panel">
-              <div class="score-panel__big">
-                <span class="score-panel__points">{{ d.score ?? 0 }}</span>
-                <span class="score-panel__max">/ {{ d.maxScore ?? 0 }}</span>
-              </div>
-              <div class="score-panel__bar">
-                <div class="score-panel__bar-fill" [style.width.%]="d.percentage ?? 0"></div>
-              </div>
-              <div class="score-panel__facts">
-                <div class="fact">
-                  <span class="fact__label">Porcentaje</span>
-                  <span class="badge" [class]="pctBadge(d.percentage)">{{ formatPct(d.percentage) }}</span>
+              @if (d.overallFeedback) {
+                <div class="alert alert-info">
+                  <span class="material-icons">forum</span>
+                  <span><strong>Retroalimentación del docente:</strong> {{ d.overallFeedback }}</span>
                 </div>
-                <div class="fact">
-                  <span class="fact__label">Intento</span>
-                  <span class="fact__value">N.° {{ d.attemptNumber }}</span>
-                </div>
-                <div class="fact">
-                  <span class="fact__label">Estado</span>
-                  <span class="fact__value">{{ statusLabel(d.status) }}</span>
-                </div>
-                <div class="fact">
-                  <span class="fact__label">Enviado</span>
-                  <span class="fact__value">{{ d.submittedAt ? formatDate(d.submittedAt) : '—' }}</span>
-                </div>
-              </div>
-            </div>
+              }
 
-            <h2 class="section-title">Detalle de respuestas</h2>
-            <div class="answers">
+              <h2 class="section-title">Detalle de respuestas</h2>
+              <div class="answers">
               @for (a of d.answers; track a.questionId; let i = $index) {
                 @if (a.questionType === 'OPEN_TEXT') {
                   <!-- Pregunta abierta: el estudiante ve su texto y, una vez revisada,
@@ -235,13 +240,14 @@ const APPROVAL_PERCENTAGE = 60;
                   </div>
                 }
               }
-            </div>
-            @if (!d.canViewDetailedFeedback && hasClosedAnswers(d)) {
-              <div class="alert alert-info feedback-locked">
-                <span class="material-icons">lock</span>
-                El detalle de las preguntas de opción múltiple estará disponible cuando
-                finalicen los intentos permitidos.
               </div>
+              @if (!d.canViewDetailedFeedback && hasClosedAnswers(d)) {
+                <div class="alert alert-info feedback-locked">
+                  <span class="material-icons">lock</span>
+                  El detalle de las preguntas de opción múltiple estará disponible cuando
+                  finalicen los intentos permitidos.
+                </div>
+              }
             }
           }
         }
@@ -343,22 +349,9 @@ export class StudentResultsComponent implements OnInit {
     return 'badge-danger';
   }
 
-  statusLabel(status: AttemptStatus): string {
-    switch (status) {
-      case 'GRADED':
-        return 'Calificado';
-      case 'PENDING_MANUAL_REVIEW':
-        return 'Pendiente de revisión';
-      case 'SUBMITTED':
-        return 'Enviado';
-      default:
-        return 'En progreso';
-    }
-  }
-
-  /** Indica si el intento espera la revisión manual del docente. */
-  isPending(status: AttemptStatus): boolean {
-    return status === 'PENDING_MANUAL_REVIEW';
+  /** Nota en escala 0–20 con un decimal; '—' si no hay valor. */
+  formatGrade(value: number | null): string {
+    return value === null || value === undefined ? '—' : value.toFixed(1);
   }
 
   /** Indica si el detalle tiene preguntas de un tipo dado. */

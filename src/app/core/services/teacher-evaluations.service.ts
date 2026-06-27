@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import {
   AssignEvaluationRequest,
   AttemptTraceabilityResponse,
+  CreateAdjustmentRequest,
   CreateEvaluationRequest,
   CreateQuestionRequest,
   EvaluationAssignmentResponse,
@@ -17,6 +18,7 @@ import {
   TeacherAttemptReviewResponse,
   TeacherEvaluationResultsResponse,
   TeacherEvaluationResultsSummaryResponse,
+  UpdateAttemptFeedbackRequest,
   UpdateEvaluationRequest,
   UpdateQuestionRequest,
 } from '../../shared/models';
@@ -191,10 +193,52 @@ export class TeacherEvaluationsService {
     );
   }
 
-  /** Cierra la revisión de un intento y recalcula su nota final. */
+  /** Marca la revisión como completa y recalcula la nota (no cierra la calificación). */
   completeReview(attemptId: number): Observable<TeacherAttemptReviewResponse> {
     return this.http.patch<TeacherAttemptReviewResponse>(
       `${this.baseUrl}/attempts/${attemptId}/complete-review`,
+      {}
+    );
+  }
+
+  // ─── Ajustes manuales, retroalimentación general y cierre ───────────────────
+
+  /** Agrega un ajuste manual de puntaje (bonificación/penalización) al intento. */
+  addAdjustment(
+    attemptId: number,
+    request: CreateAdjustmentRequest
+  ): Observable<TeacherAttemptReviewResponse> {
+    return this.http.post<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/adjustments`,
+      request
+    );
+  }
+
+  /** Anula un ajuste manual de puntaje aplicado al intento. */
+  removeAdjustment(
+    attemptId: number,
+    adjustmentId: number
+  ): Observable<TeacherAttemptReviewResponse> {
+    return this.http.delete<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/adjustments/${adjustmentId}`
+    );
+  }
+
+  /** Guarda la retroalimentación general del intento para el estudiante. */
+  updateOverallFeedback(
+    attemptId: number,
+    request: UpdateAttemptFeedbackRequest
+  ): Observable<TeacherAttemptReviewResponse> {
+    return this.http.patch<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/feedback`,
+      request
+    );
+  }
+
+  /** Cierra la calificación del intento: fija la nota final y la deja visible al estudiante. */
+  closeGrade(attemptId: number): Observable<TeacherAttemptReviewResponse> {
+    return this.http.patch<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/close-grade`,
       {}
     );
   }

@@ -166,6 +166,7 @@ const APPROVAL_PERCENTAGE = 60;
                       <th>Intento</th>
                       <th>Puntaje</th>
                       <th>%</th>
+                      <th>Nota final</th>
                       <th>Estado</th>
                       <th>Salidas</th>
                       <th>Enviado</th>
@@ -189,7 +190,20 @@ const APPROVAL_PERCENTAGE = 60;
                             {{ formatPct(r.percentage) }}
                           </span>
                         </td>
-                        <td><span class="badge" [class]="statusBadge(r.status)">{{ statusLabel(r.status) }}</span></td>
+                        <td class="text-mono">
+                          @if (r.gradeClosed) {
+                            {{ formatGrade(r.finalScore) }} / 20
+                          } @else {
+                            <span class="text-muted">—</span>
+                          }
+                        </td>
+                        <td>
+                          @if (r.gradeClosed) {
+                            <span class="badge badge-success">Cerrada</span>
+                          } @else {
+                            <span class="badge" [class]="statusBadge(r.status)">{{ statusLabel(r.status) }}</span>
+                          }
+                        </td>
                         <td>
                           @if (r.tabExitCount > 0) {
                             <span class="badge badge-warning" title="Salidas de pestaña detectadas">
@@ -206,6 +220,10 @@ const APPROVAL_PERCENTAGE = 60;
                             @if (r.status === 'PENDING_MANUAL_REVIEW') {
                               <button type="button" class="btn btn-primary btn-sm" (click)="openReview(r)">
                                 Revisar
+                              </button>
+                            } @else if (r.status === 'GRADED' && !r.gradeClosed) {
+                              <button type="button" class="btn btn-primary btn-sm" (click)="openReview(r)">
+                                Ajustar / cerrar
                               </button>
                             }
                             <button type="button" class="btn btn-secondary btn-sm" (click)="openDetail(r)">
@@ -424,10 +442,27 @@ const APPROVAL_PERCENTAGE = 60;
                   </span>
                 </div>
                 <div class="detail-head__score">
-                  <span class="badge" [class]="statusBadge(rv.status)">{{ statusLabel(rv.status) }}</span>
-                  <span class="detail-head__points">{{ rv.score ?? 0 }} / {{ rv.maxScore ?? 0 }}</span>
+                  <span class="badge" [class]="rv.gradeClosed ? 'badge-success' : statusBadge(rv.status)">
+                    {{ rv.gradeClosed ? 'Calificación cerrada' : statusLabel(rv.status) }}
+                  </span>
+                  <span class="detail-head__points">{{ rv.score ?? 0 }} / {{ rv.maxScore ?? 0 }} pts</span>
                 </div>
               </div>
+
+              <!-- Resumen de nota: base 0–20, ajustes y nota final -->
+              <div class="grade-summary">
+                <span class="chip"><span class="chip__k">Nota base</span><span class="chip__v">{{ formatGrade(rv.baseScore) }}</span></span>
+                <span class="chip"><span class="chip__k">Ajustes</span><span class="chip__v">{{ formatSigned(rv.adjustmentsTotal) }}</span></span>
+                <span class="chip chip--final"><span class="chip__k">Nota final</span><span class="chip__v">{{ formatGrade(rv.finalScore) }} / 20</span></span>
+              </div>
+
+              @if (rv.gradeClosed) {
+                <div class="alert alert-success">
+                  <span class="material-icons">lock</span>
+                  Calificación cerrada{{ rv.gradeClosedAt ? ' el ' + formatDate(rv.gradeClosedAt) : '' }}.
+                  La nota final y la retroalimentación ya son visibles para el estudiante.
+                </div>
+              }
 
               @if (reviewMessage()) {
                 <div class="alert alert-success">
@@ -466,37 +501,41 @@ const APPROVAL_PERCENTAGE = 60;
                     }
 
                     @if (a.answerId !== null) {
-                      <div class="grade-row">
-                        <label class="form-label">
-                          Puntaje (0 – {{ a.maxPoints }})
-                          <input
-                            type="number"
-                            class="input grade-row__score"
-                            min="0"
-                            [max]="a.maxPoints"
-                            [value]="scoreFor(a.answerId)"
-                            (input)="setScore(a.answerId, $any($event.target).value)"
-                          />
-                        </label>
-                        <label class="form-label form-label--full">
-                          Retroalimentación (opcional)
-                          <textarea
-                            class="textarea"
-                            rows="2"
-                            maxlength="2000"
-                            [value]="feedbackFor(a.answerId)"
-                            (input)="setFeedback(a.answerId, $any($event.target).value)"
-                          ></textarea>
-                        </label>
-                        <button
-                          type="button"
-                          class="btn btn-primary btn-sm"
-                          [disabled]="savingAnswerId() === a.answerId"
-                          (click)="gradeAnswer(a)"
-                        >
-                          {{ savingAnswerId() === a.answerId ? 'Guardando…' : 'Guardar puntaje' }}
-                        </button>
-                      </div>
+                      @if (rv.gradeClosed) {
+                        <p class="answer__points">Puntaje asignado: {{ a.awardedScore ?? 0 }} / {{ a.maxPoints }}</p>
+                      } @else {
+                        <div class="grade-row">
+                          <label class="form-label">
+                            Puntaje (0 – {{ a.maxPoints }})
+                            <input
+                              type="number"
+                              class="input grade-row__score"
+                              min="0"
+                              [max]="a.maxPoints"
+                              [value]="scoreFor(a.answerId)"
+                              (input)="setScore(a.answerId, $any($event.target).value)"
+                            />
+                          </label>
+                          <label class="form-label form-label--full">
+                            Retroalimentación (opcional)
+                            <textarea
+                              class="textarea"
+                              rows="2"
+                              maxlength="2000"
+                              [value]="feedbackFor(a.answerId)"
+                              (input)="setFeedback(a.answerId, $any($event.target).value)"
+                            ></textarea>
+                          </label>
+                          <button
+                            type="button"
+                            class="btn btn-primary btn-sm"
+                            [disabled]="savingAnswerId() === a.answerId"
+                            (click)="gradeAnswer(a)"
+                          >
+                            {{ savingAnswerId() === a.answerId ? 'Guardando…' : 'Guardar puntaje' }}
+                          </button>
+                        </div>
+                      }
                     } @else {
                       <p class="text-muted">El estudiante no dejó respuesta; igual debes asignarle un puntaje.</p>
                     }
@@ -504,19 +543,121 @@ const APPROVAL_PERCENTAGE = 60;
                 }
               </div>
 
+              <!-- Ajustes manuales de puntaje -->
+              <section class="adjust">
+                <h3 class="adjust__title">
+                  <span class="material-icons">tune</span> Ajustes de puntaje
+                </h3>
+
+                @if (rv.adjustments.length > 0) {
+                  <ul class="adjust__list">
+                    @for (adj of rv.adjustments; track adj.id) {
+                      <li class="adjust__item">
+                        <span class="badge" [class]="adj.type === 'BONUS' ? 'badge-success' : 'badge-warning'">
+                          {{ formatSigned(adj.amount) }}
+                        </span>
+                        <span class="adjust__reason">{{ adj.reason }}</span>
+                        <span class="adjust__meta">
+                          {{ adj.createdByName || '—' }}{{ adj.createdAt ? ' · ' + formatDate(adj.createdAt) : '' }}
+                        </span>
+                        @if (!rv.gradeClosed) {
+                          <button
+                            type="button"
+                            class="btn btn-icon btn-sm"
+                            title="Anular ajuste"
+                            [disabled]="removingAdjustmentId() === adj.id"
+                            (click)="removeAdjustment(adj.id)"
+                          >
+                            <span class="material-icons">delete_outline</span>
+                          </button>
+                        }
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="text-muted">No hay ajustes aplicados.</p>
+                }
+
+                @if (!rv.gradeClosed) {
+                  <div class="grade-row">
+                    <label class="form-label">
+                      Monto (+/-)
+                      <input
+                        type="number"
+                        class="input grade-row__score"
+                        step="0.5"
+                        [value]="adjustmentAmount()"
+                        (input)="adjustmentAmount.set($any($event.target).value)"
+                      />
+                    </label>
+                    <label class="form-label form-label--full">
+                      Motivo (obligatorio)
+                      <input
+                        type="text"
+                        class="input"
+                        maxlength="500"
+                        [value]="adjustmentReason()"
+                        (input)="adjustmentReason.set($any($event.target).value)"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-sm"
+                      [disabled]="addingAdjustment()"
+                      (click)="addAdjustment()"
+                    >
+                      {{ addingAdjustment() ? 'Agregando…' : 'Agregar ajuste' }}
+                    </button>
+                  </div>
+                }
+              </section>
+
+              <!-- Retroalimentación general -->
+              <section class="adjust">
+                <h3 class="adjust__title">
+                  <span class="material-icons">forum</span> Retroalimentación general
+                </h3>
+                @if (rv.gradeClosed) {
+                  <p class="answer__value" [class.answer__value--muted]="!rv.overallFeedback">
+                    {{ rv.overallFeedback || 'Sin retroalimentación general.' }}
+                  </p>
+                } @else {
+                  <textarea
+                    class="textarea"
+                    rows="3"
+                    maxlength="1500"
+                    placeholder="Comentario general para el estudiante (visible al cerrar la calificación)."
+                    [value]="overallFeedbackDraft()"
+                    (input)="overallFeedbackDraft.set($any($event.target).value)"
+                  ></textarea>
+                  <div class="modal__actions">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      [disabled]="savingFeedback()"
+                      (click)="saveOverallFeedback()"
+                    >
+                      {{ savingFeedback() ? 'Guardando…' : 'Guardar retroalimentación' }}
+                    </button>
+                  </div>
+                }
+              </section>
+
               <div class="modal__actions">
                 <button type="button" class="btn btn-secondary" (click)="closeReview()">Cerrar</button>
-                <button
-                  type="button"
-                  class="btn btn-primary"
-                  [disabled]="rv.pendingOpenCount > 0 || completing()"
-                  (click)="completeReview()"
-                >
-                  {{ completing() ? 'Finalizando…' : 'Finalizar revisión' }}
-                </button>
+                @if (!rv.gradeClosed) {
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    [disabled]="rv.pendingOpenCount > 0 || closingGrade()"
+                    (click)="closeGrade()"
+                  >
+                    {{ closingGrade() ? 'Cerrando…' : 'Cerrar calificación' }}
+                  </button>
+                }
               </div>
-              @if (rv.pendingOpenCount > 0) {
-                <p class="text-muted">Faltan {{ rv.pendingOpenCount }} respuestas por calificar para finalizar.</p>
+              @if (!rv.gradeClosed && rv.pendingOpenCount > 0) {
+                <p class="text-muted">Faltan {{ rv.pendingOpenCount }} respuestas por calificar para poder cerrar.</p>
               }
             }
           </div>
@@ -571,13 +712,21 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   readonly reviewError = signal(false);
   readonly review = signal<TeacherAttemptReviewResponse | null>(null);
   readonly savingAnswerId = signal<number | null>(null);
-  readonly completing = signal(false);
   readonly reviewMessage = signal<string | null>(null);
   readonly reviewSaveError = signal<string | null>(null);
   private reviewAttemptId: number | null = null;
   // Borradores de puntaje y retroalimentación por respuesta (answerId → valor).
   private readonly scoreDrafts = signal<Record<number, string>>({});
   private readonly feedbackDrafts = signal<Record<number, string>>({});
+
+  // Ajustes manuales, retroalimentación general y cierre de calificación.
+  readonly adjustmentAmount = signal('');
+  readonly adjustmentReason = signal('');
+  readonly addingAdjustment = signal(false);
+  readonly removingAdjustmentId = signal<number | null>(null);
+  readonly overallFeedbackDraft = signal('');
+  readonly savingFeedback = signal(false);
+  readonly closingGrade = signal(false);
 
   readonly userName = computed<string>(() => this.auth.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
@@ -749,6 +898,7 @@ export class TeacherEvaluationResultsComponent implements OnInit {
     }
     this.scoreDrafts.set(scores);
     this.feedbackDrafts.set(feedback);
+    this.overallFeedbackDraft.set(rv.overallFeedback ?? '');
   }
 
   scoreFor(answerId: number): string {
@@ -798,21 +948,101 @@ export class TeacherEvaluationResultsComponent implements OnInit {
       });
   }
 
-  completeReview(): void {
+  addAdjustment(): void {
     if (this.reviewAttemptId === null) return;
+    const amount = Number(this.adjustmentAmount());
+    if (this.adjustmentAmount().trim() === '' || Number.isNaN(amount) || amount === 0) {
+      this.reviewSaveError.set('El monto del ajuste debe ser un número distinto de cero.');
+      return;
+    }
+    const reason = this.adjustmentReason().trim();
+    if (!reason) {
+      this.reviewSaveError.set('El motivo del ajuste es obligatorio.');
+      return;
+    }
+
     this.reviewSaveError.set(null);
-    this.completing.set(true);
-    this.service.completeReview(this.reviewAttemptId).subscribe({
+    this.reviewMessage.set(null);
+    this.addingAdjustment.set(true);
+    this.service.addAdjustment(this.reviewAttemptId, { amount, reason }).subscribe({
       next: (rv) => {
         this.review.set(rv);
         this.hydrateDrafts(rv);
-        this.completing.set(false);
-        this.reviewMessage.set('Revisión finalizada. La nota final ya está disponible.');
+        this.adjustmentAmount.set('');
+        this.adjustmentReason.set('');
+        this.addingAdjustment.set(false);
+        this.reviewMessage.set('Ajuste agregado.');
         this.load();
       },
       error: (err: unknown) => {
-        this.completing.set(false);
-        this.reviewSaveError.set(this.extractError(err, 'No se pudo finalizar la revisión.'));
+        this.addingAdjustment.set(false);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo agregar el ajuste.'));
+      },
+    });
+  }
+
+  removeAdjustment(adjustmentId: number): void {
+    if (this.reviewAttemptId === null) return;
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.removingAdjustmentId.set(adjustmentId);
+    this.service.removeAdjustment(this.reviewAttemptId, adjustmentId).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.removingAdjustmentId.set(null);
+        this.reviewMessage.set('Ajuste anulado.');
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.removingAdjustmentId.set(null);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo anular el ajuste.'));
+      },
+    });
+  }
+
+  saveOverallFeedback(): void {
+    if (this.reviewAttemptId === null) return;
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.savingFeedback.set(true);
+    const overallFeedback = this.overallFeedbackDraft().trim() || null;
+    this.service.updateOverallFeedback(this.reviewAttemptId, { overallFeedback }).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.savingFeedback.set(false);
+        this.reviewMessage.set('Retroalimentación guardada.');
+      },
+      error: (err: unknown) => {
+        this.savingFeedback.set(false);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo guardar la retroalimentación.'));
+      },
+    });
+  }
+
+  closeGrade(): void {
+    if (this.reviewAttemptId === null) return;
+    const confirmed = confirm(
+      'Al cerrar la calificación, la nota final y la retroalimentación quedarán visibles para ' +
+        'el estudiante y no podrás editar puntajes ni ajustes. ¿Deseas continuar?'
+    );
+    if (!confirmed) return;
+
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.closingGrade.set(true);
+    this.service.closeGrade(this.reviewAttemptId).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.closingGrade.set(false);
+        this.reviewMessage.set('Calificación cerrada. La nota final ya es visible para el estudiante.');
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.closingGrade.set(false);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo cerrar la calificación.'));
       },
     });
   }
@@ -823,6 +1053,9 @@ export class TeacherEvaluationResultsComponent implements OnInit {
     this.reviewAttemptId = null;
     this.reviewMessage.set(null);
     this.reviewSaveError.set(null);
+    this.adjustmentAmount.set('');
+    this.adjustmentReason.set('');
+    this.overallFeedbackDraft.set('');
   }
 
   private extractError(err: unknown, fallback: string): string {
@@ -882,6 +1115,17 @@ export class TeacherEvaluationResultsComponent implements OnInit {
 
   formatPct(value: number | null): string {
     return value === null || value === undefined ? '—' : `${value}%`;
+  }
+
+  /** Nota en escala 0–20 con un decimal; '—' si no hay valor. */
+  formatGrade(value: number | null): string {
+    return value === null || value === undefined ? '—' : value.toFixed(1);
+  }
+
+  /** Monto de ajuste con su signo explícito (p. ej. +1.0, -0.5). */
+  formatSigned(value: number | null): string {
+    if (value === null || value === undefined) return '—';
+    return `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
   }
 
   formatDate(value: string): string {

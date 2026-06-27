@@ -29,6 +29,10 @@ export interface TeacherStudentResultResponse {
   readonly score: number | null;
   readonly maxScore: number | null;
   readonly percentage: number | null;
+  /** Nota final en escala 0–20 (con ajustes); null mientras la calificación no está cerrada. */
+  readonly finalScore: number | null;
+  /** Si la calificación del intento ya fue cerrada por el docente. */
+  readonly gradeClosed: boolean | null;
   readonly submittedAt: string | null;
   readonly gradedAt: string | null;
   /** Cantidad de salidas de pestaña detectadas en el intento (0 si no aplica). */
@@ -122,6 +126,10 @@ export interface StudentResultSummaryResponse {
   readonly score: number | null;
   readonly maxScore: number | null;
   readonly percentage: number | null;
+  /** Nota final en escala 0–20 (con ajustes); null mientras no está cerrada. */
+  readonly finalScore: number | null;
+  /** Si la calificación del intento ya fue cerrada (nota final definitiva). */
+  readonly gradeClosed: boolean;
   readonly submittedAt: string | null;
   readonly canViewDetailedFeedback: boolean;
   readonly attemptsUsed: number;
@@ -162,6 +170,12 @@ export interface StudentAttemptResultDetailResponse {
   readonly score: number | null;
   readonly maxScore: number | null;
   readonly percentage: number | null;
+  /** Nota final en escala 0–20; solo llega con valor cuando la calificación está cerrada. */
+  readonly finalScore: number | null;
+  /** Retroalimentación general del docente; solo llega con la calificación cerrada. */
+  readonly overallFeedback: string | null;
+  /** Si la calificación ya está cerrada (y por tanto la nota final es definitiva). */
+  readonly gradeClosed: boolean;
   readonly submittedAt: string | null;
   readonly canViewDetailedFeedback: boolean;
   readonly answers: StudentAnswerResultResponse[];
@@ -201,6 +215,20 @@ export interface TeacherReviewAnswerResponse {
   readonly teacherFeedback: string | null;
 }
 
+/** Tipo de un ajuste manual de puntaje, derivado del signo del monto. */
+export type AdjustmentType = 'BONUS' | 'PENALTY';
+
+/** Ajuste manual de puntaje aplicado a un intento, tal como lo ve el docente. */
+export interface AttemptAdjustmentResponse {
+  readonly id: number;
+  /** Monto en escala 0–20, con signo (positivo bonifica, negativo penaliza). */
+  readonly amount: number;
+  readonly type: AdjustmentType;
+  readonly reason: string;
+  readonly createdByName: string | null;
+  readonly createdAt: string | null;
+}
+
 /** Detalle de un intento para la revisión manual del docente. */
 export interface TeacherAttemptReviewResponse {
   readonly attemptId: number;
@@ -213,17 +241,41 @@ export interface TeacherAttemptReviewResponse {
   readonly section: string;
   readonly attemptNumber: number;
   readonly status: AttemptStatus;
-  /** Puntaje provisional: alternativa única + abiertas ya revisadas. */
+  /** Puntaje provisional en puntos: alternativa única + abiertas ya revisadas. */
   readonly score: number | null;
   readonly maxScore: number | null;
+  /** Nota base en escala 0–20 derivada del puntaje en puntos. */
+  readonly baseScore: number | null;
+  /** Suma de los ajustes manuales activos (en escala 0–20, con su signo). */
+  readonly adjustmentsTotal: number | null;
+  /** Nota final estimada: nota base + ajustes, acotada a [0, 20]. */
+  readonly finalScore: number | null;
+  /** Retroalimentación general del docente para el estudiante. */
+  readonly overallFeedback: string | null;
+  /** Si la calificación ya fue cerrada (bloquea la edición de puntajes/ajustes). */
+  readonly gradeClosed: boolean | null;
+  readonly gradeClosedAt: string | null;
   readonly submittedAt: string | null;
   readonly gradedAt: string | null;
   readonly pendingOpenCount: number;
   readonly openAnswers: TeacherReviewAnswerResponse[];
+  readonly adjustments: AttemptAdjustmentResponse[];
 }
 
 /** Calificación manual que el docente asigna a una respuesta abierta. */
 export interface ManualGradeRequest {
   readonly score: number;
   readonly feedback?: string | null;
+}
+
+/** Alta de un ajuste manual de puntaje sobre un intento. */
+export interface CreateAdjustmentRequest {
+  /** Monto en escala 0–20, con signo; no puede ser cero. */
+  readonly amount: number;
+  readonly reason: string;
+}
+
+/** Retroalimentación general del intento para el estudiante. */
+export interface UpdateAttemptFeedbackRequest {
+  readonly overallFeedback: string | null;
 }
