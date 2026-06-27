@@ -501,3 +501,92 @@
     width: 120px;
   }
 }
+
+/* Acciones de un modal (alineadas a la derecha) */
+.modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Resumen de nota: base / ajustes / nota final */
+.grade-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+
+  .chip--final {
+    background: var(--color-primary-soft, #e6f4ea);
+    border-color: var(--color-primary, #2e7d32);
+
+    .chip__v {
+      color: var(--color-primary, #2e7d32);
+      font-weight: 700;
+    }
+  }
+}
+
+/* Sección de ajustes manuales y retroalimentación general */
+.adjust {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 10px;
+  }
+
+  &__list {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface, #fff);
+  }
+
+  &__reason {
+    flex: 1 1 auto;
+    font-size: 0.9rem;
+  }
+
+  &__meta {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+}
+
+/* Botón solo-ícono (p. ej. anular ajuste) */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--color-danger, #c62828);
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
