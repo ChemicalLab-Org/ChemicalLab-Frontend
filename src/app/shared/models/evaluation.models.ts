@@ -10,8 +10,11 @@
 /** Estado del ciclo de vida de una evaluación. */
 export type EvaluationStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 
-/** Tipo de pregunta. En el MVP solo se admite alternativa única. */
-export type QuestionType = 'MULTIPLE_CHOICE';
+/**
+ * Tipo de pregunta: alternativa única (calificación automática) o respuesta abierta
+ * (texto del estudiante con calificación manual del docente).
+ */
+export type QuestionType = 'MULTIPLE_CHOICE' | 'OPEN_TEXT';
 
 /** Modo de presentación de las preguntas durante el intento. */
 export type QuestionDisplayMode = 'ALL_AT_ONCE' | 'ONE_BY_ONE';
@@ -44,14 +47,23 @@ export interface CreateOptionRequest {
   readonly orderIndex?: number;
 }
 
-/** Payload para agregar una pregunta con sus alternativas. */
+/**
+ * Payload para agregar una pregunta. En alternativa única se envían `options`; en
+ * respuesta abierta se omiten y puede incluirse `expectedAnswer` (criterio de corrección
+ * visible solo para el docente).
+ */
 export interface CreateQuestionRequest {
   readonly questionText: string;
   readonly questionType: QuestionType;
   readonly points: number;
   readonly orderIndex?: number;
   readonly explanation?: string;
-  readonly options: CreateOptionRequest[];
+  /** Solo respuesta abierta: criterio de corrección (solo docente). */
+  readonly expectedAnswer?: string | null;
+  /** Si la pregunta es obligatoria (por defecto true). */
+  readonly required?: boolean;
+  /** Alternativas: requeridas solo en alternativa única. */
+  readonly options?: CreateOptionRequest[];
 }
 
 /** Payload para editar una pregunta y sus alternativas. */
@@ -76,7 +88,7 @@ export interface OptionResponse {
   readonly orderIndex: number;
 }
 
-/** Pregunta con sus alternativas, vista por el docente. */
+/** Pregunta vista por el docente. En respuesta abierta `options` va vacío. */
 export interface QuestionResponse {
   readonly id: number;
   readonly questionText: string;
@@ -84,6 +96,9 @@ export interface QuestionResponse {
   readonly points: number;
   readonly orderIndex: number;
   readonly explanation: string | null;
+  /** Solo respuesta abierta: criterio de corrección (solo docente). */
+  readonly expectedAnswer: string | null;
+  readonly required: boolean;
   readonly options: OptionResponse[];
 }
 

@@ -12,6 +12,7 @@
  */
 
 import { AttemptStatus } from './student-evaluation.models';
+import { QuestionType } from './evaluation.models';
 
 // ─── Docente ──────────────────────────────────────────────────────────────
 
@@ -69,13 +70,19 @@ export interface TeacherEvaluationResultsSummaryResponse {
 export interface TeacherAnswerResultResponse {
   readonly questionId: number;
   readonly questionText: string;
+  readonly questionType: QuestionType;
   readonly selectedOptionId: number | null;
   readonly selectedOptionText: string | null;
   readonly correctOptionId: number | null;
   readonly correctOptionText: string | null;
+  /** Texto del estudiante en preguntas abiertas. */
+  readonly answerText: string | null;
   readonly correct: boolean | null;
   readonly points: number;
-  readonly pointsAwarded: number;
+  /** Puntaje obtenido; null en una abierta aún no revisada. */
+  readonly pointsAwarded: number | null;
+  readonly reviewed: boolean;
+  readonly teacherFeedback: string | null;
   readonly explanation: string | null;
 }
 
@@ -129,10 +136,17 @@ export interface StudentResultSummaryResponse {
 export interface StudentAnswerResultResponse {
   readonly questionId: number;
   readonly questionText: string;
+  readonly questionType: QuestionType;
   readonly selectedOptionText: string | null;
+  /** Texto propio del estudiante en preguntas abiertas. */
+  readonly answerText: string | null;
   readonly correct: boolean | null;
   readonly points: number;
-  readonly pointsAwarded: number;
+  /** Puntaje obtenido; null en una abierta aún no revisada por el docente. */
+  readonly pointsAwarded: number | null;
+  readonly reviewed: boolean;
+  /** Retroalimentación del docente; solo llega tras revisar la respuesta abierta. */
+  readonly teacherFeedback: string | null;
   readonly correctOptionText: string | null;
   readonly explanation: string | null;
 }
@@ -151,4 +165,65 @@ export interface StudentAttemptResultDetailResponse {
   readonly submittedAt: string | null;
   readonly canViewDetailedFeedback: boolean;
   readonly answers: StudentAnswerResultResponse[];
+}
+
+// ─── Revisión manual (docente) ──────────────────────────────────────────────
+
+/** Fila de la bandeja de intentos pendientes de revisión manual. */
+export interface PendingReviewAttemptResponse {
+  readonly attemptId: number;
+  readonly evaluationId: number;
+  readonly evaluationTitle: string;
+  readonly studentId: number;
+  readonly studentCode: string;
+  readonly studentName: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly attemptNumber: number;
+  readonly status: AttemptStatus;
+  readonly submittedAt: string | null;
+  readonly openQuestionCount: number;
+  readonly pendingOpenCount: number;
+}
+
+/** Respuesta abierta a revisar por el docente. */
+export interface TeacherReviewAnswerResponse {
+  /** null si el estudiante no dejó respuesta (igual debe calificarse). */
+  readonly answerId: number | null;
+  readonly questionId: number;
+  readonly questionText: string;
+  readonly maxPoints: number;
+  /** Criterio de corrección (solo docente). */
+  readonly expectedAnswer: string | null;
+  readonly answerText: string | null;
+  readonly reviewed: boolean;
+  readonly awardedScore: number | null;
+  readonly teacherFeedback: string | null;
+}
+
+/** Detalle de un intento para la revisión manual del docente. */
+export interface TeacherAttemptReviewResponse {
+  readonly attemptId: number;
+  readonly evaluationId: number;
+  readonly evaluationTitle: string;
+  readonly studentId: number;
+  readonly studentCode: string;
+  readonly studentName: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly attemptNumber: number;
+  readonly status: AttemptStatus;
+  /** Puntaje provisional: alternativa única + abiertas ya revisadas. */
+  readonly score: number | null;
+  readonly maxScore: number | null;
+  readonly submittedAt: string | null;
+  readonly gradedAt: string | null;
+  readonly pendingOpenCount: number;
+  readonly openAnswers: TeacherReviewAnswerResponse[];
+}
+
+/** Calificación manual que el docente asigna a una respuesta abierta. */
+export interface ManualGradeRequest {
+  readonly score: number;
+  readonly feedback?: string | null;
 }

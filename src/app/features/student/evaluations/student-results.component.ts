@@ -92,8 +92,14 @@ const APPROVAL_PERCENTAGE = 60;
                   </div>
 
                   <div class="result-card__score">
-                    <span class="result-card__points">{{ r.score ?? 0 }} / {{ r.maxScore ?? 0 }}</span>
-                    <span class="badge" [class]="pctBadge(r.percentage)">{{ formatPct(r.percentage) }}</span>
+                    @if (isPending(r.status)) {
+                      <span class="badge badge-warning">
+                        <span class="material-icons">hourglass_top</span> Pendiente de revisión
+                      </span>
+                    } @else {
+                      <span class="result-card__points">{{ r.score ?? 0 }} / {{ r.maxScore ?? 0 }}</span>
+                      <span class="badge" [class]="pctBadge(r.percentage)">{{ formatPct(r.percentage) }}</span>
+                    }
                   </div>
 
                   <button type="button" class="btn btn-primary" (click)="openDetail(r.attemptId)">
@@ -132,6 +138,14 @@ const APPROVAL_PERCENTAGE = 60;
               }
             </header>
 
+            @if (isPending(d.status)) {
+              <div class="alert alert-info feedback-locked">
+                <span class="material-icons">hourglass_top</span>
+                Tu evaluación fue enviada y está pendiente de calificación manual por el
+                docente. La nota mostrada es parcial y aún no es definitiva.
+              </div>
+            }
+
             <div class="score-panel">
               <div class="score-panel__big">
                 <span class="score-panel__points">{{ d.score ?? 0 }}</span>
@@ -160,15 +174,41 @@ const APPROVAL_PERCENTAGE = 60;
               </div>
             </div>
 
-            @if (d.canViewDetailedFeedback) {
-              <h2 class="section-title">Detalle de respuestas</h2>
-              <div class="answers">
-                @for (a of d.answers; track a.questionId; let i = $index) {
+            <h2 class="section-title">Detalle de respuestas</h2>
+            <div class="answers">
+              @for (a of d.answers; track a.questionId; let i = $index) {
+                @if (a.questionType === 'OPEN_TEXT') {
+                  <!-- Pregunta abierta: el estudiante ve su texto y, una vez revisada,
+                       el puntaje y la retroalimentación del docente. -->
+                  <div class="answer">
+                    <div class="answer__head">
+                      <span class="answer__num">{{ i + 1 }}</span>
+                      <span class="answer__text">{{ a.questionText }}</span>
+                      @if (a.reviewed) {
+                        <span class="answer__points">{{ a.pointsAwarded ?? 0 }} / {{ a.points }}</span>
+                      } @else {
+                        <span class="badge badge-warning">Pendiente de revisión</span>
+                      }
+                    </div>
+                    <div class="answer__row">
+                      <span class="answer__label">Tu respuesta:</span>
+                      <span class="answer__value" [class.answer__value--muted]="!a.answerText">
+                        {{ a.answerText || 'Sin responder' }}
+                      </span>
+                    </div>
+                    @if (a.reviewed && a.teacherFeedback) {
+                      <p class="answer__explanation">
+                        <span class="material-icons">rate_review</span>
+                        <strong>Retroalimentación:</strong> {{ a.teacherFeedback }}
+                      </p>
+                    }
+                  </div>
+                } @else if (d.canViewDetailedFeedback) {
                   <div class="answer" [class.answer--ok]="a.correct" [class.answer--bad]="a.correct === false">
                     <div class="answer__head">
                       <span class="answer__num">{{ i + 1 }}</span>
                       <span class="answer__text">{{ a.questionText }}</span>
-                      <span class="answer__points">{{ a.pointsAwarded }} / {{ a.points }}</span>
+                      <span class="answer__points">{{ a.pointsAwarded ?? 0 }} / {{ a.points }}</span>
                     </div>
                     <div class="answer__row">
                       <span class="answer__label">Tu respuesta:</span>
@@ -194,12 +234,13 @@ const APPROVAL_PERCENTAGE = 60;
                     }
                   </div>
                 }
-              </div>
-            } @else {
+              }
+            </div>
+            @if (!d.canViewDetailedFeedback && hasClosedAnswers(d)) {
               <div class="alert alert-info feedback-locked">
                 <span class="material-icons">lock</span>
-                Tu calificación ya fue registrada. El detalle de respuestas estará disponible
-                cuando finalicen los intentos permitidos.
+                El detalle de las preguntas de opción múltiple estará disponible cuando
+                finalicen los intentos permitidos.
               </div>
             }
           }
@@ -303,7 +344,26 @@ export class StudentResultsComponent implements OnInit {
   }
 
   statusLabel(status: AttemptStatus): string {
-    return status === 'GRADED' ? 'Calificado' : status === 'SUBMITTED' ? 'Enviado' : 'En progreso';
+    switch (status) {
+      case 'GRADED':
+        return 'Calificado';
+      case 'PENDING_MANUAL_REVIEW':
+        return 'Pendiente de revisión';
+      case 'SUBMITTED':
+        return 'Enviado';
+      default:
+        return 'En progreso';
+    }
+  }
+
+  /** Indica si el intento espera la revisión manual del docente. */
+  isPending(status: AttemptStatus): boolean {
+    return status === 'PENDING_MANUAL_REVIEW';
+  }
+
+  /** Indica si el detalle tiene preguntas de un tipo dado. */
+  hasClosedAnswers(d: StudentAttemptResultDetailResponse): boolean {
+    return d.answers.some((a) => a.questionType === 'MULTIPLE_CHOICE');
   }
 
   formatPct(value: number | null): string {

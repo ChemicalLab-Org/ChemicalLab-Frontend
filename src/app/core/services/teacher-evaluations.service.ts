@@ -10,8 +10,11 @@ import {
   EvaluationAssignmentResponse,
   EvaluationDetailResponse,
   EvaluationResponse,
+  ManualGradeRequest,
+  PendingReviewAttemptResponse,
   QuestionResponse,
   TeacherAttemptResultDetailResponse,
+  TeacherAttemptReviewResponse,
   TeacherEvaluationResultsResponse,
   TeacherEvaluationResultsSummaryResponse,
   UpdateEvaluationRequest,
@@ -159,6 +162,40 @@ export class TeacherEvaluationsService {
   getAttemptTraceability(attemptId: number): Observable<AttemptTraceabilityResponse> {
     return this.http.get<AttemptTraceabilityResponse>(
       `${this.baseUrl}/attempts/${attemptId}/traceability`
+    );
+  }
+
+  // ─── Revisión manual de preguntas abiertas ─────────────────────────────────
+
+  /** Bandeja de intentos del docente pendientes de revisión manual. */
+  listPendingManualReview(): Observable<PendingReviewAttemptResponse[]> {
+    return this.http.get<PendingReviewAttemptResponse[]>(`${this.baseUrl}/manual-review`);
+  }
+
+  /** Detalle de un intento para revisar sus respuestas abiertas. */
+  getAttemptReview(attemptId: number): Observable<TeacherAttemptReviewResponse> {
+    return this.http.get<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/review`
+    );
+  }
+
+  /** Asigna puntaje y retroalimentación a una respuesta abierta. */
+  gradeOpenAnswer(
+    attemptId: number,
+    answerId: number,
+    request: ManualGradeRequest
+  ): Observable<TeacherAttemptReviewResponse> {
+    return this.http.patch<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/answers/${answerId}/manual-grade`,
+      request
+    );
+  }
+
+  /** Cierra la revisión de un intento y recalcula su nota final. */
+  completeReview(attemptId: number): Observable<TeacherAttemptReviewResponse> {
+    return this.http.patch<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/complete-review`,
+      {}
     );
   }
 }
