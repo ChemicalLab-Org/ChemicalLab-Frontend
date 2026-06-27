@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { UsageMetricsService } from '../../core/services/usage-metrics.service';
 import { ExamSessionService } from '../../core/services/exam-session.service';
+import { AttemptEventService } from '../../core/services/attempt-event.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { EXAM_EXIT_ACTION, STUDENT_NAV_ITEMS, examNavItems } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
@@ -459,6 +460,15 @@ export class PeriodicTableComponent {
   private readonly router = inject(Router);
   private readonly usageMetrics = inject(UsageMetricsService);
   private readonly examSession = inject(ExamSessionService);
+  private readonly attemptEvents = inject(AttemptEventService);
+
+  constructor() {
+    // Trazabilidad del intento: si se abre la tabla periódica durante un intento activo,
+    // se registra el uso de la herramienta (solo que se abrió, nunca qué elemento se vio).
+    if (this.examSession.isActive()) {
+      this.attemptEvents.toolOpened('PERIODIC_TABLE');
+    }
+  }
 
   readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
   readonly filters: readonly ElementFilter[] = ELEMENT_FILTERS;
@@ -699,6 +709,9 @@ export class PeriodicTableComponent {
 
   /** Vuelve al intento sin finalizarlo (no se pierde el progreso). */
   backToAttempt(): void {
+    if (this.examSession.isActive()) {
+      this.attemptEvents.toolReturned('PERIODIC_TABLE');
+    }
     void this.router.navigateByUrl('/evaluations');
   }
 

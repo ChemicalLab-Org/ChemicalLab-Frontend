@@ -6,6 +6,7 @@ import { forkJoin } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { UsageMetricsService } from '../../core/services/usage-metrics.service';
 import { ExamSessionService } from '../../core/services/exam-session.service';
+import { AttemptEventService } from '../../core/services/attempt-event.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { EXAM_EXIT_ACTION, STUDENT_NAV_ITEMS, examNavItems } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
@@ -438,6 +439,7 @@ export class CompoundsComponent {
   private readonly catalog = inject(ChemistryCatalogService);
   private readonly usageMetrics = inject(UsageMetricsService);
   private readonly examSession = inject(ExamSessionService);
+  private readonly attemptEvents = inject(AttemptEventService);
 
   readonly compoundTypes = COMPOUND_TYPES;
   private readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
@@ -473,6 +475,11 @@ export class CompoundsComponent {
 
   constructor() {
     this.loadCatalogs();
+    // Trazabilidad del intento: si se abre la herramienta durante un intento activo, se
+    // registra el uso (solo que se abrió la herramienta, nunca qué se formó).
+    if (this.examSession.isActive()) {
+      this.attemptEvents.toolOpened('COMPOUND_FORMATION');
+    }
   }
 
   /** Carga todos los catálogos del backend en paralelo. */
@@ -948,6 +955,9 @@ export class CompoundsComponent {
 
   /** Vuelve al intento sin finalizarlo (no se pierde el progreso). */
   backToAttempt(): void {
+    if (this.examSession.isActive()) {
+      this.attemptEvents.toolReturned('COMPOUND_FORMATION');
+    }
     void this.router.navigateByUrl('/evaluations');
   }
 
