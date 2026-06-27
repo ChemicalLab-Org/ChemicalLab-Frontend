@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   AssignEvaluationRequest,
+  AttemptTraceabilityResponse,
   CreateEvaluationRequest,
   CreateQuestionRequest,
   EvaluationAssignmentResponse,
@@ -147,6 +148,17 @@ export class TeacherEvaluationsService {
   ): Observable<TeacherAttemptResultDetailResponse> {
     return this.http.get<TeacherAttemptResultDetailResponse>(
       `${this.baseUrl}/attempts/${attemptId}/result`
+    );
+  }
+
+  /**
+   * Trazabilidad de un intento: resumen (tiempo usado, estado final, salidas/regresos de
+   * pestaña, intentos de salida, herramientas consultadas) y línea de tiempo de eventos.
+   * Solo de intentos de evaluaciones propias; no incluye respuestas ni claves.
+   */
+  getAttemptTraceability(attemptId: number): Observable<AttemptTraceabilityResponse> {
+    return this.http.get<AttemptTraceabilityResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/traceability`
     );
   }
 }

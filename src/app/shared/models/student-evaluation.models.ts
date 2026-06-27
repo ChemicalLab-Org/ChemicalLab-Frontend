@@ -15,13 +15,28 @@ import { QuestionDisplayMode, QuestionType } from './evaluation.models';
 /** Estado de un intento de evaluación. */
 export type AttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
 
-/** Tipo de incidencia de foco reportada durante un intento. */
+/**
+ * Tipo de evento de trazabilidad de un intento. El frontend solo reporta incidencias de
+ * foco, intento de salida y uso de herramientas; los hitos del ciclo de vida
+ * (`ATTEMPT_*`, `TIME_EXPIRED`) los registra el backend y aparecen al consultar la
+ * trazabilidad como docente.
+ */
 export type AttemptEventType =
   | 'TAB_HIDDEN'
   | 'TAB_VISIBLE'
   | 'WINDOW_BLUR'
   | 'WINDOW_FOCUS'
-  | 'NAVIGATION_BLOCKED';
+  | 'NAVIGATION_BLOCKED'
+  | 'TOOL_OPENED'
+  | 'TOOL_RETURNED'
+  | 'EXIT_ATTEMPTED'
+  | 'ATTEMPT_STARTED'
+  | 'ATTEMPT_SUBMITTED'
+  | 'TIME_EXPIRED'
+  | 'ATTEMPT_EXITED';
+
+/** Herramienta de apoyo permitida que el estudiante puede abrir durante un intento. */
+export type AttemptTool = 'PERIODIC_TABLE' | 'COMPOUND_FORMATION';
 
 // ─── Responses ──────────────────────────────────────────────────────────────
 
@@ -137,13 +152,19 @@ export interface SubmitEvaluationAttemptRequest {
 }
 
 /**
- * Cuerpo para reportar una incidencia de foco durante un intento (salida/retorno de
- * pestaña o ventana). El backend solo la registra si la evaluación tiene activada la
- * detección de salida de pestaña y el intento es del propio estudiante.
+ * Cuerpo para reportar un evento de trazabilidad durante un intento: incidencia de foco
+ * (solo si la evaluación tiene activada la detección de salida de pestaña), intento de
+ * salida (`EXIT_ATTEMPTED`) o uso de una herramienta permitida (`TOOL_OPENED`/
+ * `TOOL_RETURNED`). Solo admite metadata segura: la herramienta y un `source` corto que el
+ * backend sanitiza. Nunca se envían respuestas, claves ni datos sensibles.
  */
 export interface RegisterAttemptEventRequest {
   readonly eventType: AttemptEventType;
   readonly description?: string;
+  /** Herramienta abierta (solo para TOOL_OPENED/TOOL_RETURNED). */
+  readonly tool?: AttemptTool;
+  /** Origen del evento (etiqueta corta, p. ej. BUTTON_EXIT, VISIBILITY_CHANGE). */
+  readonly source?: string;
 }
 
 /** Resumen devuelto tras reportar una incidencia de foco. */

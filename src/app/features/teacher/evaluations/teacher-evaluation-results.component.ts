@@ -8,7 +8,9 @@ import {
 } from '../../../shared/components/sidebar/sidebar.component';
 import { TEACHER_NAV_ITEMS } from '../../../shared/components/sidebar/teacher-nav';
 import {
+  AttemptEventType,
   AttemptStatus,
+  AttemptTraceabilityResponse,
   TeacherAttemptResultDetailResponse,
   TeacherEvaluationResultsResponse,
   TeacherStudentResultResponse,
@@ -257,12 +259,62 @@ const APPROVAL_PERCENTAGE = 60;
                 </div>
               </div>
 
-              @if (dt.tabExitCount > 0) {
-                <div class="alert alert-warning">
-                  <span class="material-icons">visibility_off</span>
-                  Se detectaron {{ dt.tabExitCount }} salida(s) de pestaña durante este intento.
-                </div>
-              }
+              <!-- Trazabilidad del intento -->
+              <section class="trace">
+                <h3 class="trace__title">
+                  <span class="material-icons">timeline</span> Trazabilidad del intento
+                </h3>
+
+                @if (traceLoading()) {
+                  <p class="text-muted">Cargando trazabilidad…</p>
+                } @else if (traceError()) {
+                  <p class="text-muted">No se pudo cargar la trazabilidad de este intento.</p>
+                } @else if (traceability(); as tr) {
+                  <div class="trace__chips">
+                    <span class="chip"><span class="chip__k">Estado final</span><span class="chip__v">{{ statusLabel(tr.finalStatus) }}</span></span>
+                    <span class="chip"><span class="chip__k">Tiempo usado</span><span class="chip__v">{{ formatDuration(tr.timeUsedSeconds) }}</span></span>
+                    <span class="chip"><span class="chip__k">Inicio</span><span class="chip__v">{{ tr.startedAt ? formatDate(tr.startedAt) : '—' }}</span></span>
+                    <span class="chip"><span class="chip__k">Finalización</span><span class="chip__v">{{ tr.submittedAt ? formatDate(tr.submittedAt) : '—' }}</span></span>
+                    <span class="chip"><span class="chip__k">Salidas de pestaña</span><span class="chip__v">{{ tr.tabExitCount }}</span></span>
+                    <span class="chip"><span class="chip__k">Regresos</span><span class="chip__v">{{ tr.tabReturnCount }}</span></span>
+                    <span class="chip"><span class="chip__k">Intentos de salida</span><span class="chip__v">{{ tr.exitAttemptCount }}</span></span>
+                  </div>
+
+                  @if (!tr.trackTabExit) {
+                    <p class="text-muted" style="margin-top:8px">
+                      La detección de salida de pestaña estaba desactivada en esta evaluación.
+                    </p>
+                  }
+
+                  @if (tr.toolsUsed.length > 0) {
+                    <div class="trace__tools">
+                      <span class="text-muted">Herramientas consultadas:</span>
+                      @for (t of tr.toolsUsed; track t) {
+                        <span class="badge badge-neutral">{{ toolLabel(t) }}</span>
+                      }
+                    </div>
+                  }
+
+                  @if (tr.events.length > 0) {
+                    <ul class="timeline">
+                      @for (e of tr.events; track e.id) {
+                        <li class="timeline__item">
+                          <span class="timeline__dot" [class]="eventTone(e.eventType)"></span>
+                          <span class="timeline__time">{{ formatTime(e.occurredAt) }}</span>
+                          <span class="timeline__label">{{ eventLabel(e.eventType) }}</span>
+                          @if (toolFromMetadata(e.metadata); as tool) {
+                            <span class="badge badge-neutral timeline__meta">{{ tool }}</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="text-muted" style="margin-top:8px">
+                      No se registraron eventos durante este intento.
+                    </p>
+                  }
+                }
+              </section>
 
               <div class="answers">
                 @for (a of dt.answers; track a.questionId; let i = $index) {
@@ -338,6 +390,11 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   readonly detailError = signal(false);
   readonly detail = signal<TeacherAttemptResultDetailResponse | null>(null);
   private detailAttemptId: number | null = null;
+
+  // Trazabilidad del intento (resumen + línea de tiempo), cargada junto al detalle.
+  readonly traceLoading = signal(false);
+  readonly traceError = signal(false);
+  readonly traceability = signal<AttemptTraceabilityResponse | null>(null);
 
   readonly userName = computed<string>(() => this.auth.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
@@ -436,12 +493,33 @@ export class TeacherEvaluationResultsComponent implements OnInit {
         this.detailLoading.set(false);
       },
     });
+    this.loadTraceability();
+  }
+
+  /** Carga la trazabilidad del intento abierto. Su error no bloquea el detalle de respuestas. */
+  private loadTraceability(): void {
+    if (this.detailAttemptId === null) return;
+    this.traceability.set(null);
+    this.traceLoading.set(true);
+    this.traceError.set(false);
+    this.service.getAttemptTraceability(this.detailAttemptId).subscribe({
+      next: (t) => {
+        this.traceability.set(t);
+        this.traceLoading.set(false);
+      },
+      error: () => {
+        this.traceError.set(true);
+        this.traceLoading.set(false);
+      },
+    });
   }
 
   closeDetail(): void {
     this.detailOpen.set(false);
     this.detail.set(null);
     this.detailAttemptId = null;
+    this.traceability.set(null);
+    this.traceError.set(false);
   }
 
   goBack(): void {
@@ -488,6 +566,77 @@ export class TeacherEvaluationResultsComponent implements OnInit {
       hour: '2-digit',
       minute: '2-digit',
     }).format(date);
+  }
+
+  /** Solo la hora (hh:mm:ss), para la línea de tiempo de eventos. */
+  formatTime(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('es-PE', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(date);
+  }
+
+  /** Tiempo usado en formato legible (mm:ss o hh:mm:ss); '—' si no hay dato. */
+  formatDuration(seconds: number | null): string {
+    if (seconds === null || seconds === undefined) return '—';
+    const s = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+  }
+
+  /** Etiqueta en español para un tipo de evento del intento. */
+  eventLabel(type: AttemptEventType): string {
+    switch (type) {
+      case 'ATTEMPT_STARTED': return 'Inicio del intento';
+      case 'ATTEMPT_SUBMITTED': return 'Envío del intento';
+      case 'ATTEMPT_EXITED': return 'Salida del intento';
+      case 'TIME_EXPIRED': return 'Tiempo agotado';
+      case 'EXIT_ATTEMPTED': return 'Intento de salida';
+      case 'TOOL_OPENED': return 'Abrió una herramienta';
+      case 'TOOL_RETURNED': return 'Volvió al intento';
+      case 'TAB_HIDDEN': return 'Salida de pestaña';
+      case 'WINDOW_BLUR': return 'Ventana sin foco';
+      case 'TAB_VISIBLE': return 'Regreso a la pestaña';
+      case 'WINDOW_FOCUS': return 'Ventana con foco';
+      case 'NAVIGATION_BLOCKED': return 'Navegación bloqueada';
+      default: return type;
+    }
+  }
+
+  /** Tono visual del punto de la línea de tiempo según el tipo de evento. */
+  eventTone(type: AttemptEventType): string {
+    if (type === 'TAB_HIDDEN' || type === 'WINDOW_BLUR') return 'tone-warn';
+    if (type === 'EXIT_ATTEMPTED' || type === 'ATTEMPT_EXITED' || type === 'TIME_EXPIRED') return 'tone-exit';
+    if (type === 'TOOL_OPENED' || type === 'TOOL_RETURNED') return 'tone-tool';
+    return '';
+  }
+
+  /** Nombre legible de una herramienta consultada. */
+  toolLabel(tool: string): string {
+    switch (tool) {
+      case 'PERIODIC_TABLE': return 'Tabla periódica';
+      case 'COMPOUND_FORMATION': return 'Formación de compuestos';
+      default: return tool;
+    }
+  }
+
+  /** Extrae el nombre de la herramienta de una metadata "tool=..."; null si no hay. */
+  toolFromMetadata(metadata: string | null): string | null {
+    if (!metadata) return null;
+    for (const part of metadata.split(';')) {
+      const trimmed = part.trim();
+      if (trimmed.startsWith('tool=')) {
+        const value = trimmed.substring('tool='.length).trim();
+        return value.length > 0 ? this.toolLabel(value) : null;
+      }
+    }
+    return null;
   }
 }
 

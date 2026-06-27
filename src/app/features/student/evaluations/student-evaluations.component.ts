@@ -1361,6 +1361,14 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
    * continuar respondiendo ni retomarlo.
    */
   leaveAttempt(): void {
+    // Trazabilidad: se registra la intención de salir (puede cancelarse). No finaliza el
+    // intento por sí mismo y se reporta de forma silenciosa, sin interrumpir al estudiante.
+    const attempt = this.attempt();
+    if (attempt) {
+      this.service
+        .registerAttemptEvent(attempt.id, { eventType: 'EXIT_ATTEMPTED', source: 'BUTTON_EXIT' })
+        .subscribe({ error: () => { /* no interrumpe el intento */ } });
+    }
     this.confirmState.set({
       title: 'Salir de la evaluación',
       message:
