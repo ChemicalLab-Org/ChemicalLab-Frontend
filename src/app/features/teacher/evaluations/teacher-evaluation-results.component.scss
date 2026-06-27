@@ -467,3 +467,37 @@
     margin-left: auto;
   }
 }
+
+/* Acciones por fila (revisar / ver detalle) */
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Calificación manual de una respuesta abierta */
+.grade-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+
+  .form-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+
+    &--full {
+      flex: 1 1 100%;
+    }
+  }
+
+  &__score {
+    width: 120px;
+  }
+}

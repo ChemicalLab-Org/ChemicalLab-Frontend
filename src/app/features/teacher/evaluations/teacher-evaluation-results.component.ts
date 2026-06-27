@@ -12,7 +12,9 @@ import {
   AttemptStatus,
   AttemptTraceabilityResponse,
   TeacherAttemptResultDetailResponse,
+  TeacherAttemptReviewResponse,
   TeacherEvaluationResultsResponse,
+  TeacherReviewAnswerResponse,
   TeacherStudentResultResponse,
 } from '../../../shared/models';
 
@@ -187,7 +189,7 @@ const APPROVAL_PERCENTAGE = 60;
                             {{ formatPct(r.percentage) }}
                           </span>
                         </td>
-                        <td><span class="badge badge-success">{{ statusLabel(r.status) }}</span></td>
+                        <td><span class="badge" [class]="statusBadge(r.status)">{{ statusLabel(r.status) }}</span></td>
                         <td>
                           @if (r.tabExitCount > 0) {
                             <span class="badge badge-warning" title="Salidas de pestaña detectadas">
@@ -200,9 +202,16 @@ const APPROVAL_PERCENTAGE = 60;
                         </td>
                         <td>{{ r.submittedAt ? formatDate(r.submittedAt) : '—' }}</td>
                         <td>
-                          <button type="button" class="btn btn-secondary btn-sm" (click)="openDetail(r)">
-                            Ver detalle
-                          </button>
+                          <div class="row-actions">
+                            @if (r.status === 'PENDING_MANUAL_REVIEW') {
+                              <button type="button" class="btn btn-primary btn-sm" (click)="openReview(r)">
+                                Revisar
+                              </button>
+                            }
+                            <button type="button" class="btn btn-secondary btn-sm" (click)="openDetail(r)">
+                              Ver detalle
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     }
@@ -318,37 +327,197 @@ const APPROVAL_PERCENTAGE = 60;
 
               <div class="answers">
                 @for (a of dt.answers; track a.questionId; let i = $index) {
-                  <div class="answer" [class.answer--ok]="a.correct" [class.answer--bad]="a.correct === false">
+                  @if (a.questionType === 'OPEN_TEXT') {
+                    <div class="answer">
+                      <div class="answer__head">
+                        <span class="answer__num">{{ i + 1 }}</span>
+                        <span class="answer__text">{{ a.questionText }}</span>
+                        @if (a.reviewed) {
+                          <span class="answer__points">{{ a.pointsAwarded ?? 0 }} / {{ a.points }}</span>
+                        } @else {
+                          <span class="badge badge-warning">Pendiente</span>
+                        }
+                      </div>
+                      <div class="answer__row">
+                        <span class="answer__label">Respuesta del estudiante:</span>
+                        <span class="answer__value" [class.answer__value--muted]="!a.answerText">
+                          {{ a.answerText || 'Sin responder' }}
+                        </span>
+                      </div>
+                      @if (a.teacherFeedback) {
+                        <p class="answer__explanation">
+                          <span class="material-icons">rate_review</span>
+                          <strong>Tu retroalimentación:</strong> {{ a.teacherFeedback }}
+                        </p>
+                      }
+                    </div>
+                  } @else {
+                    <div class="answer" [class.answer--ok]="a.correct" [class.answer--bad]="a.correct === false">
+                      <div class="answer__head">
+                        <span class="answer__num">{{ i + 1 }}</span>
+                        <span class="answer__text">{{ a.questionText }}</span>
+                        <span class="answer__points">{{ a.pointsAwarded ?? 0 }} / {{ a.points }}</span>
+                      </div>
+                      <div class="answer__row">
+                        <span class="answer__label">Respuesta del estudiante:</span>
+                        <span class="answer__value" [class.answer__value--muted]="!a.selectedOptionText">
+                          {{ a.selectedOptionText || 'Sin responder' }}
+                          @if (a.correct) {
+                            <span class="material-icons answer__icon answer__icon--ok">check_circle</span>
+                          } @else {
+                            <span class="material-icons answer__icon answer__icon--bad">cancel</span>
+                          }
+                        </span>
+                      </div>
+                      @if (!a.correct && a.correctOptionText) {
+                        <div class="answer__row">
+                          <span class="answer__label">Respuesta correcta:</span>
+                          <span class="answer__value answer__value--correct">{{ a.correctOptionText }}</span>
+                        </div>
+                      }
+                      @if (a.explanation) {
+                        <p class="answer__explanation">
+                          <span class="material-icons">lightbulb</span> {{ a.explanation }}
+                        </p>
+                      }
+                    </div>
+                  }
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Modal: revisión manual de respuestas abiertas -->
+    @if (reviewOpen()) {
+      <div class="modal-overlay" (click)="closeReview()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <header class="modal__header">
+            <h2 class="modal__title">Revisión manual</h2>
+            <button type="button" class="modal__close" aria-label="Cerrar" (click)="closeReview()">
+              <span class="material-icons">close</span>
+            </button>
+          </header>
+
+          <div class="modal__body">
+            @if (reviewLoading()) {
+              <div class="state">
+                <div class="state__spinner"></div>
+                <p class="state__title">Cargando respuestas…</p>
+              </div>
+            } @else if (reviewError()) {
+              <div class="state state--error">
+                <span class="material-icons state__icon">cloud_off</span>
+                <p class="state__title">No se pudo cargar la revisión.</p>
+                <button type="button" class="btn btn-primary" (click)="reloadReview()">
+                  <span class="material-icons">refresh</span> Reintentar
+                </button>
+              </div>
+            } @else if (review(); as rv) {
+              <div class="detail-head">
+                <div>
+                  <span class="detail-head__name">{{ rv.studentName }}</span>
+                  <span class="detail-head__meta">
+                    {{ rv.studentCode }} · {{ rv.grade }} "{{ rv.section }}" · Intento N.° {{ rv.attemptNumber }}
+                  </span>
+                </div>
+                <div class="detail-head__score">
+                  <span class="badge" [class]="statusBadge(rv.status)">{{ statusLabel(rv.status) }}</span>
+                  <span class="detail-head__points">{{ rv.score ?? 0 }} / {{ rv.maxScore ?? 0 }}</span>
+                </div>
+              </div>
+
+              @if (reviewMessage()) {
+                <div class="alert alert-success">
+                  <span class="material-icons">check_circle</span> {{ reviewMessage() }}
+                </div>
+              }
+              @if (reviewSaveError()) {
+                <div class="alert alert-danger">
+                  <span class="material-icons">error_outline</span> {{ reviewSaveError() }}
+                </div>
+              }
+
+              <div class="answers">
+                @for (a of rv.openAnswers; track a.questionId; let i = $index) {
+                  <div class="answer">
                     <div class="answer__head">
                       <span class="answer__num">{{ i + 1 }}</span>
                       <span class="answer__text">{{ a.questionText }}</span>
-                      <span class="answer__points">{{ a.pointsAwarded }} / {{ a.points }}</span>
+                      @if (a.reviewed) {
+                        <span class="badge badge-success">Revisada</span>
+                      } @else {
+                        <span class="badge badge-warning">Pendiente</span>
+                      }
                     </div>
                     <div class="answer__row">
                       <span class="answer__label">Respuesta del estudiante:</span>
-                      <span class="answer__value" [class.answer__value--muted]="!a.selectedOptionText">
-                        {{ a.selectedOptionText || 'Sin responder' }}
-                        @if (a.correct) {
-                          <span class="material-icons answer__icon answer__icon--ok">check_circle</span>
-                        } @else {
-                          <span class="material-icons answer__icon answer__icon--bad">cancel</span>
-                        }
+                      <span class="answer__value" [class.answer__value--muted]="!a.answerText">
+                        {{ a.answerText || 'Sin responder' }}
                       </span>
                     </div>
-                    @if (!a.correct && a.correctOptionText) {
-                      <div class="answer__row">
-                        <span class="answer__label">Respuesta correcta:</span>
-                        <span class="answer__value answer__value--correct">{{ a.correctOptionText }}</span>
-                      </div>
-                    }
-                    @if (a.explanation) {
+                    @if (a.expectedAnswer) {
                       <p class="answer__explanation">
-                        <span class="material-icons">lightbulb</span> {{ a.explanation }}
+                        <span class="material-icons">fact_check</span>
+                        <strong>Criterio (solo tú lo ves):</strong> {{ a.expectedAnswer }}
                       </p>
+                    }
+
+                    @if (a.answerId !== null) {
+                      <div class="grade-row">
+                        <label class="form-label">
+                          Puntaje (0 – {{ a.maxPoints }})
+                          <input
+                            type="number"
+                            class="input grade-row__score"
+                            min="0"
+                            [max]="a.maxPoints"
+                            [value]="scoreFor(a.answerId)"
+                            (input)="setScore(a.answerId, $any($event.target).value)"
+                          />
+                        </label>
+                        <label class="form-label form-label--full">
+                          Retroalimentación (opcional)
+                          <textarea
+                            class="textarea"
+                            rows="2"
+                            maxlength="2000"
+                            [value]="feedbackFor(a.answerId)"
+                            (input)="setFeedback(a.answerId, $any($event.target).value)"
+                          ></textarea>
+                        </label>
+                        <button
+                          type="button"
+                          class="btn btn-primary btn-sm"
+                          [disabled]="savingAnswerId() === a.answerId"
+                          (click)="gradeAnswer(a)"
+                        >
+                          {{ savingAnswerId() === a.answerId ? 'Guardando…' : 'Guardar puntaje' }}
+                        </button>
+                      </div>
+                    } @else {
+                      <p class="text-muted">El estudiante no dejó respuesta; igual debes asignarle un puntaje.</p>
                     }
                   </div>
                 }
               </div>
+
+              <div class="modal__actions">
+                <button type="button" class="btn btn-secondary" (click)="closeReview()">Cerrar</button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  [disabled]="rv.pendingOpenCount > 0 || completing()"
+                  (click)="completeReview()"
+                >
+                  {{ completing() ? 'Finalizando…' : 'Finalizar revisión' }}
+                </button>
+              </div>
+              @if (rv.pendingOpenCount > 0) {
+                <p class="text-muted">Faltan {{ rv.pendingOpenCount }} respuestas por calificar para finalizar.</p>
+              }
             }
           </div>
         </div>
@@ -395,6 +564,20 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   readonly traceLoading = signal(false);
   readonly traceError = signal(false);
   readonly traceability = signal<AttemptTraceabilityResponse | null>(null);
+
+  // Revisión manual de respuestas abiertas.
+  readonly reviewOpen = signal(false);
+  readonly reviewLoading = signal(false);
+  readonly reviewError = signal(false);
+  readonly review = signal<TeacherAttemptReviewResponse | null>(null);
+  readonly savingAnswerId = signal<number | null>(null);
+  readonly completing = signal(false);
+  readonly reviewMessage = signal<string | null>(null);
+  readonly reviewSaveError = signal<string | null>(null);
+  private reviewAttemptId: number | null = null;
+  // Borradores de puntaje y retroalimentación por respuesta (answerId → valor).
+  private readonly scoreDrafts = signal<Record<number, string>>({});
+  private readonly feedbackDrafts = signal<Record<number, string>>({});
 
   readonly userName = computed<string>(() => this.auth.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
@@ -522,6 +705,131 @@ export class TeacherEvaluationResultsComponent implements OnInit {
     this.traceError.set(false);
   }
 
+  // ── Revisión manual ──
+
+  openReview(row: TeacherStudentResultResponse): void {
+    this.reviewAttemptId = row.attemptId;
+    this.reviewOpen.set(true);
+    this.reviewMessage.set(null);
+    this.reviewSaveError.set(null);
+    this.loadReview();
+  }
+
+  reloadReview(): void {
+    this.loadReview();
+  }
+
+  private loadReview(): void {
+    if (this.reviewAttemptId === null) return;
+    this.review.set(null);
+    this.reviewLoading.set(true);
+    this.reviewError.set(false);
+    this.service.getAttemptReview(this.reviewAttemptId).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.reviewLoading.set(false);
+      },
+      error: () => {
+        this.reviewError.set(true);
+        this.reviewLoading.set(false);
+      },
+    });
+  }
+
+  /** Inicializa los borradores con los puntajes/retroalimentación ya asignados. */
+  private hydrateDrafts(rv: TeacherAttemptReviewResponse): void {
+    const scores: Record<number, string> = {};
+    const feedback: Record<number, string> = {};
+    for (const a of rv.openAnswers) {
+      if (a.answerId !== null) {
+        scores[a.answerId] = a.awardedScore !== null ? String(a.awardedScore) : '';
+        feedback[a.answerId] = a.teacherFeedback ?? '';
+      }
+    }
+    this.scoreDrafts.set(scores);
+    this.feedbackDrafts.set(feedback);
+  }
+
+  scoreFor(answerId: number): string {
+    return this.scoreDrafts()[answerId] ?? '';
+  }
+
+  feedbackFor(answerId: number): string {
+    return this.feedbackDrafts()[answerId] ?? '';
+  }
+
+  setScore(answerId: number, value: string): void {
+    this.scoreDrafts.update((m) => ({ ...m, [answerId]: value }));
+  }
+
+  setFeedback(answerId: number, value: string): void {
+    this.feedbackDrafts.update((m) => ({ ...m, [answerId]: value }));
+  }
+
+  gradeAnswer(answer: TeacherReviewAnswerResponse): void {
+    if (answer.answerId === null || this.reviewAttemptId === null) return;
+    const raw = this.scoreDrafts()[answer.answerId] ?? '';
+    const score = Number(raw);
+    if (raw.trim() === '' || Number.isNaN(score) || score < 0 || score > answer.maxPoints) {
+      this.reviewSaveError.set(`El puntaje debe estar entre 0 y ${answer.maxPoints}.`);
+      return;
+    }
+    const feedback = (this.feedbackDrafts()[answer.answerId] ?? '').trim() || null;
+
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.savingAnswerId.set(answer.answerId);
+    this.service
+      .gradeOpenAnswer(this.reviewAttemptId, answer.answerId, { score, feedback })
+      .subscribe({
+        next: (rv) => {
+          this.review.set(rv);
+          this.hydrateDrafts(rv);
+          this.savingAnswerId.set(null);
+          this.reviewMessage.set('Puntaje guardado.');
+          // El estado del intento puede haber pasado a GRADED: se refresca la lista.
+          this.load();
+        },
+        error: (err: unknown) => {
+          this.savingAnswerId.set(null);
+          this.reviewSaveError.set(this.extractError(err, 'No se pudo guardar el puntaje.'));
+        },
+      });
+  }
+
+  completeReview(): void {
+    if (this.reviewAttemptId === null) return;
+    this.reviewSaveError.set(null);
+    this.completing.set(true);
+    this.service.completeReview(this.reviewAttemptId).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.completing.set(false);
+        this.reviewMessage.set('Revisión finalizada. La nota final ya está disponible.');
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.completing.set(false);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo finalizar la revisión.'));
+      },
+    });
+  }
+
+  closeReview(): void {
+    this.reviewOpen.set(false);
+    this.review.set(null);
+    this.reviewAttemptId = null;
+    this.reviewMessage.set(null);
+    this.reviewSaveError.set(null);
+  }
+
+  private extractError(err: unknown, fallback: string): string {
+    const e = err as { error?: { message?: string } };
+    return e?.error?.message ?? fallback;
+  }
+
   goBack(): void {
     void this.router.navigateByUrl(this.cameFromResults ? '/teacher/results' : '/teacher/evaluations');
   }
@@ -545,7 +853,27 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   }
 
   statusLabel(status: AttemptStatus): string {
-    return status === 'GRADED' ? 'Calificado' : status === 'SUBMITTED' ? 'Enviado' : 'En progreso';
+    switch (status) {
+      case 'GRADED':
+        return 'Calificado';
+      case 'PENDING_MANUAL_REVIEW':
+        return 'Pendiente de revisión';
+      case 'SUBMITTED':
+        return 'Enviado';
+      default:
+        return 'En progreso';
+    }
+  }
+
+  statusBadge(status: AttemptStatus): string {
+    switch (status) {
+      case 'GRADED':
+        return 'badge-success';
+      case 'PENDING_MANUAL_REVIEW':
+        return 'badge-warning';
+      default:
+        return 'badge-neutral';
+    }
   }
 
   formatScore(value: number | null): string {

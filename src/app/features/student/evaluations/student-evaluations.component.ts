@@ -16,6 +16,7 @@ import {
   AttemptResponse,
   StudentEvaluationDetailResponse,
   StudentEvaluationResponse,
+  StudentQuestionResponse,
 } from '../../../shared/models';
 
 type View = 'list' | 'detail' | 'take' | 'submitted';
@@ -293,6 +294,13 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                     {{ d.questions.length }} {{ d.questions.length === 1 ? 'pregunta' : 'preguntas' }},
                     {{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'una por pantalla' : 'todas en una pantalla' }}.
                   </li>
+                  @if (hasOpenQuestions()) {
+                    <li>
+                      <span class="material-icons">rate_review</span>
+                      Contiene preguntas que serán revisadas por el docente: tu nota final
+                      puede quedar pendiente hasta esa revisión.
+                    </li>
+                  }
                   @if (d.questionDisplayMode === 'ONE_BY_ONE') {
                     <li>
                       <span class="material-icons">arrow_forward</span>
@@ -481,27 +489,47 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                 <div class="q-card">
                   <div class="q-card__head">
                     <div class="q-card__num">{{ isOneByOne() ? currentIndex() + 1 : ($index + 1) }}</div>
-                    <div class="q-card__text">{{ q.questionText }}</div>
+                    <div class="q-card__text">
+                      {{ q.questionText }}
+                      @if (q.questionType === 'OPEN_TEXT') {
+                        <span class="badge badge-info q-card__tag">Respuesta abierta</span>
+                      }
+                    </div>
                   </div>
 
-                  <div class="q-card__options">
-                    @for (opt of q.options; track opt.id) {
-                      <label
-                        class="q-option"
-                        [class.q-option--selected]="answerFor(q.id) === opt.id"
-                      >
-                        <input
-                          type="radio"
-                          class="q-option__input"
-                          [name]="'q-' + q.id"
-                          [checked]="answerFor(q.id) === opt.id"
-                          (change)="selectOption(q.id, opt.id)"
-                        />
-                        <span class="q-option__radio"></span>
-                        <span class="q-option__label">{{ opt.optionText }}</span>
-                      </label>
-                    }
-                  </div>
+                  @if (q.questionType === 'OPEN_TEXT') {
+                    <div class="q-card__open">
+                      <textarea
+                        class="textarea"
+                        rows="5"
+                        maxlength="3000"
+                        [placeholder]="q.required ? 'Escribe tu respuesta (obligatoria)' : 'Escribe tu respuesta'"
+                        [value]="answerTextFor(q.id)"
+                        (input)="onTextInput(q.id, $any($event.target).value)"
+                        (blur)="saveOpenAnswer(q.id)"
+                      ></textarea>
+                      <span class="q-card__counter">{{ answerTextFor(q.id).length }} / 3000</span>
+                    </div>
+                  } @else {
+                    <div class="q-card__options">
+                      @for (opt of q.options; track opt.id) {
+                        <label
+                          class="q-option"
+                          [class.q-option--selected]="answerFor(q.id) === opt.id"
+                        >
+                          <input
+                            type="radio"
+                            class="q-option__input"
+                            [name]="'q-' + q.id"
+                            [checked]="answerFor(q.id) === opt.id"
+                            (change)="selectOption(q.id, opt.id)"
+                          />
+                          <span class="q-option__radio"></span>
+                          <span class="q-option__label">{{ opt.optionText }}</span>
+                        </label>
+                      }
+                    </div>
+                  }
 
                   <div class="q-card__feedback">
                     @if (savingQuestionId() === q.id) {
@@ -677,6 +705,8 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   // ── Intento / rendición ──
   readonly attempt = signal<AttemptResponse | null>(null);
   readonly answers = signal<Record<number, number | null>>({});
+  /** Respuestas de texto de las preguntas abiertas (questionId → texto). */
+  readonly textAnswers = signal<Record<number, string>>({});
   readonly starting = signal(false);
   readonly startError = signal<string | null>(null);
 
@@ -767,9 +797,22 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
 
   // ── Derivados de la rendición ──
   readonly answeredCount = computed(() => {
-    const map = this.answers();
-    return Object.values(map).filter((v) => v !== null && v !== undefined).length;
+    const questions = this.detail()?.questions ?? [];
+    return questions.filter((q) => this.isAnswered(q)).length;
   });
+  /** Indica si la evaluación contiene al menos una pregunta abierta (revisión manual). */
+  readonly hasOpenQuestions = computed(() =>
+    (this.detail()?.questions ?? []).some((q) => q.questionType === 'OPEN_TEXT')
+  );
+  /** Preguntas abiertas obligatorias que aún están en blanco. */
+  readonly requiredOpenMissing = computed(() =>
+    (this.detail()?.questions ?? []).filter(
+      (q) =>
+        q.questionType === 'OPEN_TEXT' &&
+        q.required &&
+        (this.textAnswers()[q.id] ?? '').trim().length === 0
+    )
+  );
   readonly progressPct = computed(() => {
     const total = this.detail()?.questions.length ?? 0;
     if (total === 0) return 0;
@@ -977,7 +1020,15 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   }
 
   isSubmitted(ev: StudentEvaluationResponse): boolean {
-    return ev.attemptStatus === 'SUBMITTED' || ev.attemptStatus === 'GRADED';
+    return (
+      ev.attemptStatus === 'SUBMITTED' ||
+      ev.attemptStatus === 'GRADED' ||
+      ev.attemptStatus === 'PENDING_MANUAL_REVIEW'
+    );
+  }
+
+  isPendingReview(ev: StudentEvaluationResponse): boolean {
+    return ev.attemptStatus === 'PENDING_MANUAL_REVIEW';
   }
 
   /** Puede iniciar un intento nuevo: no en progreso, no vencida y con intentos disponibles. */
@@ -992,6 +1043,7 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
 
   statusLabel(ev: StudentEvaluationResponse): string {
     if (this.hasInProgress(ev)) return 'En progreso';
+    if (this.isPendingReview(ev)) return 'Pendiente de revisión';
     if (this.isSubmitted(ev)) return 'Enviada';
     if (this.isOverdue(ev)) return 'Vencida';
     return 'Pendiente';
@@ -1111,10 +1163,16 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   private enterTake(attempt: AttemptResponse): void {
     this.attempt.set(attempt);
     const map: Record<number, number | null> = {};
+    const textMap: Record<number, string> = {};
     for (const a of attempt.answers) {
-      map[a.questionId] = a.selectedOptionId;
+      if (a.questionType === 'OPEN_TEXT') {
+        textMap[a.questionId] = a.answerText ?? '';
+      } else {
+        map[a.questionId] = a.selectedOptionId;
+      }
     }
     this.answers.set(map);
+    this.textAnswers.set(textMap);
     this.submitError.set(null);
     // En el modo una por una, continuamos desde la pregunta pendiente que indica el
     // backend (las anteriores quedan bloqueadas); en todas juntas el índice es indiferente.
@@ -1171,6 +1229,52 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     return this.answers()[questionId] ?? null;
   }
 
+  answerTextFor(questionId: number): string {
+    return this.textAnswers()[questionId] ?? '';
+  }
+
+  /** Indica si una pregunta tiene respuesta (alternativa elegida o texto no vacío). */
+  isAnswered(question: StudentQuestionResponse): boolean {
+    if (question.questionType === 'OPEN_TEXT') {
+      return (this.textAnswers()[question.id] ?? '').trim().length > 0;
+    }
+    return this.answers()[question.id] != null;
+  }
+
+  /** Guarda localmente el texto de una pregunta abierta mientras el estudiante escribe. */
+  onTextInput(questionId: number, value: string): void {
+    this.textAnswers.update((m) => ({ ...m, [questionId]: value }));
+  }
+
+  /**
+   * Persiste el texto de una pregunta abierta (al salir del campo) en el modo todas juntas.
+   * En el modo una por una el texto se confirma al pulsar "Guardar y continuar".
+   */
+  saveOpenAnswer(questionId: number): void {
+    const attempt = this.attempt();
+    if (!attempt || this.isOneByOne()) {
+      return;
+    }
+    const answerText = (this.textAnswers()[questionId] ?? '').trim();
+    this.savedQuestionId.set(null);
+    this.saveErrorQuestionId.set(null);
+    this.savingQuestionId.set(questionId);
+    this.service.saveAnswer(attempt.id, { questionId, answerText }).subscribe({
+      next: (updated) => {
+        this.attempt.set(updated);
+        this.savingQuestionId.set(null);
+        this.savedQuestionId.set(questionId);
+        setTimeout(() => {
+          if (this.savedQuestionId() === questionId) this.savedQuestionId.set(null);
+        }, 2000);
+      },
+      error: () => {
+        this.savingQuestionId.set(null);
+        this.saveErrorQuestionId.set(questionId);
+      },
+    });
+  }
+
   selectOption(questionId: number, optionId: number): void {
     // Guardado local inmediato para no perder la selección.
     this.answers.update((m) => ({ ...m, [questionId]: optionId }));
@@ -1223,12 +1327,22 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
       return;
     }
     const wasLast = this.isLastQuestion();
-    const selectedOptionId = this.answers()[current.id] ?? null;
+    const isOpen = current.questionType === 'OPEN_TEXT';
+
+    // No se avanza si una abierta obligatoria queda en blanco.
+    if (isOpen && current.required && (this.textAnswers()[current.id] ?? '').trim().length === 0) {
+      this.submitError.set('Esta pregunta es obligatoria: escribe tu respuesta para continuar.');
+      return;
+    }
+
+    const payload = isOpen
+      ? { questionId: current.id, answerText: (this.textAnswers()[current.id] ?? '').trim() }
+      : { questionId: current.id, selectedOptionId: this.answers()[current.id] ?? null };
 
     this.advancing.set(true);
     this.submitError.set(null);
     this.service
-      .saveAnswer(attempt.id, { questionId: current.id, selectedOptionId })
+      .saveAnswer(attempt.id, payload)
       .subscribe({
         next: (updated) => {
           this.attempt.set(updated);
@@ -1442,6 +1556,17 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   // ═══════════════ Envío ═══════════════
 
   askSubmit(): void {
+    // Una abierta obligatoria en blanco bloquea el envío (el backend también lo valida).
+    const missingRequired = this.requiredOpenMissing().length;
+    if (missingRequired > 0) {
+      this.submitError.set(
+        missingRequired === 1
+          ? 'Tienes una pregunta abierta obligatoria sin responder.'
+          : `Tienes ${missingRequired} preguntas abiertas obligatorias sin responder.`
+      );
+      return;
+    }
+
     const total = this.detail()?.questions.length ?? 0;
     const unanswered = total - this.answeredCount();
 
@@ -1479,14 +1604,23 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.submitting.set(true);
     this.submitError.set(null);
 
-    // Reenviamos las respuestas seleccionadas por si alguna no llegó a guardarse.
+    // Reenviamos las respuestas (alternativa o texto) por si alguna no llegó a guardarse.
     const map = this.answers();
-    const answers = Object.entries(map)
-      .filter(([, optionId]) => optionId !== null && optionId !== undefined)
-      .map(([questionId, optionId]) => ({
-        questionId: Number(questionId),
-        selectedOptionId: optionId as number,
-      }));
+    const textMap = this.textAnswers();
+    const answers = [
+      ...Object.entries(map)
+        .filter(([, optionId]) => optionId !== null && optionId !== undefined)
+        .map(([questionId, optionId]) => ({
+          questionId: Number(questionId),
+          selectedOptionId: optionId as number,
+        })),
+      ...Object.entries(textMap)
+        .filter(([, text]) => (text ?? '').trim().length > 0)
+        .map(([questionId, text]) => ({
+          questionId: Number(questionId),
+          answerText: text.trim(),
+        })),
+    ];
 
     this.service.submitAttempt(attempt.id, { answers }).subscribe({
       next: (result) => {
@@ -1520,6 +1654,7 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.detail.set(null);
     this.attempt.set(null);
     this.answers.set({});
+    this.textAnswers.set({});
     this.currentIndex.set(0);
     this.tabExitWarning.set(null);
     this.tabExitCount.set(0);
