@@ -211,12 +211,25 @@
     font-size: 20px;
   }
 
+  // Íconos SVG inline (p. ej. el borrador, que no existe en el set "Material Icons" clásico).
+  // Heredan el color del botón con currentColor, por lo que respetan el estado activo (blanco).
+  .tool-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+  }
+
   &--sm {
     width: 32px;
     height: 32px;
 
     .material-icons {
       font-size: 18px;
+    }
+
+    .tool-icon {
+      width: 18px;
+      height: 18px;
     }
   }
 
@@ -306,6 +319,9 @@
 // en pantalla al estar a escala 1:1), para que se vea el área que se borrará.
 .eraser-cursor {
   position: absolute;
+  // box-sizing border-box: el diámetro exterior (incluido el borde) coincide con el tamaño del
+  // borrador, que es el ancho real con el que se borra.
+  box-sizing: border-box;
   border-radius: 50%;
   border: 2px solid var(--color-neutral-700);
   background: rgba(255, 255, 255, 0.35);
@@ -315,10 +331,39 @@
   z-index: 3;
 }
 
-// Entrada de texto flotante mientras se escribe (se rasteriza en el lienzo al confirmar).
-.text-input {
+// Texto colocado sobre la pizarra como objeto movible. Por defecto no intercepta el puntero (para
+// poder dibujar/borrar/desplazar por encima); solo es seleccionable con la herramienta Texto.
+.text-item {
   position: absolute;
   z-index: 4;
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  &--editable {
+    pointer-events: auto;
+    cursor: move;
+
+    &:hover {
+      outline: 1px solid var(--color-primary-300);
+      outline-offset: 2px;
+    }
+  }
+
+  &--dragging {
+    outline: 1px dashed var(--color-primary-500);
+    outline-offset: 2px;
+  }
+}
+
+// Entrada de texto flotante mientras se escribe (se guarda como objeto movible al confirmar).
+.text-input {
+  position: absolute;
+  z-index: 5;
   margin: 0;
   padding: 0 2px;
   border: 1px dashed var(--color-primary-500);
@@ -332,6 +377,7 @@
 .canvas-overlay {
   position: absolute;
   inset: 0;
+  z-index: 6; // por encima de textos y cursor del borrador
   display: flex;
   flex-direction: column;
   align-items: center;

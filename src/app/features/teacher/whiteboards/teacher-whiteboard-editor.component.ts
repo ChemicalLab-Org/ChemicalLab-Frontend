@@ -61,6 +61,19 @@ interface TextDraft {
   readonly wy: number;
 }
 
+/** Texto colocado sobre la pizarra como objeto movible (coordenadas del workspace). */
+interface TextItem {
+  readonly id: string;
+  readonly wx: number;
+  readonly wy: number;
+  readonly text: string;
+  readonly color: string;
+  readonly size: number;
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly underline: boolean;
+}
+
 @Component({
   selector: 'app-teacher-whiteboard-editor',
   standalone: true,
@@ -178,7 +191,15 @@ interface TextDraft {
                       title="Borrador"
                       (click)="selectTool('ERASER')"
                     >
-                      <span class="material-icons">ink_eraser</span>
+                      <!-- Borrador en SVG inline: el set "Material Icons" clásico (el único cargado
+                           en index.html) no incluye un glifo de borrador, por eso antes se veía un
+                           recuadro vacío. -->
+                      <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path
+                          fill="currentColor"
+                          d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53c-1.56 1.56-4.09 1.56-5.66 0l-3.53-3.53c-.78-.79-.78-2.05 0-2.84L13.41 3.56c.79-.78 2.05-.78 2.83 0M4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95Z"
+                        />
+                      </svg>
                     </button>
                     <button
                       type="button"
@@ -349,6 +370,32 @@ interface TextDraft {
                       [style.width.px]="eraserSize()"
                       [style.height.px]="eraserSize()"
                     ></div>
+                  }
+
+                  <!-- Textos como objetos sobre el lienzo: se pueden seleccionar y arrastrar con la
+                       herramienta Texto. Se posicionan en coordenadas del workspace + el pan, de modo
+                       que siguen el desplazamiento de la pizarra. Se rasterizan solo en la captura
+                       final (no se difunden en vivo por WebSocket: limitación documentada). -->
+                  @for (item of textItems(); track item.id) {
+                    @if (editingTextId() !== item.id) {
+                      <div
+                        class="text-item"
+                        [class.text-item--editable]="canEditText()"
+                        [class.text-item--dragging]="draggingTextId() === item.id"
+                        [style.left.px]="panX() + item.wx"
+                        [style.top.px]="panY() + item.wy"
+                        [style.color]="item.color"
+                        [style.font-size.px]="item.size"
+                        [style.font-weight]="item.bold ? 700 : 400"
+                        [style.font-style]="item.italic ? 'italic' : 'normal'"
+                        [style.text-decoration]="item.underline ? 'underline' : 'none'"
+                        (pointerdown)="onTextItemPointerDown(item, $event)"
+                        (pointermove)="onTextItemPointerMove($event)"
+                        (pointerup)="onTextItemPointerUp($event)"
+                        (pointercancel)="onTextItemPointerUp($event)"
+                        (dblclick)="onTextItemDblClick(item, $event)"
+                      >{{ item.text }}</div>
+                    }
                   }
 
                   @if (textDraft(); as draft) {
@@ -528,6 +575,14 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   readonly textDraft = signal<TextDraft | null>(null);
   readonly textValue = signal<string>('');
 
+  // Textos colocados sobre la pizarra (objetos movibles).
+  readonly textItems = signal<TextItem[]>([]);
+  /** id del texto que se está reeditando (se oculta su objeto mientras se edita). */
+  readonly editingTextId = signal<string | null>(null);
+  /** id del texto que se está arrastrando, o null. */
+  readonly draggingTextId = signal<string | null>(null);
+  private textDragStart = { wx: 0, wy: 0, clientX: 0, clientY: 0 };
+
   readonly fullscreen = signal<boolean>(false);
 
   readonly session = signal<WhiteboardSessionResponse | null>(null);
@@ -576,6 +631,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   readonly showEraserCursor = computed<boolean>(
     () => this.tool() === 'ERASER' && this.canDraw() && this.cursorPos() !== null && !this.panning
   );
+
+  /** Los textos solo se pueden seleccionar/mover con la herramienta Texto y la sesión activa. */
+  readonly canEditText = computed<boolean>(() => this.tool() === 'TEXT' && this.canDraw());
 
   /** Cursor del lienzo según la herramienta y el estado de la sesión. */
   readonly canvasCursor = computed<string>(() => {
@@ -839,6 +897,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     const rect = wrap.getBoundingClientRect();
     const wp = this.toCanvasPoint(event);
+    this.editingTextId.set(null);
     this.textValue.set('');
     this.textDraft.set({
       screenX: event.clientX - rect.left,
@@ -850,9 +909,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Confirma el texto en edición dibujándolo en el lienzo. El backend no define un eventType de
-   * texto, por lo que el texto se rasteriza localmente: forma parte de la captura final pero no
-   * se difunde en vivo por WebSocket (limitación documentada).
+   * Confirma el texto en edición guardándolo como objeto movible sobre la pizarra. Los textos se
+   * rasterizan solo al generar la captura final (forman parte de ella); no se difunden en vivo por
+   * WebSocket porque el backend no define un eventType de texto (limitación documentada).
    */
   commitText(): void {
     const draft = this.textDraft();
@@ -860,37 +919,47 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     const value = this.textValue().trim();
+    const editingId = this.editingTextId();
     this.textDraft.set(null);
     this.textValue.set('');
-    if (value === '' || !this.canDraw()) {
+    this.editingTextId.set(null);
+
+    if (value === '') {
+      // Edición que se dejó vacía: se elimina el texto existente.
+      if (editingId !== null) {
+        this.textItems.update((items) => items.filter((i) => i.id !== editingId));
+      }
       return;
     }
-    const ctx = this.ensureCanvas();
-    if (ctx === null) {
+    if (!this.canDraw()) {
       return;
     }
-    const size = this.textSize();
-    ctx.save();
-    ctx.font = this.canvasFont(size);
-    ctx.fillStyle = this.color();
-    ctx.textBaseline = 'top';
-    ctx.fillText(value, draft.wx, draft.wy);
-    if (this.textUnderline()) {
-      const width = ctx.measureText(value).width;
-      const underlineY = draft.wy + size * 1.08;
-      ctx.strokeStyle = this.color();
-      ctx.lineWidth = Math.max(1, size / 14);
-      ctx.beginPath();
-      ctx.moveTo(draft.wx, underlineY);
-      ctx.lineTo(draft.wx + width, underlineY);
-      ctx.stroke();
+
+    const attrs = {
+      text: value,
+      color: this.color(),
+      size: this.textSize(),
+      bold: this.textBold(),
+      italic: this.textItalic(),
+      underline: this.textUnderline(),
+    };
+    if (editingId !== null) {
+      this.textItems.update((items) =>
+        items.map((i) => (i.id === editingId ? { ...i, ...attrs } : i))
+      );
+    } else {
+      this.textItems.update((items) => [
+        ...items,
+        { id: this.localId(), wx: draft.wx, wy: draft.wy, ...attrs },
+      ]);
     }
-    ctx.restore();
   }
 
   cancelText(): void {
+    // Si se cancela una reedición, el objeto original se conserva sin cambios.
     this.textDraft.set(null);
     this.textValue.set('');
+    this.editingTextId.set(null);
   }
 
   /** Esc dentro del campo de texto: cancela el texto sin afectar a la pantalla completa. */
@@ -899,10 +968,103 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.cancelText();
   }
 
-  private canvasFont(size: number): string {
-    const style = this.textItalic() ? 'italic ' : '';
-    const weight = this.textBold() ? '700' : '400';
-    return `${style}${weight} ${size}px "Plus Jakarta Sans", system-ui, sans-serif`;
+  // ─── Texto movible: selección, arrastre y reedición ──────────────────────────
+
+  onTextItemPointerDown(item: TextItem, event: PointerEvent): void {
+    if (!this.canEditText()) {
+      return;
+    }
+    // Evita que el clic llegue al lienzo (crearía un texto nuevo) o inicie el pan.
+    event.preventDefault();
+    event.stopPropagation();
+    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+    this.draggingTextId.set(item.id);
+    this.textDragStart = {
+      wx: item.wx,
+      wy: item.wy,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
+  }
+
+  onTextItemPointerMove(event: PointerEvent): void {
+    const id = this.draggingTextId();
+    if (id === null) {
+      return;
+    }
+    event.preventDefault();
+    // El lienzo se muestra a escala 1:1, por lo que el desplazamiento en pantalla equivale al
+    // desplazamiento en coordenadas del workspace.
+    const dx = event.clientX - this.textDragStart.clientX;
+    const dy = event.clientY - this.textDragStart.clientY;
+    const wx = Math.max(0, Math.min(WORKSPACE_WIDTH, this.textDragStart.wx + dx));
+    const wy = Math.max(0, Math.min(WORKSPACE_HEIGHT, this.textDragStart.wy + dy));
+    this.textItems.update((items) => items.map((i) => (i.id === id ? { ...i, wx, wy } : i)));
+  }
+
+  onTextItemPointerUp(event: PointerEvent): void {
+    if (this.draggingTextId() === null) {
+      return;
+    }
+    (event.target as HTMLElement).releasePointerCapture?.(event.pointerId);
+    this.draggingTextId.set(null);
+  }
+
+  /** Doble clic sobre un texto: lo reabre en el editor flotante para cambiar su contenido/estilo. */
+  onTextItemDblClick(item: TextItem, event: Event): void {
+    if (!this.canEditText()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.commitText();
+    this.color.set(item.color);
+    this.textSize.set(item.size);
+    this.textBold.set(item.bold);
+    this.textItalic.set(item.italic);
+    this.textUnderline.set(item.underline);
+    this.editingTextId.set(item.id);
+    this.textValue.set(item.text);
+    this.textDraft.set({
+      screenX: this.panX() + item.wx,
+      screenY: this.panY() + item.wy,
+      wx: item.wx,
+      wy: item.wy,
+    });
+    setTimeout(() => this.textEditorRef()?.nativeElement.focus(), 0);
+  }
+
+  /** Dibuja un texto en un contexto (se usa al componer la captura final). */
+  private drawTextItem(ctx: CanvasRenderingContext2D, item: TextItem): void {
+    ctx.save();
+    ctx.font = this.fontFor(item);
+    ctx.fillStyle = item.color;
+    ctx.textBaseline = 'top';
+    ctx.fillText(item.text, item.wx, item.wy);
+    if (item.underline) {
+      const width = ctx.measureText(item.text).width;
+      const underlineY = item.wy + item.size * 1.08;
+      ctx.strokeStyle = item.color;
+      ctx.lineWidth = Math.max(1, item.size / 14);
+      ctx.beginPath();
+      ctx.moveTo(item.wx, underlineY);
+      ctx.lineTo(item.wx + width, underlineY);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private fontFor(item: TextItem): string {
+    const style = item.italic ? 'italic ' : '';
+    const weight = item.bold ? '700' : '400';
+    return `${style}${weight} ${item.size}px "Plus Jakarta Sans", system-ui, sans-serif`;
+  }
+
+  /** Identificador local para objetos que no viajan por WebSocket (textos). */
+  private localId(): string {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `txt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
   // ─── Borrar todo ──────────────────────────────────────────────────────────────
@@ -1104,6 +1266,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     ctx.fillStyle = BOARD_BACKGROUND;
     ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
+    // Los textos son objetos sobre la pizarra: "Borrar todo" también los retira.
+    this.textItems.set([]);
   }
 
   private renderSegment(from: WhiteboardPoint, to: WhiteboardPoint, color: string, width: number): void {
@@ -1192,29 +1356,48 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   // ─── Captura final / historial ────────────────────────────────────────────────
 
-  /** Genera la captura del lienzo (solo la pizarra), reescalada para un peso razonable. */
+  /**
+   * Genera la captura del lienzo (solo la pizarra/workspace), reescalada para un peso razonable.
+   * Compone el bitmap de trazos y borrados con los textos colocados (que son objetos overlay), de
+   * modo que la captura final incluye trazos, borrados y textos en su posición actual. No captura
+   * la barra de herramientas, el panel de participantes ni ningún otro elemento de la interfaz.
+   */
   private exportSnapshot(callback: (blob: Blob | null) => void): void {
     const canvas = this.canvasRef()?.nativeElement;
     if (!canvas) {
       callback(null);
       return;
     }
-    if (canvas.width <= SNAPSHOT_MAX_WIDTH) {
+    // Composición a resolución completa: trazos/borrados (bitmap) + textos encima.
+    const composed = document.createElement('canvas');
+    composed.width = WORKSPACE_WIDTH;
+    composed.height = WORKSPACE_HEIGHT;
+    const cctx = composed.getContext('2d');
+    if (cctx === null) {
       canvas.toBlob(callback, 'image/png');
       return;
     }
-    const scale = SNAPSHOT_MAX_WIDTH / canvas.width;
+    cctx.drawImage(canvas, 0, 0);
+    for (const item of this.textItems()) {
+      this.drawTextItem(cctx, item);
+    }
+
+    if (composed.width <= SNAPSHOT_MAX_WIDTH) {
+      composed.toBlob(callback, 'image/png');
+      return;
+    }
+    const scale = SNAPSHOT_MAX_WIDTH / composed.width;
     const off = document.createElement('canvas');
-    off.width = Math.round(canvas.width * scale);
-    off.height = Math.round(canvas.height * scale);
+    off.width = Math.round(composed.width * scale);
+    off.height = Math.round(composed.height * scale);
     const octx = off.getContext('2d');
     if (octx === null) {
-      canvas.toBlob(callback, 'image/png');
+      composed.toBlob(callback, 'image/png');
       return;
     }
     octx.fillStyle = BOARD_BACKGROUND;
     octx.fillRect(0, 0, off.width, off.height);
-    octx.drawImage(canvas, 0, 0, off.width, off.height);
+    octx.drawImage(composed, 0, 0, off.width, off.height);
     off.toBlob(callback, 'image/png');
   }
 
