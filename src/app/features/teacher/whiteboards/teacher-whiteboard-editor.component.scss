@@ -29,11 +29,15 @@
       flex-direction: column;
       flex: 1;
       min-height: 0;
+      // Evita que el ancho intrínseco del lienzo (resolución lógica de 3200px) estire el
+      // contenedor más allá del viewport y empuje los controles de la toolbar fuera de la pantalla.
+      min-width: 0;
     }
 
     .board-area {
       flex: 1;
       min-height: 0;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       gap: var(--space-3);
@@ -42,7 +46,39 @@
     .board-viewport {
       flex: 1;
       height: auto;
+      min-height: 0; // permite que el visor se ajuste al alto disponible sin desbordar
+      min-width: 0;
     }
+  }
+}
+
+// Botón flotante para salir de pantalla completa. Siempre visible en una esquina, por encima del
+// lienzo, sin depender de la barra de herramientas.
+.fs-exit {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 250;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-600);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: background var(--transition-fast);
+
+  .material-icons {
+    font-size: 20px;
+  }
+
+  &:hover {
+    background: var(--color-primary-700);
   }
 }
 
@@ -172,13 +208,29 @@
 // Barra de herramientas
 .toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-4);
+  flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background: var(--color-neutral-0);
   border: 1.5px solid var(--color-neutral-200);
   border-radius: var(--radius-lg);
+
+  // Cada fila agrupa controles. La fila superior (herramientas + acciones) es siempre igual; la
+  // de opciones tiene altura mínima constante, de modo que cambiar de herramienta no desplaza el
+  // lienzo ni los botones Pausar/Finalizar.
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+
+    &--options {
+      min-height: 40px;
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-neutral-200);
+    }
+  }
 
   &__group {
     display: flex;
@@ -211,12 +263,25 @@
     font-size: 20px;
   }
 
+  // Íconos SVG inline (p. ej. el borrador, que no existe en el set "Material Icons" clásico).
+  // Heredan el color del botón con currentColor, por lo que respetan el estado activo (blanco).
+  .tool-icon {
+    width: 20px;
+    height: 20px;
+    display: block;
+  }
+
   &--sm {
     width: 32px;
     height: 32px;
 
     .material-icons {
       font-size: 18px;
+    }
+
+    .tool-icon {
+      width: 18px;
+      height: 18px;
     }
   }
 
@@ -267,6 +332,17 @@
     cursor: pointer;
   }
 
+  // Selector compacto de tamaño de texto (estilo editor de texto), sin barra deslizante.
+  &__select {
+    width: auto;
+    min-width: 64px;
+    height: 32px;
+    padding: 0 28px 0 10px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
   &--range &__value {
     min-width: 18px;
     font-size: var(--text-sm);
@@ -306,6 +382,9 @@
 // en pantalla al estar a escala 1:1), para que se vea el área que se borrará.
 .eraser-cursor {
   position: absolute;
+  // box-sizing border-box: el diámetro exterior (incluido el borde) coincide con el tamaño del
+  // borrador, que es el ancho real con el que se borra.
+  box-sizing: border-box;
   border-radius: 50%;
   border: 2px solid var(--color-neutral-700);
   background: rgba(255, 255, 255, 0.35);
@@ -315,10 +394,40 @@
   z-index: 3;
 }
 
-// Entrada de texto flotante mientras se escribe (se rasteriza en el lienzo al confirmar).
-.text-input {
+// Texto colocado sobre la pizarra como objeto movible. Por defecto no intercepta el puntero (para
+// poder dibujar/borrar/desplazar por encima); solo es seleccionable con la herramienta Texto.
+.text-item {
   position: absolute;
   z-index: 4;
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  &--editable {
+    pointer-events: auto;
+    cursor: move;
+
+    &:hover {
+      outline: 1px solid var(--color-primary-300);
+      outline-offset: 2px;
+    }
+  }
+
+  &--dragging {
+    outline: 1px dashed var(--color-primary-500);
+    outline-offset: 2px;
+  }
+}
+
+// Editor de texto flotante (contenteditable) mientras se escribe/formatea; al confirmar se guarda
+// como objeto movible con formato por runs.
+.text-input {
+  position: absolute;
+  z-index: 5;
   margin: 0;
   padding: 0 2px;
   border: 1px dashed var(--color-primary-500);
@@ -326,12 +435,21 @@
   outline: none;
   line-height: 1.1;
   min-width: 40px;
+  white-space: pre;
+  cursor: text;
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  &:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-neutral-400);
+    pointer-events: none;
+  }
 }
 
 .canvas-overlay {
   position: absolute;
   inset: 0;
+  z-index: 6; // por encima de textos y cursor del borrador
   display: flex;
   flex-direction: column;
   align-items: center;
