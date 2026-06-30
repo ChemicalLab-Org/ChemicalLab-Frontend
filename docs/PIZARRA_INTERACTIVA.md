@@ -135,12 +135,19 @@ con un **estado actual del lienzo** para sesiones en vivo (no solo la imagen fin
 - **Participantes en vivo:** al unirse un estudiante, el backend difunde el evento de control
   `PARTICIPANT_JOINED` y el editor docente **refresca el panel de participantes** sin recargar (el
   botón Actualizar y la recarga del detalle también lo listan).
-- **Texto en vivo (docente y estudiante):** el texto se difunde por `TEXT`/`TEXT_DELETE`. El
-  docente lo crea/mueve/edita con formato; **el estudiante con permiso** también puede insertar
-  texto en versión básica (contenido + color + tamaño) con la herramienta Texto, y el backend lo
-  acepta con la misma regla de permiso efectivo que un trazo (`CLEAR` sigue reservado al docente).
-  Cada cliente renderiza el texto entrante como overlay; el docente ve el texto de los alumnos y
-  todo se conserva al reconstruir el estado.
+- **Texto en vivo (docente y estudiante, mismo comportamiento):** el texto se difunde por
+  `TEXT`/`TEXT_DELETE`. El docente y **el estudiante con permiso** tienen exactamente la misma
+  experiencia de texto, compartida en `src/app/shared/whiteboard/whiteboard-text.util.ts`: insertar,
+  color, tamaño, **negrita/cursiva/subrayado aplicados solo a la selección** (editor contenteditable
+  + `execCommand`), **mover** el texto (arrastre, conservando el formato) y reeditar (doble clic). El
+  backend acepta el texto del estudiante con la misma regla de permiso efectivo que un trazo (`CLEAR`
+  sigue reservado al docente). Cada cliente renderiza el texto entrante como overlay; el docente ve
+  el texto de los alumnos y viceversa, y todo se conserva al reconstruir el estado.
+- **El borrador borra texto:** además de los trazos, el borrador elimina los objetos de texto que su
+  círculo toca (detección por intersección con el rectángulo del texto, considerando el
+  desplazamiento/pan). Funciona para el docente y para el estudiante con permiso; difunde
+  `TEXT_DELETE` para que todos lo vean desaparecer, se quita del estado guardado (no reaparece al
+  recargar) y no se incluye en la captura final.
 - **Permisos:** ante `INTERACTION_UPDATED`/`PARTICIPANT_PERMISSION_UPDATED` el alumno vuelve a pedir
   el detalle y recalcula `canInteract`; si el join falla en una sesión en vivo, el error se
   **reporta** (ya no se degrada en silencio a solo lectura), evitando que el alumno quede sin

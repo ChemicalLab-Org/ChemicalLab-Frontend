@@ -35,6 +35,15 @@ import {
   WhiteboardStrokeRecord,
   WhiteboardTextRun,
 } from '../../../shared/models';
+import {
+  WhiteboardTextObject,
+  caretToEnd,
+  drawTextItem,
+  eraserHitsText,
+  localTextId,
+  parseRuns,
+  runsToHtml,
+} from '../../../shared/whiteboard/whiteboard-text.util';
 
 /**
  * Área de trabajo (workspace) de la pizarra: grande pero limitada (no infinita). Es la
@@ -64,26 +73,8 @@ interface TextDraft {
   readonly wy: number;
 }
 
-/**
- * Fragmento de texto con un estilo uniforme. El formato (negrita/cursiva/subrayado) es por run,
- * lo que permite formato parcial dentro de un mismo texto. El color y el tamaño son del bloque.
- */
-interface TextRun {
-  readonly text: string;
-  readonly bold: boolean;
-  readonly italic: boolean;
-  readonly underline: boolean;
-}
-
 /** Texto colocado sobre la pizarra como objeto movible (coordenadas del workspace). */
-interface TextItem {
-  readonly id: string;
-  readonly wx: number;
-  readonly wy: number;
-  readonly color: string;
-  readonly size: number;
-  readonly runs: readonly TextRun[];
-}
+type TextItem = WhiteboardTextObject;
 
 @Component({
   selector: 'app-teacher-whiteboard-editor',
@@ -827,8 +818,12 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     event.preventDefault();
     (event.target as HTMLCanvasElement).setPointerCapture?.(event.pointerId);
     this.drawing = true;
-    this.currentStroke = [this.toCanvasPoint(event)];
+    const start = this.toCanvasPoint(event);
+    this.currentStroke = [start];
     this.renderStroke(this.currentStroke, this.activeColor(), this.activeWidth());
+    if (this.tool() === 'ERASER') {
+      this.eraseTextsAt(start);
+    }
   }
 
   onPointerMove(event: PointerEvent): void {
@@ -849,6 +844,38 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (previous) {
       this.renderSegment(previous, point, this.activeColor(), this.activeWidth());
     }
+    // El borrador también elimina los objetos de texto que toca (no solo trazos del lienzo).
+    if (this.tool() === 'ERASER') {
+      this.eraseTextsAt(point);
+    }
+  }
+
+  /**
+   * Elimina los objetos de texto que el círculo del borrador toca en la posición indicada
+   * (coordenadas del workspace) y difunde su eliminación por WebSocket para que el resto de
+   * participantes los vean desaparecer. El estado guardado también se actualiza, de modo que al
+   * recargar no reaparecen.
+   */
+  private eraseTextsAt(point: WhiteboardPoint): void {
+    const items = this.textItems();
+    if (items.length === 0) {
+      return;
+    }
+    const ctx = this.ensureCanvas();
+    if (ctx === null) {
+      return;
+    }
+    const radius = this.eraserSize() / 2;
+    const hit = items.filter((item) => eraserHitsText(ctx, item, point.x, point.y, radius));
+    if (hit.length === 0) {
+      return;
+    }
+    const hitIds = new Set(hit.map((i) => i.id));
+    this.textItems.update((list) => list.filter((i) => !hitIds.has(i.id)));
+    for (const id of hitIds) {
+      this.broadcastTextDelete(id);
+    }
+    this.scheduleStateSave();
   }
 
   onPointerUp(event: PointerEvent): void {
@@ -966,7 +993,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     const editor = this.textEditorRef()?.nativeElement ?? null;
     const editingId = this.editingTextId();
-    const runs = editor ? this.parseRuns(editor) : [];
+    const runs = editor ? parseRuns(editor) : [];
     const plain = runs.map((r) => r.text).join('').trim();
 
     this.textDraft.set(null);
@@ -996,7 +1023,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         items.map((i) => (i.id === editingId ? { ...i, ...base } : i))
       );
     } else {
-      saved = { id: this.localId(), wx: draft.wx, wy: draft.wy, ...base };
+      saved = { id: localTextId(), wx: draft.wx, wy: draft.wy, ...base };
       this.textItems.update((items) => [...items, saved]);
     }
     // Difunde el texto en vivo para que el alumno lo vea sin recargar y lo guarda en el estado.
@@ -1049,7 +1076,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       const editor = this.textEditorRef()?.nativeElement;
       if (editor) {
         editor.focus();
-        this.caretToEnd(editor);
+        caretToEnd(editor);
       }
     }, 0);
   }
@@ -1170,140 +1197,14 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     setTimeout(() => {
       const editor = this.textEditorRef()?.nativeElement;
       if (editor) {
-        editor.innerHTML = this.runsToHtml(item.runs);
+        editor.innerHTML = runsToHtml(item.runs);
         editor.focus();
-        this.caretToEnd(editor);
+        caretToEnd(editor);
         this.refreshFormatStates();
       }
     }, 0);
   }
 
-  /** Dibuja un texto (con formato por runs) en un contexto; se usa al componer la captura final. */
-  private drawTextItem(ctx: CanvasRenderingContext2D, item: TextItem): void {
-    ctx.save();
-    ctx.fillStyle = item.color;
-    ctx.strokeStyle = item.color;
-    ctx.textBaseline = 'top';
-    let x = item.wx;
-    for (const run of item.runs) {
-      ctx.font = this.runFont(item.size, run);
-      const width = ctx.measureText(run.text).width;
-      ctx.fillText(run.text, x, item.wy);
-      if (run.underline) {
-        const underlineY = item.wy + item.size * 1.08;
-        ctx.lineWidth = Math.max(1, item.size / 14);
-        ctx.beginPath();
-        ctx.moveTo(x, underlineY);
-        ctx.lineTo(x + width, underlineY);
-        ctx.stroke();
-      }
-      x += width;
-    }
-    ctx.restore();
-  }
-
-  private runFont(size: number, run: TextRun): string {
-    const style = run.italic ? 'italic ' : '';
-    const weight = run.bold ? '700' : '400';
-    return `${style}${weight} ${size}px "Plus Jakarta Sans", system-ui, sans-serif`;
-  }
-
-  /** Convierte el DOM del editor contenteditable en runs con estilo uniforme. */
-  private parseRuns(root: HTMLElement): TextRun[] {
-    const runs: TextRun[] = [];
-    const walk = (node: Node, bold: boolean, italic: boolean, underline: boolean): void => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent ?? '';
-        if (text.length > 0) {
-          runs.push({ text, bold, italic, underline });
-        }
-        return;
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        return;
-      }
-      const el = node as HTMLElement;
-      if (el.tagName === 'BR') {
-        return; // editor de una sola línea: ignoramos saltos
-      }
-      const style = el.style;
-      const fontWeight = style.fontWeight;
-      const nextBold =
-        bold ||
-        el.tagName === 'B' ||
-        el.tagName === 'STRONG' ||
-        fontWeight === 'bold' ||
-        (fontWeight !== '' && Number(fontWeight) >= 600);
-      const nextItalic = italic || el.tagName === 'I' || el.tagName === 'EM' || style.fontStyle === 'italic';
-      const decoration = `${style.textDecoration} ${style.textDecorationLine}`;
-      const nextUnderline = underline || el.tagName === 'U' || decoration.includes('underline');
-      el.childNodes.forEach((child) => walk(child, nextBold, nextItalic, nextUnderline));
-    };
-    root.childNodes.forEach((n) => walk(n, false, false, false));
-    return this.mergeRuns(runs);
-  }
-
-  /** Une runs adyacentes con el mismo formato (evita fragmentación innecesaria). */
-  private mergeRuns(runs: TextRun[]): TextRun[] {
-    const merged: TextRun[] = [];
-    for (const run of runs) {
-      const last = merged[merged.length - 1];
-      if (
-        last &&
-        last.bold === run.bold &&
-        last.italic === run.italic &&
-        last.underline === run.underline
-      ) {
-        merged[merged.length - 1] = { ...last, text: last.text + run.text };
-      } else {
-        merged.push(run);
-      }
-    }
-    return merged;
-  }
-
-  /** Serializa runs a HTML para volver a poblar el editor al reeditar. */
-  private runsToHtml(runs: readonly TextRun[]): string {
-    return runs
-      .map((run) => {
-        let html = this.escapeHtml(run.text);
-        if (run.bold) {
-          html = `<b>${html}</b>`;
-        }
-        if (run.italic) {
-          html = `<i>${html}</i>`;
-        }
-        if (run.underline) {
-          html = `<u>${html}</u>`;
-        }
-        return html;
-      })
-      .join('');
-  }
-
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
-
-  /** Coloca el cursor al final del contenido del editor. */
-  private caretToEnd(editor: HTMLElement): void {
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  }
-
-  /** Identificador local para objetos que no viajan por WebSocket (textos). */
-  private localId(): string {
-    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `txt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
 
   // ─── Borrar todo ──────────────────────────────────────────────────────────────
 
@@ -1657,7 +1558,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     cctx.drawImage(canvas, 0, 0);
     for (const item of this.textItems()) {
-      this.drawTextItem(cctx, item);
+      drawTextItem(cctx, item);
     }
 
     if (composed.width <= SNAPSHOT_MAX_WIDTH) {
@@ -1739,7 +1640,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       wy: point.y,
       color: event.color ?? '#1a1a16',
       size: event.fontSize ?? 32,
-      runs: (event.runs ?? []) as readonly TextRun[],
+      runs: (event.runs ?? []) as readonly WhiteboardTextRun[],
     };
     this.textItems.update((items) => {
       const index = items.findIndex((i) => i.id === item.id);

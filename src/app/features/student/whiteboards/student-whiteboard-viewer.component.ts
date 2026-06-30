@@ -33,6 +33,14 @@ import {
   WhiteboardStudentSessionResponse,
   WhiteboardTextRun,
 } from '../../../shared/models';
+import {
+  WhiteboardTextObject,
+  caretToEnd,
+  eraserHitsText,
+  localTextId,
+  parseRuns,
+  runsToHtml,
+} from '../../../shared/whiteboard/whiteboard-text.util';
 
 /**
  * Mismo espacio de coordenadas (workspace) que el editor docente, para que los trazos que llegan
@@ -48,12 +56,13 @@ const PEN_CURSOR =
 
 /**
  * Herramientas del estudiante: plumón, borrador, texto y desplazamiento. «Borrar todo» es solo
- * docente. El texto del estudiante es una versión básica (contenido + color + tamaño) que se
- * difunde por WebSocket para que el docente y los demás lo vean.
+ * docente. El texto del estudiante tiene el mismo comportamiento que el docente (formato parcial
+ * negrita/cursiva/subrayado, mover, reeditar) reutilizando la lógica compartida
+ * ({@link ../../../shared/whiteboard/whiteboard-text.util}), y se difunde por WebSocket.
  */
 type StudentTool = 'PEN' | 'ERASER' | 'TEXT' | 'MOVE';
 
-/** Borrador de texto en edición (input flotante sobre el visor). */
+/** Texto en edición (editor flotante contenteditable sobre el visor). */
 interface TextDraft {
   readonly screenX: number;
   readonly screenY: number;
@@ -62,14 +71,7 @@ interface TextDraft {
 }
 
 /** Objeto de texto sobre la pizarra (propio del alumno o recibido del docente/otros). */
-interface DisplayTextItem {
-  readonly id: string;
-  readonly wx: number;
-  readonly wy: number;
-  readonly color: string;
-  readonly size: number;
-  readonly runs: readonly WhiteboardTextRun[];
-}
+type DisplayTextItem = WhiteboardTextObject;
 
 /**
  * Visor en vivo de la pizarra para el estudiante.
@@ -250,7 +252,12 @@ interface DisplayTextItem {
                   <div class="toolbar__group">
                     <label class="tool-field" title="Color">
                       <span class="material-icons">palette</span>
-                      <input type="color" [value]="color()" (input)="onColor($event)" />
+                      <input
+                        type="color"
+                        [value]="color()"
+                        (mousedown)="keepEditorFocus()"
+                        (input)="onColor($event)"
+                      />
                     </label>
 
                     @if (tool() === 'PEN') {
@@ -283,6 +290,7 @@ interface DisplayTextItem {
                         <select
                           class="select tool-field__select"
                           [value]="textSize()"
+                          (mousedown)="keepEditorFocus()"
                           (change)="onTextSize($event)"
                         >
                           @for (size of textSizes; track size) {
@@ -290,6 +298,42 @@ interface DisplayTextItem {
                           }
                         </select>
                       </label>
+
+                      <div class="toolbar__group toolbar__group--tight">
+                        <button
+                          type="button"
+                          class="tool-btn tool-btn--sm"
+                          [class.tool-btn--active]="textBold()"
+                          [disabled]="textDraft() === null"
+                          title="Negrita (selecciona texto para aplicarlo a una parte)"
+                          (mousedown)="$event.preventDefault()"
+                          (click)="applyFormat('bold')"
+                        >
+                          <span class="material-icons">format_bold</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="tool-btn tool-btn--sm"
+                          [class.tool-btn--active]="textItalic()"
+                          [disabled]="textDraft() === null"
+                          title="Cursiva (selecciona texto para aplicarlo a una parte)"
+                          (mousedown)="$event.preventDefault()"
+                          (click)="applyFormat('italic')"
+                        >
+                          <span class="material-icons">format_italic</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="tool-btn tool-btn--sm"
+                          [class.tool-btn--active]="textUnderline()"
+                          [disabled]="textDraft() === null"
+                          title="Subrayado (selecciona texto para aplicarlo a una parte)"
+                          (mousedown)="$event.preventDefault()"
+                          (click)="applyFormat('underline')"
+                        >
+                          <span class="material-icons">format_underlined</span>
+                        </button>
+                      </div>
                     }
                   </div>
                 }
@@ -318,37 +362,51 @@ interface DisplayTextItem {
                   ></div>
                 }
 
-                <!-- Textos del docente (solo lectura para el alumno): se posicionan en coordenadas
-                     del workspace + el pan, de modo que siguen el desplazamiento de la pizarra. -->
+                <!-- Textos sobre la pizarra (del alumno, del docente o de otros): se posicionan en
+                     coordenadas del workspace + el pan. Con permiso y la herramienta Texto se pueden
+                     mover (arrastrar) y reeditar (doble clic); si no, solo se visualizan. -->
                 @for (item of textItems(); track item.id) {
-                  <div
-                    class="text-item"
-                    [style.left.px]="panX() + item.wx"
-                    [style.top.px]="panY() + item.wy"
-                    [style.color]="item.color"
-                    [style.font-size.px]="item.size"
-                  >@for (run of item.runs; track $index) {<span
-                      [style.font-weight]="run.bold ? 700 : 400"
-                      [style.font-style]="run.italic ? 'italic' : 'normal'"
-                      [style.text-decoration]="run.underline ? 'underline' : 'none'"
-                    >{{ run.text }}</span>}</div>
+                  @if (editingTextId() !== item.id) {
+                    <div
+                      class="text-item"
+                      [class.text-item--editable]="canEditText()"
+                      [class.text-item--dragging]="draggingTextId() === item.id"
+                      [style.left.px]="panX() + item.wx"
+                      [style.top.px]="panY() + item.wy"
+                      [style.color]="item.color"
+                      [style.font-size.px]="item.size"
+                      (pointerdown)="onTextItemPointerDown(item, $event)"
+                      (pointermove)="onTextItemPointerMove($event)"
+                      (pointerup)="onTextItemPointerUp($event)"
+                      (pointercancel)="onTextItemPointerUp($event)"
+                      (dblclick)="onTextItemDblClick(item, $event)"
+                    >@for (run of item.runs; track $index) {<span
+                        [style.font-weight]="run.bold ? 700 : 400"
+                        [style.font-style]="run.italic ? 'italic' : 'normal'"
+                        [style.text-decoration]="run.underline ? 'underline' : 'none'"
+                      >{{ run.text }}</span>}</div>
+                  }
                 }
 
                 @if (textDraft(); as draft) {
-                  <!-- Input flotante de texto del alumno: Enter confirma, Escape cancela. -->
-                  <input
-                    #textInput
-                    type="text"
+                  <!-- Editor temporal contenteditable: permite seleccionar partes del texto y aplicar
+                       negrita/cursiva/subrayado solo a la selección (execCommand). Al confirmar, su
+                       contenido se convierte en runs con estilo propio y se difunde por WebSocket. -->
+                  <div
+                    #textEditor
                     class="text-input"
-                    placeholder="Escribe y pulsa Enter…"
+                    contenteditable="true"
+                    data-placeholder="Escribe y pulsa Enter…"
                     [style.left.px]="draft.screenX"
                     [style.top.px]="draft.screenY"
                     [style.color]="color()"
                     [style.font-size.px]="textSize()"
-                    (keydown.enter)="onTextInputEnter($event)"
-                    (keydown.escape)="cancelText()"
-                    (blur)="commitText()"
-                  />
+                    (keydown.enter)="onEditorEnter($event)"
+                    (keydown.escape)="onTextEscape($event)"
+                    (keyup)="refreshFormatStates()"
+                    (mouseup)="refreshFormatStates()"
+                    (blur)="onEditorBlur()"
+                  ></div>
                 }
 
                 @if (s.status === 'PAUSED') {
@@ -389,7 +447,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('boardCanvas');
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
-  private readonly textInputRef = viewChild<ElementRef<HTMLInputElement>>('textInput');
+  private readonly textEditorRef = viewChild<ElementRef<HTMLDivElement>>('textEditor');
 
   private sessionId = 0;
   private ctx: CanvasRenderingContext2D | null = null;
@@ -406,8 +464,20 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   readonly cursorPos = signal<{ x: number; y: number } | null>(null);
 
-  /** Textos del docente que el alumno solo visualiza (vía estado inicial y eventos en vivo). */
+  /** Textos sobre la pizarra (propios del alumno o recibidos del docente/otros estudiantes). */
   readonly textItems = signal<DisplayTextItem[]>([]);
+  /** id del texto que se está reeditando (se oculta su objeto mientras se edita). */
+  readonly editingTextId = signal<string | null>(null);
+  /** id del texto que se está arrastrando, o null. */
+  readonly draggingTextId = signal<string | null>(null);
+  private textDragStart = { wx: 0, wy: 0, clientX: 0, clientY: 0 };
+  /** Evita que el editor se confirme al tocar controles de tamaño/color (que roban el foco). */
+  private keepEditorOpen = false;
+
+  // Estado activo de los botones B/I/U: refleja el formato de la selección actual del editor.
+  readonly textBold = signal<boolean>(false);
+  readonly textItalic = signal<boolean>(false);
+  readonly textUnderline = signal<boolean>(false);
 
   readonly fullscreen = signal<boolean>(false);
 
@@ -451,6 +521,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   readonly showEraserCursor = computed<boolean>(
     () => this.tool() === 'ERASER' && this.canDraw() && this.cursorPos() !== null && !this.panning
   );
+
+  /** Los textos solo se pueden seleccionar/mover/reeditar con la herramienta Texto y permiso. */
+  readonly canEditText = computed<boolean>(() => this.tool() === 'TEXT' && this.canDraw());
 
   readonly canvasCursor = computed<string>(() => {
     if (this.tool() === 'MOVE') {
@@ -629,6 +702,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   onColor(event: Event): void {
     this.color.set((event.target as HTMLInputElement).value);
+    this.restoreEditorAfterToolbar();
   }
 
   onStrokeWidth(event: Event): void {
@@ -641,15 +715,17 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   onTextSize(event: Event): void {
     this.textSize.set(Number((event.target as HTMLSelectElement).value));
+    this.restoreEditorAfterToolbar();
   }
 
-  // ─── Texto del estudiante (versión básica: contenido + color + tamaño) ─────────
+  // ─── Texto: editor con formato parcial (igual que el docente, vía util compartido) ─────
 
-  /** Abre el input de texto en la posición indicada del lienzo. */
+  /** Abre el editor contenteditable en la posición indicada del lienzo. */
   private placeText(event: PointerEvent): void {
     if (!this.canDraw()) {
       return;
     }
+    // Si ya había un texto en edición, confírmalo antes de abrir otro.
     this.commitText();
     const wrap = this.wrapRef()?.nativeElement;
     if (!wrap) {
@@ -657,53 +733,232 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     const rect = wrap.getBoundingClientRect();
     const wp = this.toCanvasPoint(event);
+    this.editingTextId.set(null);
+    this.resetFormatStates();
     this.textDraft.set({
       screenX: event.clientX - rect.left,
       screenY: event.clientY - rect.top,
       wx: wp.x,
       wy: wp.y,
     });
-    setTimeout(() => this.textInputRef()?.nativeElement?.focus(), 0);
+    setTimeout(() => {
+      const editor = this.textEditorRef()?.nativeElement;
+      if (editor) {
+        editor.innerHTML = '';
+        editor.focus();
+      }
+    }, 0);
   }
 
-  /** Confirma el texto en edición: lo agrega al lienzo y lo difunde por WebSocket. */
+  /**
+   * Confirma el texto en edición guardándolo como objeto movible. El contenido del editor
+   * contenteditable se convierte en runs (fragmentos con su propio negrita/cursiva/subrayado),
+   * conservando el formato parcial, y se difunde por WebSocket.
+   */
   commitText(): void {
     const draft = this.textDraft();
     if (draft === null) {
       return;
     }
-    const input = this.textInputRef()?.nativeElement ?? null;
-    const text = (input?.value ?? '').trim();
+    const editor = this.textEditorRef()?.nativeElement ?? null;
+    const editingId = this.editingTextId();
+    const runs = editor ? parseRuns(editor) : [];
+    const plain = runs.map((r) => r.text).join('').trim();
+
     this.textDraft.set(null);
-    if (input) {
-      input.value = '';
+    this.editingTextId.set(null);
+    if (editor) {
+      editor.innerHTML = '';
     }
-    if (text === '' || !this.canDraw()) {
+
+    if (plain === '') {
+      // Edición que se dejó vacía: se elimina el texto existente (y se avisa a los demás).
+      if (editingId !== null) {
+        this.textItems.update((items) => items.filter((i) => i.id !== editingId));
+        this.broadcastTextDelete(editingId);
+      }
       return;
     }
-    const item: DisplayTextItem = {
-      id: this.localId(),
-      wx: draft.wx,
-      wy: draft.wy,
-      color: this.color(),
-      size: this.textSize(),
-      runs: [{ text, bold: false, italic: false, underline: false }],
-    };
-    this.textItems.update((items) => [...items, item]);
-    this.broadcastTextUpsert(item);
+    if (!this.canDraw()) {
+      return;
+    }
+
+    const base = { color: this.color(), size: this.textSize(), runs };
+    let saved: DisplayTextItem;
+    if (editingId !== null) {
+      saved = { id: editingId, wx: draft.wx, wy: draft.wy, ...base };
+      this.textItems.update((items) => items.map((i) => (i.id === editingId ? { ...i, ...base } : i)));
+    } else {
+      saved = { id: localTextId(), wx: draft.wx, wy: draft.wy, ...base };
+      this.textItems.update((items) => [...items, saved]);
+    }
+    this.broadcastTextUpsert(saved);
   }
 
   cancelText(): void {
-    const input = this.textInputRef()?.nativeElement;
-    if (input) {
-      input.value = '';
+    const editor = this.textEditorRef()?.nativeElement;
+    if (editor) {
+      editor.innerHTML = '';
     }
     this.textDraft.set(null);
+    this.editingTextId.set(null);
   }
 
-  onTextInputEnter(event: Event): void {
+  /** Enter confirma el texto (evita el salto de línea del contenteditable). */
+  onEditorEnter(event: Event): void {
     event.preventDefault();
     this.commitText();
+  }
+
+  /** Esc dentro del editor: cancela el texto sin afectar a la pantalla completa. */
+  onTextEscape(event: Event): void {
+    event.stopPropagation();
+    this.cancelText();
+  }
+
+  /**
+   * El editor pierde el foco. Si fue por tocar un control de la toolbar (tamaño/color), NO se
+   * confirma el texto: el control aplicará su cambio y se devolverá el foco al editor.
+   */
+  onEditorBlur(): void {
+    if (this.keepEditorOpen) {
+      this.keepEditorOpen = false;
+      return;
+    }
+    this.commitText();
+  }
+
+  /** mousedown sobre tamaño/color: marca que el editor debe seguir abierto pese al blur. */
+  keepEditorFocus(): void {
+    if (this.textDraft() !== null) {
+      this.keepEditorOpen = true;
+    }
+  }
+
+  /** Tras aplicar tamaño/color desde la toolbar, devuelve el foco al editor en curso. */
+  private restoreEditorAfterToolbar(): void {
+    this.keepEditorOpen = false;
+    if (this.textDraft() === null) {
+      return;
+    }
+    setTimeout(() => {
+      const editor = this.textEditorRef()?.nativeElement;
+      if (editor) {
+        editor.focus();
+        caretToEnd(editor);
+      }
+    }, 0);
+  }
+
+  /**
+   * Aplica negrita/cursiva/subrayado a la SELECCIÓN actual del editor (formato parcial). Usa
+   * `execCommand`: obsoleto pero es la vía nativa para editar formato sin librerías.
+   */
+  applyFormat(command: 'bold' | 'italic' | 'underline'): void {
+    const editor = this.textEditorRef()?.nativeElement;
+    if (this.textDraft() === null || !editor) {
+      return;
+    }
+    editor.focus();
+    try {
+      document.execCommand(command);
+    } catch {
+      /* no-op: navegador sin soporte de execCommand */
+    }
+    this.refreshFormatStates();
+  }
+
+  /** Sincroniza el estado activo de los botones B/I/U con el formato de la selección. */
+  refreshFormatStates(): void {
+    const editor = this.textEditorRef()?.nativeElement;
+    if (this.textDraft() === null || !editor || document.activeElement !== editor) {
+      return;
+    }
+    try {
+      this.textBold.set(document.queryCommandState('bold'));
+      this.textItalic.set(document.queryCommandState('italic'));
+      this.textUnderline.set(document.queryCommandState('underline'));
+    } catch {
+      /* no-op */
+    }
+  }
+
+  private resetFormatStates(): void {
+    this.textBold.set(false);
+    this.textItalic.set(false);
+    this.textUnderline.set(false);
+  }
+
+  // ─── Texto movible: arrastre y reedición ──────────────────────────────────────
+
+  onTextItemPointerDown(item: DisplayTextItem, event: PointerEvent): void {
+    if (!this.canEditText()) {
+      return;
+    }
+    // Evita que el clic llegue al lienzo (crearía un texto nuevo) o inicie el pan.
+    event.preventDefault();
+    event.stopPropagation();
+    (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+    this.draggingTextId.set(item.id);
+    this.textDragStart = { wx: item.wx, wy: item.wy, clientX: event.clientX, clientY: event.clientY };
+  }
+
+  onTextItemPointerMove(event: PointerEvent): void {
+    const id = this.draggingTextId();
+    if (id === null) {
+      return;
+    }
+    event.preventDefault();
+    // El lienzo se muestra a escala 1:1, por lo que el desplazamiento en pantalla equivale al
+    // desplazamiento en coordenadas del workspace.
+    const dx = event.clientX - this.textDragStart.clientX;
+    const dy = event.clientY - this.textDragStart.clientY;
+    const wx = Math.max(0, Math.min(WORKSPACE_WIDTH, this.textDragStart.wx + dx));
+    const wy = Math.max(0, Math.min(WORKSPACE_HEIGHT, this.textDragStart.wy + dy));
+    this.textItems.update((items) => items.map((i) => (i.id === id ? { ...i, wx, wy } : i)));
+  }
+
+  onTextItemPointerUp(event: PointerEvent): void {
+    const id = this.draggingTextId();
+    if (id === null) {
+      return;
+    }
+    (event.target as HTMLElement).releasePointerCapture?.(event.pointerId);
+    this.draggingTextId.set(null);
+    // Difunde la nueva posición para que el docente y los demás la vean (manteniendo el formato).
+    const moved = this.textItems().find((i) => i.id === id);
+    if (moved) {
+      this.broadcastTextUpsert(moved);
+    }
+  }
+
+  /** Doble clic sobre un texto: lo reabre en el editor para cambiar su contenido/estilo. */
+  onTextItemDblClick(item: DisplayTextItem, event: Event): void {
+    if (!this.canEditText()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.commitText();
+    this.color.set(item.color);
+    this.textSize.set(item.size);
+    this.resetFormatStates();
+    this.editingTextId.set(item.id);
+    this.textDraft.set({
+      screenX: this.panX() + item.wx,
+      screenY: this.panY() + item.wy,
+      wx: item.wx,
+      wy: item.wy,
+    });
+    setTimeout(() => {
+      const editor = this.textEditorRef()?.nativeElement;
+      if (editor) {
+        editor.innerHTML = runsToHtml(item.runs);
+        editor.focus();
+        caretToEnd(editor);
+        this.refreshFormatStates();
+      }
+    }, 0);
   }
 
   /** Difunde un objeto de texto del alumno para que el docente y los demás lo vean en vivo. */
@@ -721,10 +976,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     });
   }
 
-  private localId(): string {
-    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `txt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  /** Difunde la eliminación de un objeto de texto por su identificador. */
+  private broadcastTextDelete(textId: string): void {
+    const clientEventId = this.newEventId();
+    this.realtime.sendDraw({ eventType: 'TEXT_DELETE', tool: 'TEXT', textId, clientEventId });
   }
 
   /**
@@ -764,8 +1019,12 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     event.preventDefault();
     (event.target as HTMLCanvasElement).setPointerCapture?.(event.pointerId);
     this.drawing = true;
-    this.currentStroke = [this.toCanvasPoint(event)];
+    const start = this.toCanvasPoint(event);
+    this.currentStroke = [start];
     this.renderStroke(this.currentStroke, this.activeColor(), this.activeWidth());
+    if (this.tool() === 'ERASER') {
+      this.eraseTextsAt(start);
+    }
   }
 
   onPointerMove(event: PointerEvent): void {
@@ -785,6 +1044,38 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.currentStroke.push(point);
     if (previous) {
       this.renderSegment(previous, point, this.activeColor(), this.activeWidth());
+    }
+    // El borrador también elimina los objetos de texto que toca (no solo trazos del lienzo).
+    if (this.tool() === 'ERASER') {
+      this.eraseTextsAt(point);
+    }
+  }
+
+  /**
+   * Elimina los objetos de texto que el círculo del borrador toca y difunde su eliminación por
+   * WebSocket para que el docente y los demás los vean desaparecer. Requiere permiso de dibujo.
+   */
+  private eraseTextsAt(point: WhiteboardPoint): void {
+    if (!this.canDraw()) {
+      return;
+    }
+    const items = this.textItems();
+    if (items.length === 0) {
+      return;
+    }
+    const ctx = this.ensureCanvas();
+    if (ctx === null) {
+      return;
+    }
+    const radius = this.eraserSize() / 2;
+    const hit = items.filter((item) => eraserHitsText(ctx, item, point.x, point.y, radius));
+    if (hit.length === 0) {
+      return;
+    }
+    const hitIds = new Set(hit.map((i) => i.id));
+    this.textItems.update((list) => list.filter((i) => !hitIds.has(i.id)));
+    for (const id of hitIds) {
+      this.broadcastTextDelete(id);
     }
   }
 

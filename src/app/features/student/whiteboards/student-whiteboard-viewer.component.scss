@@ -205,6 +205,26 @@
       color: #fff;
     }
   }
+
+  &--sm {
+    width: 32px;
+    height: 32px;
+
+    .material-icons {
+      font-size: 18px;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.toolbar__group--tight {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .tool-field {
@@ -386,8 +406,8 @@
   margin-left: auto;
 }
 
-// Texto sobre la pizarra (del docente, otros alumnos o el propio). No intercepta el puntero,
-// para no estorbar el dibujo/desplazamiento por encima.
+// Texto sobre la pizarra (del docente, otros alumnos o el propio). Por defecto no intercepta el
+// puntero (para dibujar/desplazar por encima); solo es seleccionable/movible con la herramienta Texto.
 .text-item {
   position: absolute;
   z-index: 4;
@@ -398,9 +418,25 @@
   user-select: none;
   pointer-events: none;
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  &--editable {
+    pointer-events: auto;
+    cursor: move;
+
+    &:hover {
+      outline: 1px solid var(--color-primary-300);
+      outline-offset: 2px;
+    }
+  }
+
+  &--dragging {
+    outline: 1px dashed var(--color-primary-500);
+    outline-offset: 2px;
+  }
 }
 
-// Input flotante mientras el alumno escribe un texto.
+// Editor flotante (contenteditable) mientras el alumno escribe/formatea; al confirmar se guarda
+// como objeto movible con formato por runs.
 .text-input {
   position: absolute;
   z-index: 5;
@@ -410,9 +446,16 @@
   background: rgba(255, 255, 255, 0.9);
   outline: none;
   line-height: 1.1;
-  min-width: 120px;
+  min-width: 40px;
   white-space: pre;
+  cursor: text;
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  &:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-neutral-400);
+    pointer-events: none;
+  }
 }
 
 // Selector compacto de tamaño de texto en la toolbar.
