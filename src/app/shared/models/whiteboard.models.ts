@@ -18,7 +18,7 @@ export type WhiteboardInteractionOverride = 'FOLLOW_GLOBAL' | 'ALLOWED' | 'BLOCK
 
 /**
  * Tipo de evento de dibujo transportado por WebSocket (enum WhiteboardDrawEventType).
- * TEXT/TEXT_DELETE transportan los objetos de texto del docente en vivo (reservados al docente).
+ * TEXT/TEXT_DELETE transportan objetos de texto en vivo del docente o de estudiantes con permiso.
  */
 export type WhiteboardDrawEventType = 'DRAW' | 'ERASE' | 'CLEAR' | 'TEXT' | 'TEXT_DELETE';
 
