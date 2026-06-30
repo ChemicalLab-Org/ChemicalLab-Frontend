@@ -280,6 +280,17 @@
     cursor: pointer;
   }
 
+  // Selector compacto de tamaño de texto (estilo editor de texto), sin barra deslizante.
+  &__select {
+    width: auto;
+    min-width: 64px;
+    height: 32px;
+    padding: 0 28px 0 10px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
   &--range &__value {
     min-width: 18px;
     font-size: var(--text-sm);

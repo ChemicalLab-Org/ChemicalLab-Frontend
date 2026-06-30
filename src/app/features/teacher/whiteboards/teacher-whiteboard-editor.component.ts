@@ -262,18 +262,18 @@ interface TextItem {
                         <span class="tool-field__value">{{ eraserSize() }}</span>
                       </label>
                     } @else if (tool() === 'TEXT') {
-                      <label class="tool-field tool-field--range" title="Tamaño del texto">
+                      <label class="tool-field" title="Tamaño del texto">
                         <span class="material-icons">format_size</span>
-                        <input
-                          type="range"
-                          min="14"
-                          max="96"
-                          step="2"
+                        <select
+                          class="select tool-field__select"
                           [value]="textSize()"
                           [disabled]="!canDraw()"
-                          (input)="onTextSize($event)"
-                        />
-                        <span class="tool-field__value">{{ textSize() }}</span>
+                          (change)="onTextSize($event)"
+                        >
+                          @for (size of textSizes; track size) {
+                            <option [value]="size">{{ size }}</option>
+                          }
+                        </select>
                       </label>
 
                       <div class="toolbar__group toolbar__group--tight">
@@ -606,6 +606,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   readonly strokeWidth = signal<number>(4);
   readonly eraserSize = signal<number>(28);
   readonly textSize = signal<number>(32);
+  /** Tamaños de texto disponibles en el selector (estilo editor de texto). */
+  readonly textSizes: readonly number[] = [12, 14, 16, 18, 24, 32, 48];
   readonly textBold = signal<boolean>(false);
   readonly textItalic = signal<boolean>(false);
   readonly textUnderline = signal<boolean>(false);
@@ -742,7 +744,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   onTextSize(event: Event): void {
-    this.textSize.set(Number((event.target as HTMLInputElement).value));
+    this.textSize.set(Number((event.target as HTMLSelectElement).value));
   }
 
   onTextInput(event: Event): void {
