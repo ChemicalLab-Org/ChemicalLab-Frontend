@@ -100,6 +100,19 @@ interface TextItem {
       }
 
       <main class="main">
+        @if (fullscreen()) {
+          <!-- Salida de pantalla completa siempre visible (independiente de la toolbar), además de
+               la tecla Escape. Flotante en una esquina para no tapar las herramientas. -->
+          <button
+            type="button"
+            class="fs-exit"
+            title="Salir de pantalla completa (Esc)"
+            (click)="toggleFullscreen()"
+          >
+            <span class="material-icons">fullscreen_exit</span> Salir de pantalla completa
+          </button>
+        }
+
         @if (!fullscreen()) {
           <button type="button" class="back-link" (click)="goToList()">
             <span class="material-icons">arrow_back</span> Volver a las sesiones
@@ -236,18 +249,7 @@ interface TextItem {
                     </div>
 
                     <div class="toolbar__group toolbar__group--right">
-                      @if (fullscreen()) {
-                        <!-- En pantalla completa: botón con etiqueta clara para volver al modo
-                             normal (además de la tecla Escape). -->
-                        <button
-                          type="button"
-                          class="btn btn-secondary btn-sm"
-                          title="Salir de pantalla completa (Esc)"
-                          (click)="toggleFullscreen()"
-                        >
-                          <span class="material-icons">fullscreen_exit</span> Salir de pantalla completa
-                        </button>
-                      } @else {
+                      @if (!fullscreen()) {
                         <button
                           type="button"
                           class="tool-btn"
