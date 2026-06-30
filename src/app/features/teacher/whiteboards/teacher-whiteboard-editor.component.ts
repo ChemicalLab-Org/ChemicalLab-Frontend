@@ -388,7 +388,7 @@ type TextItem = WhiteboardTextObject;
                   <!-- Textos como objetos sobre el lienzo: se pueden seleccionar y arrastrar con la
                        herramienta Texto. Se posicionan en coordenadas del workspace + el pan, de modo
                        que siguen el desplazamiento de la pizarra. Se rasterizan solo en la captura
-                       final (no se difunden en vivo por WebSocket: limitación documentada). -->
+                       final. También se difunden en vivo por WebSocket. -->
                   @for (item of textItems(); track item.id) {
                     @if (editingTextId() !== item.id) {
                       <div
@@ -585,6 +585,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private boardStrokes: WhiteboardStrokeRecord[] = [];
   private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly STATE_SAVE_DEBOUNCE_MS = 1000;
+  private readonly boardStateReady = signal<boolean>(false);
+  private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
 
   // Desplazamiento (pan) del lienzo dentro del visor.
   private panning = false;
@@ -645,9 +647,12 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
   readonly isClosed = computed<boolean>(() => this.session()?.status === 'CLOSED');
-  /** Solo se puede dibujar si la sesión está ACTIVE y el canal está conectado. */
+  /** Solo se puede dibujar si la sesión está ACTIVE, el canal está conectado y el estado inicial cargó. */
   readonly canDraw = computed<boolean>(
-    () => this.session()?.status === 'ACTIVE' && this.connectionState() === 'connected'
+    () =>
+      this.session()?.status === 'ACTIVE' &&
+      this.connectionState() === 'connected' &&
+      this.boardStateReady()
   );
 
   /** Transform del lienzo según el desplazamiento actual (herramienta "Mover"). */
@@ -729,8 +734,12 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         this.loading.set(false);
         if (detail.session.status === 'CLOSED') {
           this.realtime.disconnect();
+          this.boardStateReady.set(false);
+          this.queuedRemoteDrawEvents = [];
           this.loadSnapshot();
         } else {
+          this.boardStateReady.set(false);
+          this.queuedRemoteDrawEvents = [];
           this.realtime.connect(this.sessionId);
           // Tras renderizar el lienzo, centra la vista del workspace en el visor y restaura el
           // estado guardado (trazos + textos) para no perder la pizarra al recargar.
@@ -982,9 +991,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   /**
    * Confirma el texto en edición guardándolo como objeto movible. El contenido del editor
    * contenteditable se convierte en "runs" (fragmentos con su propio negrita/cursiva/subrayado),
-   * de modo que el formato parcial se conserva. Los textos se rasterizan solo al generar la captura
-   * final; no se difunden en vivo por WebSocket porque el backend no define un eventType de texto
-   * (limitación documentada).
+   * de modo que el formato parcial se conserva. Los textos se difunden en vivo por WebSocket y se
+   * rasterizan al generar la captura final.
    */
   commitText(): void {
     const draft = this.textDraft();
@@ -1336,6 +1344,14 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   // ─── Eventos en vivo recibidos ────────────────────────────────────────────────
 
   private onRemoteDraw(event: WhiteboardDrawEventResponse): void {
+    if (!this.boardStateReady()) {
+      this.queuedRemoteDrawEvents.push(event);
+      return;
+    }
+    this.applyRemoteDraw(event);
+  }
+
+  private applyRemoteDraw(event: WhiteboardDrawEventResponse): void {
     if (event.clientEventId !== null && this.ownEventIds.has(event.clientEventId)) {
       // Es el eco de un evento propio que ya se pintó localmente.
       this.ownEventIds.delete(event.clientEventId);
@@ -1713,17 +1729,21 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.whiteboardService.getBoardState(this.sessionId).subscribe({
       next: (state) => {
         if (state.stateJson === null || state.stateJson.trim() === '') {
+          this.finishBoardStateLoad();
           return;
         }
         let snapshot: WhiteboardBoardStateSnapshot;
         try {
           snapshot = JSON.parse(state.stateJson) as WhiteboardBoardStateSnapshot;
         } catch {
+          this.finishBoardStateLoad();
           return;
         }
         this.replayBoardState(snapshot);
+        this.finishBoardStateLoad();
       },
       error: () => {
+        this.finishBoardStateLoad();
         /* silencioso: sin estado previo el docente sigue dibujando con normalidad */
       },
     });
@@ -1738,6 +1758,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     // Conserva los trazos en vivo que pudieran haber llegado mientras se cargaba el estado: el
     // estado guardado es previo a la carga, así que no se solapan; se vuelven a pintar tras limpiar.
     const pending = this.boardStrokes;
+    const pendingTexts = this.textItems();
     this.clearCanvas();
     this.boardStrokes = [...restored, ...pending];
     for (const stroke of this.boardStrokes) {
@@ -1747,17 +1768,32 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       this.renderStroke(stroke.points, color, width);
     }
     const texts = Array.isArray(snapshot.texts) ? snapshot.texts : [];
-    if (texts.length > 0 || this.textItems().length === 0) {
-      this.textItems.set(
-        texts.map((t) => ({
-          id: t.id,
-          wx: t.wx,
-          wy: t.wy,
-          color: t.color,
-          size: t.size,
-          runs: t.runs,
-        }))
-      );
+    const restoredTexts = texts.map((t) => ({
+      id: t.id,
+      wx: t.wx,
+      wy: t.wy,
+      color: t.color,
+      size: t.size,
+      runs: t.runs,
+    }));
+    const mergedTexts = [...restoredTexts];
+    for (const pendingText of pendingTexts) {
+      const index = mergedTexts.findIndex((item) => item.id === pendingText.id);
+      if (index === -1) {
+        mergedTexts.push(pendingText);
+      } else {
+        mergedTexts[index] = pendingText;
+      }
+    }
+    this.textItems.set(mergedTexts);
+  }
+
+  private finishBoardStateLoad(): void {
+    this.boardStateReady.set(true);
+    const queued = this.queuedRemoteDrawEvents;
+    this.queuedRemoteDrawEvents = [];
+    for (const event of queued) {
+      this.applyRemoteDraw(event);
     }
   }
 
