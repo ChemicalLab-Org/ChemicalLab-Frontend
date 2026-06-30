@@ -135,16 +135,26 @@ con un **estado actual del lienzo** para sesiones en vivo (no solo la imagen fin
 - **Participantes en vivo:** al unirse un estudiante, el backend difunde el evento de control
   `PARTICIPANT_JOINED` y el editor docente **refresca el panel de participantes** sin recargar (el
   botón Actualizar y la recarga del detalle también lo listan).
-- **Texto en vivo:** el docente difunde los objetos de texto por `TEXT`/`TEXT_DELETE`; el visor
-  estudiante los renderiza como overlay de solo lectura (contenido, posición, color, tamaño y
-  formato), y los conserva al reconstruir el estado.
+- **Texto en vivo (docente y estudiante):** el texto se difunde por `TEXT`/`TEXT_DELETE`. El
+  docente lo crea/mueve/edita con formato; **el estudiante con permiso** también puede insertar
+  texto en versión básica (contenido + color + tamaño) con la herramienta Texto, y el backend lo
+  acepta con la misma regla de permiso efectivo que un trazo (`CLEAR` sigue reservado al docente).
+  Cada cliente renderiza el texto entrante como overlay; el docente ve el texto de los alumnos y
+  todo se conserva al reconstruir el estado.
 - **Permisos:** ante `INTERACTION_UPDATED`/`PARTICIPANT_PERMISSION_UPDATED` el alumno vuelve a pedir
   el detalle y recalcula `canInteract`; si el join falla en una sesión en vivo, el error se
   **reporta** (ya no se degrada en silencio a solo lectura), evitando que el alumno quede sin
-  participante y sin poder dibujar pese a tener permiso.
-- **Pantalla completa del alumno:** el visor estudiante tiene modo de pantalla completa (botón +
-  Escape, con botón flotante «Salir de pantalla completa») que no recrea el lienzo ni desconecta el
-  WebSocket y no habilita herramientas sin permiso.
+  participante y sin poder dibujar pese a tener permiso. La herramienta Texto del alumno aparece
+  solo con permiso, junto a plumón, borrador y mover.
+- **Pantalla completa (docente y estudiante):** un **único botón en la barra de herramientas**
+  alterna entrar/salir (el ícono cambia `fullscreen`↔`fullscreen_exit`); también sale con Escape. Se
+  eliminó el botón verde flotante. No recrea el lienzo ni desconecta el WebSocket, y no habilita
+  herramientas sin permiso. En pantalla completa el lienzo se estira a lo ancho de forma consistente
+  en docente y estudiante, mostrando con claridad el límite derecho de la pizarra.
+- **Rutas inexistentes → 404:** el `GlobalExceptionHandler` del backend mapea las rutas sin handler
+  (`NoResourceFoundException`/`NoHandlerFoundException` de Spring Boot 4) a **404** en vez de un 500
+  engañoso, de modo que llamar a `/state` contra un backend donde aún no está desplegado responde
+  404 claro (no 500).
 
 ### Pendiente para 15.4 (no incluido aquí)
 

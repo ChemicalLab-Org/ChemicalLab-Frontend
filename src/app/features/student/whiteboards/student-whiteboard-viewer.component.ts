@@ -46,10 +46,22 @@ const BOARD_BACKGROUND = '#ffffff';
 const PEN_CURSOR =
   'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMyAxNy4yNVYyMWgzLjc1TDE3LjgxIDkuOTRsLTMuNzUtMy43NUwzIDE3LjI1eiIgZmlsbD0iIzFhMWExNiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0yMC43MSA3LjA0YTEgMSAwIDAgMCAwLTEuNDFsLTIuMzQtMi4zNGExIDEgMCAwIDAtMS40MSAwbC0xLjgzIDEuODMgMy43NSAzLjc1IDEuODMtMS44M3oiIGZpbGw9IiMxZDllNzUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=") 3 25, crosshair';
 
-/** Herramientas del estudiante: plumón, borrador y desplazamiento. «Borrar todo» es solo docente. */
-type StudentTool = 'PEN' | 'ERASER' | 'MOVE';
+/**
+ * Herramientas del estudiante: plumón, borrador, texto y desplazamiento. «Borrar todo» es solo
+ * docente. El texto del estudiante es una versión básica (contenido + color + tamaño) que se
+ * difunde por WebSocket para que el docente y los demás lo vean.
+ */
+type StudentTool = 'PEN' | 'ERASER' | 'TEXT' | 'MOVE';
 
-/** Objeto de texto que el alumno solo visualiza (lo crea/mueve el docente). */
+/** Borrador de texto en edición (input flotante sobre el visor). */
+interface TextDraft {
+  readonly screenX: number;
+  readonly screenY: number;
+  readonly wx: number;
+  readonly wy: number;
+}
+
+/** Objeto de texto sobre la pizarra (propio del alumno o recibido del docente/otros). */
 interface DisplayTextItem {
   readonly id: string;
   readonly wx: number;
@@ -93,18 +105,6 @@ interface DisplayTextItem {
       }
 
       <main class="main">
-        @if (fullscreen()) {
-          <!-- Salida de pantalla completa siempre visible (además de Escape). -->
-          <button
-            type="button"
-            class="fs-exit"
-            title="Salir de pantalla completa (Esc)"
-            (click)="toggleFullscreen()"
-          >
-            <span class="material-icons">fullscreen_exit</span> Salir de pantalla completa
-          </button>
-        }
-
         @if (!fullscreen()) {
           <button type="button" class="back-link" (click)="goToList()">
             <span class="material-icons">arrow_back</span> Volver a la pizarra
@@ -213,6 +213,15 @@ interface DisplayTextItem {
                         />
                       </svg>
                     </button>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [class.tool-btn--active]="tool() === 'TEXT'"
+                      title="Texto"
+                      (click)="selectTool('TEXT')"
+                    >
+                      <span class="material-icons">title</span>
+                    </button>
                   }
                   <button
                     type="button"
@@ -229,10 +238,11 @@ interface DisplayTextItem {
                   <button
                     type="button"
                     class="tool-btn"
-                    title="Pantalla completa"
+                    [class.tool-btn--active]="fullscreen()"
+                    [title]="fullscreen() ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'"
                     (click)="toggleFullscreen()"
                   >
-                    <span class="material-icons">fullscreen</span>
+                    <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
                   </button>
                 </div>
 
@@ -266,6 +276,19 @@ interface DisplayTextItem {
                           (input)="onEraserSize($event)"
                         />
                         <span class="tool-field__value">{{ eraserSize() }}</span>
+                      </label>
+                    } @else if (tool() === 'TEXT') {
+                      <label class="tool-field" title="Tamaño del texto">
+                        <span class="material-icons">format_size</span>
+                        <select
+                          class="select tool-field__select"
+                          [value]="textSize()"
+                          (change)="onTextSize($event)"
+                        >
+                          @for (size of textSizes; track size) {
+                            <option [value]="size">{{ size }}</option>
+                          }
+                        </select>
                       </label>
                     }
                   </div>
@@ -311,6 +334,23 @@ interface DisplayTextItem {
                     >{{ run.text }}</span>}</div>
                 }
 
+                @if (textDraft(); as draft) {
+                  <!-- Input flotante de texto del alumno: Enter confirma, Escape cancela. -->
+                  <input
+                    #textInput
+                    type="text"
+                    class="text-input"
+                    placeholder="Escribe y pulsa Enter…"
+                    [style.left.px]="draft.screenX"
+                    [style.top.px]="draft.screenY"
+                    [style.color]="color()"
+                    [style.font-size.px]="textSize()"
+                    (keydown.enter)="onTextInputEnter($event)"
+                    (keydown.escape)="cancelText()"
+                    (blur)="commitText()"
+                  />
+                }
+
                 @if (s.status === 'PAUSED') {
                   <div class="canvas-overlay">
                     <span class="material-icons">pause_circle</span>
@@ -349,6 +389,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('boardCanvas');
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
+  private readonly textInputRef = viewChild<ElementRef<HTMLInputElement>>('textInput');
 
   private sessionId = 0;
   private ctx: CanvasRenderingContext2D | null = null;
@@ -381,6 +422,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   readonly color = signal<string>('#1d9e75');
   readonly strokeWidth = signal<number>(4);
   readonly eraserSize = signal<number>(28);
+  readonly textSize = signal<number>(28);
+  readonly textSizes: readonly number[] = [12, 14, 16, 18, 24, 32, 48];
+
+  /** Texto del alumno en edición (input flotante). */
+  readonly textDraft = signal<TextDraft | null>(null);
 
   readonly connectionState = this.realtime.connectionState;
 
@@ -415,6 +461,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     if (this.tool() === 'ERASER') {
       return 'none';
+    }
+    if (this.tool() === 'TEXT') {
+      return 'text';
     }
     return PEN_CURSOR;
   });
@@ -553,6 +602,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
         this.session.set(detail);
         // Si perdió el permiso o se pausó, vuelve a «Mover» para no dejar una herramienta inválida.
         if (!this.canDraw() && this.tool() !== 'MOVE') {
+          this.cancelText();
           this.tool.set('MOVE');
         }
       },
@@ -567,6 +617,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   selectTool(tool: StudentTool): void {
     if (tool !== 'MOVE' && !this.canDraw()) {
       return;
+    }
+    if (this.tool() === 'TEXT' && tool !== 'TEXT') {
+      this.commitText();
     }
     this.tool.set(tool);
     if (tool !== 'ERASER') {
@@ -586,6 +639,94 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.eraserSize.set(Number((event.target as HTMLInputElement).value));
   }
 
+  onTextSize(event: Event): void {
+    this.textSize.set(Number((event.target as HTMLSelectElement).value));
+  }
+
+  // ─── Texto del estudiante (versión básica: contenido + color + tamaño) ─────────
+
+  /** Abre el input de texto en la posición indicada del lienzo. */
+  private placeText(event: PointerEvent): void {
+    if (!this.canDraw()) {
+      return;
+    }
+    this.commitText();
+    const wrap = this.wrapRef()?.nativeElement;
+    if (!wrap) {
+      return;
+    }
+    const rect = wrap.getBoundingClientRect();
+    const wp = this.toCanvasPoint(event);
+    this.textDraft.set({
+      screenX: event.clientX - rect.left,
+      screenY: event.clientY - rect.top,
+      wx: wp.x,
+      wy: wp.y,
+    });
+    setTimeout(() => this.textInputRef()?.nativeElement?.focus(), 0);
+  }
+
+  /** Confirma el texto en edición: lo agrega al lienzo y lo difunde por WebSocket. */
+  commitText(): void {
+    const draft = this.textDraft();
+    if (draft === null) {
+      return;
+    }
+    const input = this.textInputRef()?.nativeElement ?? null;
+    const text = (input?.value ?? '').trim();
+    this.textDraft.set(null);
+    if (input) {
+      input.value = '';
+    }
+    if (text === '' || !this.canDraw()) {
+      return;
+    }
+    const item: DisplayTextItem = {
+      id: this.localId(),
+      wx: draft.wx,
+      wy: draft.wy,
+      color: this.color(),
+      size: this.textSize(),
+      runs: [{ text, bold: false, italic: false, underline: false }],
+    };
+    this.textItems.update((items) => [...items, item]);
+    this.broadcastTextUpsert(item);
+  }
+
+  cancelText(): void {
+    const input = this.textInputRef()?.nativeElement;
+    if (input) {
+      input.value = '';
+    }
+    this.textDraft.set(null);
+  }
+
+  onTextInputEnter(event: Event): void {
+    event.preventDefault();
+    this.commitText();
+  }
+
+  /** Difunde un objeto de texto del alumno para que el docente y los demás lo vean en vivo. */
+  private broadcastTextUpsert(item: DisplayTextItem): void {
+    const clientEventId = this.newEventId();
+    this.realtime.sendDraw({
+      eventType: 'TEXT',
+      tool: 'TEXT',
+      textId: item.id,
+      color: item.color,
+      fontSize: item.size,
+      runs: item.runs as readonly WhiteboardTextRun[],
+      points: [{ x: item.wx, y: item.wy }],
+      clientEventId,
+    });
+  }
+
+  private localId(): string {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `txt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
   /**
    * Alterna la pantalla completa. Es un modo CSS: no recrea el lienzo ni desconecta el WebSocket,
    * por lo que no se pierde el contenido ni la conexión. Tras el cambio de tamaño del visor,
@@ -598,7 +739,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    if (this.fullscreen()) {
+    if (this.textDraft() !== null) {
+      this.cancelText();
+    } else if (this.fullscreen()) {
       this.toggleFullscreen();
     }
   }
@@ -608,6 +751,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   onPointerDown(event: PointerEvent): void {
     if (this.tool() === 'MOVE' || !this.canDraw()) {
       this.startPan(event);
+      return;
+    }
+    if (this.tool() === 'TEXT') {
+      this.placeText(event);
       return;
     }
     const ctx = this.ensureCanvas();
@@ -775,6 +922,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       case 'SESSION_PAUSED':
         this.session.set({ ...current, status: 'PAUSED', canInteract: false });
         if (this.tool() !== 'MOVE') {
+          this.cancelText();
           this.tool.set('MOVE');
         }
         this.showBanner('La sesión está pausada por el docente.', 'warning');

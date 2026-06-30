@@ -103,19 +103,6 @@ interface TextItem {
       }
 
       <main class="main">
-        @if (fullscreen()) {
-          <!-- Salida de pantalla completa siempre visible (independiente de la toolbar), además de
-               la tecla Escape. Flotante en una esquina para no tapar las herramientas. -->
-          <button
-            type="button"
-            class="fs-exit"
-            title="Salir de pantalla completa (Esc)"
-            (click)="toggleFullscreen()"
-          >
-            <span class="material-icons">fullscreen_exit</span> Salir de pantalla completa
-          </button>
-        }
-
         @if (!fullscreen()) {
           <button type="button" class="back-link" (click)="goToList()">
             <span class="material-icons">arrow_back</span> Volver a las sesiones
@@ -252,16 +239,15 @@ interface TextItem {
                     </div>
 
                     <div class="toolbar__group toolbar__group--right">
-                      @if (!fullscreen()) {
-                        <button
-                          type="button"
-                          class="tool-btn"
-                          title="Pantalla completa"
-                          (click)="toggleFullscreen()"
-                        >
-                          <span class="material-icons">fullscreen</span>
-                        </button>
-                      }
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="fullscreen()"
+                        [title]="fullscreen() ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'"
+                        (click)="toggleFullscreen()"
+                      >
+                        <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
+                      </button>
                       @if (s.status === 'ACTIVE') {
                         <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="pause()">
                           <span class="material-icons">pause</span> Pausar
@@ -1460,9 +1446,20 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       this.scheduleStateSave();
       return;
     }
-    // El texto en vivo lo origina solo el docente; sus ecos se descartan arriba por clientEventId.
-    // Por seguridad, ignoramos cualquier evento de texto entrante en el editor docente.
-    if (event.eventType === 'TEXT' || event.eventType === 'TEXT_DELETE') {
+    // Texto de un estudiante (los ecos del propio docente se descartan arriba por clientEventId):
+    // se inserta/actualiza o elimina en el lienzo del docente para que lo vea, y se guarda en el
+    // estado para que la recarga y la captura final lo conserven.
+    if (event.eventType === 'TEXT') {
+      this.upsertRemoteText(event);
+      this.scheduleStateSave();
+      return;
+    }
+    if (event.eventType === 'TEXT_DELETE') {
+      if (event.textId !== null) {
+        const id = event.textId;
+        this.textItems.update((items) => items.filter((i) => i.id !== id));
+        this.scheduleStateSave();
+      }
       return;
     }
     const points = (event.points ?? []) as WhiteboardPoint[];
@@ -1728,6 +1725,31 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private broadcastTextDelete(textId: string): void {
     const clientEventId = this.newEventId();
     this.realtime.sendDraw({ eventType: 'TEXT_DELETE', tool: 'TEXT', textId, clientEventId });
+  }
+
+  /** Inserta o actualiza en el lienzo del docente un texto recibido de un estudiante. */
+  private upsertRemoteText(event: WhiteboardDrawEventResponse): void {
+    const point = event.points?.[0];
+    if (event.textId === null || !point || event.runs === null) {
+      return;
+    }
+    const item: TextItem = {
+      id: event.textId,
+      wx: point.x,
+      wy: point.y,
+      color: event.color ?? '#1a1a16',
+      size: event.fontSize ?? 32,
+      runs: (event.runs ?? []) as readonly TextRun[],
+    };
+    this.textItems.update((items) => {
+      const index = items.findIndex((i) => i.id === item.id);
+      if (index === -1) {
+        return [...items, item];
+      }
+      const next = [...items];
+      next[index] = item;
+      return next;
+    });
   }
 
   // ─── Estado actual del lienzo (persistencia para recarga / unión tardía) ───────
