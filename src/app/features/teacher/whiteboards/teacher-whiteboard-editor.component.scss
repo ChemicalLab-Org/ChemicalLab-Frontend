@@ -227,27 +227,37 @@
   }
 }
 
-// Lienzo
+// Lienzo: el visor recorta un área de trabajo mayor; el docente la desplaza con "Mover".
 .canvas-wrap {
   position: relative;
   border: 1.5px solid var(--color-neutral-200);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: #fff;
+  background: var(--color-neutral-100);
   box-shadow: var(--shadow-sm);
+  height: clamp(380px, 62vh, 760px);
 }
 
+// Sin tamaño CSS: el lienzo se muestra a escala 1:1 con su resolución lógica (2400×1500),
+// por lo que el visor solo muestra una parte y el desplazamiento (pan) tiene sentido.
 .board-canvas {
   display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  height: auto;
   touch-action: none;
-  cursor: crosshair;
+  transform-origin: top left;
+  background: #fff;
+  will-change: transform;
+}
 
-  &--locked {
-    cursor: not-allowed;
-  }
+// Cursor circular del borrador: su diámetro coincide con el tamaño del borrador (px lógicos = px
+// en pantalla al estar a escala 1:1), para que se vea el área que se borrará.
+.eraser-cursor {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid var(--color-neutral-600);
+  background: rgba(26, 26, 22, 0.06);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 3;
 }
 
 .canvas-overlay {

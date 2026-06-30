@@ -35,12 +35,23 @@ import {
   WhiteboardSessionStatus,
 } from '../../../shared/models';
 
-/** Resolución lógica fija del lienzo. Garantiza coordenadas coherentes entre clientes. */
-const CANVAS_WIDTH = 1600;
-const CANVAS_HEIGHT = 900;
+/**
+ * Resolución lógica fija del lienzo. Garantiza coordenadas coherentes entre clientes. Es un
+ * área de trabajo mayor que el área visible: el docente se desplaza por ella con la herramienta
+ * "Mover". No es un lienzo infinito; es un área preparada amplia.
+ */
+const CANVAS_WIDTH = 2400;
+const CANVAS_HEIGHT = 1500;
 const BOARD_BACKGROUND = '#ffffff';
 
-type DrawTool = 'PEN' | 'ERASER';
+/**
+ * Cursor del plumón: un lápiz dibujado en SVG (hotspot en la punta, abajo-izquierda) en vez del
+ * cursor básico. Incluye "crosshair" como respaldo si el navegador no admite el cursor de imagen.
+ */
+const PEN_CURSOR =
+  'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMyAxNy4yNVYyMWgzLjc1TDE3LjgxIDkuOTRsLTMuNzUtMy43NUwzIDE3LjI1eiIgZmlsbD0iIzFhMWExNiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0yMC43MSA3LjA0YTEgMSAwIDAgMCAwLTEuNDFsLTIuMzQtMi4zNGExIDEgMCAwIDAtMS40MSAwbC0xLjgzIDEuODMgMy43NSAzLjc1IDEuODMtMS44M3oiIGZpbGw9IiMxZDllNzUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=") 3 25, crosshair';
+
+type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
 
 @Component({
   selector: 'app-teacher-whiteboard-editor',
@@ -155,6 +166,15 @@ type DrawTool = 'PEN' | 'ERASER';
                     >
                       <span class="material-icons">ink_eraser</span>
                     </button>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [class.tool-btn--active]="tool() === 'MOVE'"
+                      title="Mover pizarra"
+                      (click)="selectTool('MOVE')"
+                    >
+                      <span class="material-icons">pan_tool</span>
+                    </button>
                   </div>
 
                   <div class="toolbar__group">
@@ -223,17 +243,28 @@ type DrawTool = 'PEN' | 'ERASER';
                   </div>
                 </div>
 
-                <div class="canvas-wrap">
+                <div #canvasWrap class="canvas-wrap">
                   <canvas
                     #boardCanvas
                     class="board-canvas"
-                    [class.board-canvas--locked]="!canDraw()"
+                    [style.transform]="boardTransform()"
+                    [style.cursor]="canvasCursor()"
                     (pointerdown)="onPointerDown($event)"
                     (pointermove)="onPointerMove($event)"
                     (pointerup)="onPointerUp($event)"
-                    (pointerleave)="onPointerUp($event)"
+                    (pointerleave)="onPointerLeave($event)"
                     (pointercancel)="onPointerUp($event)"
                   ></canvas>
+
+                  @if (showEraserCursor()) {
+                    <div
+                      class="eraser-cursor"
+                      [style.left.px]="cursorPos()!.x"
+                      [style.top.px]="cursorPos()!.y"
+                      [style.width.px]="eraserSize()"
+                      [style.height.px]="eraserSize()"
+                    ></div>
+                  }
 
                   @if (s.status === 'PAUSED') {
                     <div class="canvas-overlay">
@@ -366,11 +397,21 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   readonly userRole = 'Docente';
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('boardCanvas');
+  private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
 
   private sessionId = 0;
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
   private currentStroke: WhiteboardPoint[] = [];
+
+  // Desplazamiento (pan) del lienzo con la herramienta "Mover".
+  private panning = false;
+  private panStart = { x: 0, y: 0, px: 0, py: 0 };
+  readonly panX = signal<number>(0);
+  readonly panY = signal<number>(0);
+
+  // Posición del puntero dentro del visor, para el cursor circular del borrador.
+  readonly cursorPos = signal<{ x: number; y: number } | null>(null);
   /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
   private readonly ownEventIds = new Set<string>();
   private snapshotObjectUrl: string | null = null;
@@ -407,6 +448,31 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   readonly canDraw = computed<boolean>(
     () => this.session()?.status === 'ACTIVE' && this.connectionState() === 'connected'
   );
+
+  /** Transform del lienzo según el desplazamiento actual (herramienta "Mover"). */
+  readonly boardTransform = computed<string>(
+    () => `translate(${this.panX()}px, ${this.panY()}px)`
+  );
+
+  /** Muestra el cursor circular del borrador (vista previa del área que se borrará). */
+  readonly showEraserCursor = computed<boolean>(
+    () => this.tool() === 'ERASER' && this.canDraw() && this.cursorPos() !== null && !this.panning
+  );
+
+  /** Cursor del lienzo según la herramienta y el estado de la sesión. */
+  readonly canvasCursor = computed<string>(() => {
+    if (this.tool() === 'MOVE') {
+      return this.panning ? 'grabbing' : 'grab';
+    }
+    if (!this.canDraw()) {
+      return 'not-allowed';
+    }
+    if (this.tool() === 'ERASER') {
+      // El círculo de vista previa hace de cursor; se oculta el cursor nativo.
+      return 'none';
+    }
+    return PEN_CURSOR;
+  });
 
   ngOnInit(): void {
     const idParam = this.route.snapshot.paramMap.get('id');
@@ -468,6 +534,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
 
   selectTool(tool: DrawTool): void {
     this.tool.set(tool);
+    if (tool !== 'ERASER') {
+      this.cursorPos.set(null);
+    }
   }
 
   onColor(event: Event): void {
@@ -482,9 +551,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     this.eraserSize.set(Number((event.target as HTMLInputElement).value));
   }
 
-  // ─── Dibujo en el lienzo ──────────────────────────────────────────────────────
+  // ─── Dibujo y desplazamiento en el lienzo ─────────────────────────────────────
 
   onPointerDown(event: PointerEvent): void {
+    if (this.tool() === 'MOVE') {
+      this.startPan(event);
+      return;
+    }
     if (!this.canDraw()) {
       return;
     }
@@ -500,6 +573,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   }
 
   onPointerMove(event: PointerEvent): void {
+    if (this.panning) {
+      this.updatePan(event);
+      return;
+    }
+    if (this.tool() === 'ERASER') {
+      this.updateCursorPos(event);
+    }
     if (!this.drawing || !this.canDraw()) {
       return;
     }
@@ -513,6 +593,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   }
 
   onPointerUp(event: PointerEvent): void {
+    if (this.panning) {
+      this.endPan(event);
+      return;
+    }
     if (!this.drawing) {
       return;
     }
@@ -523,6 +607,52 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     const points = this.currentStroke;
     this.currentStroke = [];
     this.publishStroke(points);
+  }
+
+  onPointerLeave(event: PointerEvent): void {
+    // Oculta el cursor del borrador al salir del lienzo y cierra el trazo/desplazamiento en curso.
+    this.cursorPos.set(null);
+    this.onPointerUp(event);
+  }
+
+  // ─── Desplazamiento (pan) ─────────────────────────────────────────────────────
+
+  private startPan(event: PointerEvent): void {
+    event.preventDefault();
+    (event.target as HTMLCanvasElement).setPointerCapture?.(event.pointerId);
+    this.panning = true;
+    this.panStart = { x: event.clientX, y: event.clientY, px: this.panX(), py: this.panY() };
+  }
+
+  private updatePan(event: PointerEvent): void {
+    const dx = event.clientX - this.panStart.x;
+    const dy = event.clientY - this.panStart.y;
+    this.setPan(this.panStart.px + dx, this.panStart.py + dy);
+  }
+
+  private endPan(event: PointerEvent): void {
+    this.panning = false;
+    (event.target as HTMLCanvasElement).releasePointerCapture?.(event.pointerId);
+  }
+
+  /** Aplica el desplazamiento limitándolo para que el lienzo no se salga por completo del visor. */
+  private setPan(x: number, y: number): void {
+    const wrap = this.wrapRef()?.nativeElement;
+    const viewW = wrap?.clientWidth ?? CANVAS_WIDTH;
+    const viewH = wrap?.clientHeight ?? CANVAS_HEIGHT;
+    const minX = Math.min(0, viewW - CANVAS_WIDTH);
+    const minY = Math.min(0, viewH - CANVAS_HEIGHT);
+    this.panX.set(Math.max(minX, Math.min(0, x)));
+    this.panY.set(Math.max(minY, Math.min(0, y)));
+  }
+
+  private updateCursorPos(event: PointerEvent): void {
+    const wrap = this.wrapRef()?.nativeElement;
+    if (!wrap) {
+      return;
+    }
+    const rect = wrap.getBoundingClientRect();
+    this.cursorPos.set({ x: event.clientX - rect.left, y: event.clientY - rect.top });
   }
 
   askClear(): void {

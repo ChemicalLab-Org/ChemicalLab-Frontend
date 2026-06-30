@@ -18,11 +18,14 @@ pendiente para 15.3 el frontend del estudiante y su historial.
 - **Crear sesión** (modal): nombre, grado (1–6), sección (una letra, normalizada a mayúscula)
   y descripción opcional. Al crear, redirige al editor de la sesión.
 - **Editor Canvas en vivo** (`/teacher/whiteboards/:id`): lienzo HTML5 con resolución lógica
-  fija (1600×900) para coordenadas coherentes entre clientes; soporta mouse y eventos táctiles
-  (Pointer Events).
-- **Herramientas**: plumón, selector de color, grosor del trazo, borrador, tamaño del borrador
-  y borrar toda la pizarra (con confirmación). El borrador se implementa como trazo del color
-  de fondo (blanco), lo que mantiene la captura final con fondo limpio.
+  fija (2400×1500) para coordenadas coherentes entre clientes; se muestra a escala 1:1 dentro
+  de un visor que recorta un área de trabajo mayor. Soporta mouse y eventos táctiles (Pointer
+  Events).
+- **Herramientas**: plumón (cursor de lápiz en SVG), selector de color, grosor del trazo,
+  borrador (cursor circular cuyo diámetro sigue el tamaño del borrador), tamaño del borrador,
+  borrar toda la pizarra (con confirmación) y **Mover** (mano) para desplazar/pan el lienzo sin
+  dibujar. El borrador se implementa como trazo del color de fondo (blanco), lo que mantiene la
+  captura final con fondo limpio.
 - **Conexión WebSocket/STOMP** con `@stomp/stompjs`: conecta al endpoint del backend enviando
   el JWT en la cabecera `Authorization` del frame CONNECT, se suscribe a
   `/topic/whiteboards/{sessionId}` (eventos de dibujo y de control en el mismo canal, separados
