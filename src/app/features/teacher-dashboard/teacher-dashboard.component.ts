@@ -168,6 +168,15 @@ export class TeacherDashboardComponent {
       route: '/teacher/results',
     },
     {
+      id: 'whiteboards',
+      title: 'Pizarra interactiva',
+      description: 'Dibuja y explica conceptos en vivo con tu clase.',
+      icon: 'draw',
+      tone: 'blue',
+      cta: 'Abrir pizarra',
+      route: '/teacher/whiteboards',
+    },
+    {
       id: 'compounds',
       title: 'Formación de compuestos',
       description: 'Forma y explica compuestos químicos en clase.',
