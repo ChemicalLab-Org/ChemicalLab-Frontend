@@ -236,14 +236,27 @@ interface TextItem {
                     </div>
 
                     <div class="toolbar__group toolbar__group--right">
-                      <button
-                        type="button"
-                        class="tool-btn"
-                        title="{{ fullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa' }}"
-                        (click)="toggleFullscreen()"
-                      >
-                        <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
-                      </button>
+                      @if (fullscreen()) {
+                        <!-- En pantalla completa: botón con etiqueta clara para volver al modo
+                             normal (además de la tecla Escape). -->
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm"
+                          title="Salir de pantalla completa (Esc)"
+                          (click)="toggleFullscreen()"
+                        >
+                          <span class="material-icons">fullscreen_exit</span> Salir de pantalla completa
+                        </button>
+                      } @else {
+                        <button
+                          type="button"
+                          class="tool-btn"
+                          title="Pantalla completa"
+                          (click)="toggleFullscreen()"
+                        >
+                          <span class="material-icons">fullscreen</span>
+                        </button>
+                      }
                       @if (s.status === 'ACTIVE') {
                         <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="pause()">
                           <span class="material-icons">pause</span> Pausar
