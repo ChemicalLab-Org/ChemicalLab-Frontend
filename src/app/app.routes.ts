@@ -88,6 +88,26 @@ export const routes: Routes = [
     data: { roles: ['DOCENTE'] },
   },
   {
+    // Carga diferida: el editor en vivo arrastra la dependencia WebSocket/STOMP, que se
+    // mantiene fuera del bundle inicial y solo se descarga al abrir el módulo de pizarra.
+    path: 'teacher/whiteboards',
+    loadComponent: () =>
+      import('./features/teacher/whiteboards/teacher-whiteboards.component').then(
+        (m) => m.TeacherWhiteboardsComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/whiteboards/:id',
+    loadComponent: () =>
+      import('./features/teacher/whiteboards/teacher-whiteboard-editor.component').then(
+        (m) => m.TeacherWhiteboardEditorComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
     path: 'teacher/results/:evaluationId',
     component: TeacherEvaluationResultsComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
