@@ -407,7 +407,7 @@
 }
 
 // Texto sobre la pizarra (del docente, otros alumnos o el propio). Por defecto no intercepta el
-// puntero (para dibujar/desplazar por encima); solo es seleccionable/movible con la herramienta Texto.
+// puntero (para dibujar/desplazar por encima); solo es seleccionable/movible con Seleccionar.
 .text-item {
   position: absolute;
   z-index: 4;
@@ -421,7 +421,7 @@
 
   &--editable {
     pointer-events: auto;
-    cursor: move;
+    cursor: pointer;
 
     &:hover {
       outline: 1px solid var(--color-primary-300);
@@ -429,9 +429,20 @@
     }
   }
 
+  &--selected {
+    outline: 1.5px solid var(--color-primary-500);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
+  }
+
+  &--text-mode {
+    cursor: text;
+  }
+
   &--dragging {
     outline: 1px dashed var(--color-primary-500);
     outline-offset: 2px;
+    cursor: grabbing;
   }
 }
 

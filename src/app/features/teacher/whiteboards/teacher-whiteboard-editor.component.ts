@@ -41,6 +41,7 @@ import {
   drawTextItem,
   eraserHitsText,
   localTextId,
+  measureTextWidth,
   parseRuns,
   runsToHtml,
 } from '../../../shared/whiteboard/whiteboard-text.util';
@@ -64,7 +65,7 @@ const SNAPSHOT_MAX_WIDTH = 2400;
 const PEN_CURSOR =
   'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMyAxNy4yNVYyMWgzLjc1TDE3LjgxIDkuOTRsLTMuNzUtMy43NUwzIDE3LjI1eiIgZmlsbD0iIzFhMWExNiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0yMC43MSA3LjA0YTEgMSAwIDAgMCAwLTEuNDFsLTIuMzQtMi4zNGExIDEgMCAwIDAtMS40MSAwbC0xLjgzIDEuODMgMy43NSAzLjc1IDEuODMtMS44M3oiIGZpbGw9IiMxZDllNzUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=") 3 25, crosshair';
 
-type DrawTool = 'PEN' | 'ERASER' | 'TEXT' | 'MOVE';
+type DrawTool = 'PEN' | 'ERASER' | 'TEXT' | 'SELECT' | 'MOVE';
 
 interface TextDraft {
   readonly screenX: number;
@@ -221,6 +222,16 @@ type TextItem = WhiteboardTextObject;
                       <button
                         type="button"
                         class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'SELECT'"
+                        [disabled]="!canDraw()"
+                        title="Seleccionar"
+                        (click)="selectTool('SELECT')"
+                      >
+                        <span class="material-icons">near_me</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
                         [class.tool-btn--active]="tool() === 'MOVE'"
                         title="Mover pizarra"
                         (click)="selectTool('MOVE')"
@@ -256,7 +267,7 @@ type TextItem = WhiteboardTextObject;
 
                   <div class="toolbar__row toolbar__row--options">
                     <div class="toolbar__group">
-                      @if (tool() !== 'MOVE') {
+                      @if (tool() !== 'MOVE' && tool() !== 'SELECT') {
                         <label class="tool-field" title="Color">
                           <span class="material-icons">palette</span>
                           <input
@@ -386,15 +397,17 @@ type TextItem = WhiteboardTextObject;
                   }
 
                   <!-- Textos como objetos sobre el lienzo: se pueden seleccionar y arrastrar con la
-                       herramienta Texto. Se posicionan en coordenadas del workspace + el pan, de modo
+                       herramienta Seleccionar. Se posicionan en coordenadas del workspace + el pan, de modo
                        que siguen el desplazamiento de la pizarra. Se rasterizan solo en la captura
                        final. También se difunden en vivo por WebSocket. -->
                   @for (item of textItems(); track item.id) {
                     @if (editingTextId() !== item.id) {
                       <div
                         class="text-item"
-                        [class.text-item--editable]="canEditText()"
+                        [class.text-item--editable]="canSelectObject() || canEditText()"
+                        [class.text-item--selected]="selectedTextId() === item.id"
                         [class.text-item--dragging]="draggingTextId() === item.id"
+                        [class.text-item--text-mode]="canEditText()"
                         [style.left.px]="panX() + item.wx"
                         [style.top.px]="panY() + item.wy"
                         [style.color]="item.color"
@@ -604,6 +617,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   readonly textItems = signal<TextItem[]>([]);
   /** id del texto que se está reeditando (se oculta su objeto mientras se edita). */
   readonly editingTextId = signal<string | null>(null);
+  /** id del texto seleccionado localmente. No se persiste ni se difunde. */
+  readonly selectedTextId = signal<string | null>(null);
   /** id del texto que se está arrastrando, o null. */
   readonly draggingTextId = signal<string | null>(null);
   private textDragStart = { wx: 0, wy: 0, clientX: 0, clientY: 0 };
@@ -665,7 +680,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     () => this.tool() === 'ERASER' && this.canDraw() && this.cursorPos() !== null && !this.panning
   );
 
-  /** Los textos solo se pueden seleccionar/mover con la herramienta Texto y la sesión activa. */
+  /** Los objetos solo se pueden seleccionar/mover con la herramienta Seleccionar y la sesión activa. */
+  readonly canSelectObject = computed<boolean>(() => this.tool() === 'SELECT' && this.canDraw());
+
+  /** La reedición de texto existente permanece ligada a la herramienta Texto. */
   readonly canEditText = computed<boolean>(() => this.tool() === 'TEXT' && this.canDraw());
 
   /** Cursor del lienzo según la herramienta y el estado de la sesión. */
@@ -678,6 +696,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     if (this.tool() === 'ERASER') {
       return 'none'; // el círculo de vista previa hace de cursor
+    }
+    if (this.tool() === 'SELECT') {
+      return 'pointer';
     }
     if (this.tool() === 'TEXT') {
       return 'text';
@@ -767,6 +788,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (tool !== 'ERASER') {
       this.cursorPos.set(null);
     }
+    if (tool !== 'SELECT') {
+      this.clearSelection();
+    }
   }
 
   onColor(event: Event): void {
@@ -811,6 +835,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   onPointerDown(event: PointerEvent): void {
     if (this.tool() === 'MOVE') {
       this.startPan(event);
+      return;
+    }
+    if (this.tool() === 'SELECT') {
+      this.clearSelection();
       return;
     }
     if (this.tool() === 'TEXT') {
@@ -1138,13 +1166,20 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   // ─── Texto movible: selección, arrastre y reedición ──────────────────────────
 
   onTextItemPointerDown(item: TextItem, event: PointerEvent): void {
-    if (!this.canEditText()) {
+    if (this.canEditText()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.beginTextEdit(item);
+      return;
+    }
+    if (!this.canSelectObject()) {
       return;
     }
     // Evita que el clic llegue al lienzo (crearía un texto nuevo) o inicie el pan.
     event.preventDefault();
     event.stopPropagation();
     (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+    this.selectedTextId.set(item.id);
     this.draggingTextId.set(item.id);
     this.textDragStart = {
       wx: item.wx,
@@ -1164,8 +1199,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     // desplazamiento en coordenadas del workspace.
     const dx = event.clientX - this.textDragStart.clientX;
     const dy = event.clientY - this.textDragStart.clientY;
-    const wx = Math.max(0, Math.min(WORKSPACE_WIDTH, this.textDragStart.wx + dx));
-    const wy = Math.max(0, Math.min(WORKSPACE_HEIGHT, this.textDragStart.wy + dy));
+    const item = this.textItems().find((i) => i.id === id);
+    if (!item) {
+      return;
+    }
+    const next = this.clampTextPosition(item, this.textDragStart.wx + dx, this.textDragStart.wy + dy);
+    const wx = next.wx;
+    const wy = next.wy;
     this.textItems.update((items) => items.map((i) => (i.id === id ? { ...i, wx, wy } : i)));
   }
 
@@ -1178,7 +1218,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.draggingTextId.set(null);
     // Difunde la nueva posición del texto en vivo y la guarda en el estado del lienzo.
     const moved = this.textItems().find((i) => i.id === id);
-    if (moved) {
+    if (moved && (moved.wx !== this.textDragStart.wx || moved.wy !== this.textDragStart.wy)) {
       this.broadcastTextUpsert(moved);
       this.scheduleStateSave();
     }
@@ -1191,7 +1231,12 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     event.preventDefault();
     event.stopPropagation();
+    this.beginTextEdit(item);
+  }
+
+  private beginTextEdit(item: TextItem): void {
     this.commitText();
+    this.clearSelection();
     this.color.set(item.color);
     this.textSize.set(item.size);
     this.resetFormatStates();
@@ -1213,6 +1258,22 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }, 0);
   }
 
+  private clearSelection(): void {
+    this.selectedTextId.set(null);
+    this.draggingTextId.set(null);
+  }
+
+  private clampTextPosition(item: TextItem, wx: number, wy: number): { wx: number; wy: number } {
+    const ctx = this.ensureCanvas();
+    const width = ctx === null ? 0 : measureTextWidth(ctx, item);
+    const maxX = Math.max(0, WORKSPACE_WIDTH - width);
+    const maxY = Math.max(0, WORKSPACE_HEIGHT - item.size);
+    return {
+      wx: Math.round(Math.max(0, Math.min(maxX, wx)) * 100) / 100,
+      wy: Math.round(Math.max(0, Math.min(maxY, wy)) * 100) / 100,
+    };
+  }
+
 
   // ─── Borrar todo ──────────────────────────────────────────────────────────────
 
@@ -1227,6 +1288,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.clearOpen.set(false);
     this.clearCanvas();
     this.boardStrokes = [];
+    this.clearSelection();
     const clientEventId = this.newEventId();
     this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId });
     this.scheduleStateSave();
@@ -1239,6 +1301,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.whiteboardService.pauseSession(this.sessionId).subscribe({
       next: (updated) => {
         this.session.set(updated);
+        this.clearSelection();
         this.busy.set(false);
         this.showBanner('Sesión pausada. El dibujo está bloqueado.', 'warning');
       },
@@ -1374,6 +1437,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (event.eventType === 'TEXT_DELETE') {
       if (event.textId !== null) {
         const id = event.textId;
+        if (this.selectedTextId() === id) {
+          this.clearSelection();
+        }
         this.textItems.update((items) => items.filter((i) => i.id !== id));
         this.scheduleStateSave();
       }
@@ -1403,6 +1469,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     switch (event.eventType) {
       case 'SESSION_PAUSED':
         this.session.set({ ...current, status: 'PAUSED' });
+        this.clearSelection();
         this.showBanner('La sesión fue pausada.', 'warning');
         break;
       case 'SESSION_RESUMED':
@@ -1410,6 +1477,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         this.showBanner('La sesión fue reanudada.', 'success');
         break;
       case 'SESSION_CLOSED':
+        this.clearSelection();
         this.realtime.disconnect();
         this.reload();
         break;
@@ -1453,6 +1521,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     ctx.fillStyle = BOARD_BACKGROUND;
     ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
     // Los textos son objetos sobre la pizarra: "Borrar todo" también los retira.
+    this.clearSelection();
     this.textItems.set([]);
   }
 
