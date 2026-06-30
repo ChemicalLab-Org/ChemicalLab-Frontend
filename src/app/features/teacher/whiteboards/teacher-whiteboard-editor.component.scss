@@ -29,11 +29,15 @@
       flex-direction: column;
       flex: 1;
       min-height: 0;
+      // Evita que el ancho intrínseco del lienzo (resolución lógica de 3200px) estire el
+      // contenedor más allá del viewport y empuje los controles de la toolbar fuera de la pantalla.
+      min-width: 0;
     }
 
     .board-area {
       flex: 1;
       min-height: 0;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       gap: var(--space-3);
@@ -43,6 +47,7 @@
       flex: 1;
       height: auto;
       min-height: 0; // permite que el visor se ajuste al alto disponible sin desbordar
+      min-width: 0;
     }
   }
 }
