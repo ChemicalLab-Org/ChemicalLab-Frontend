@@ -131,6 +131,14 @@ export class StudentDashboardComponent {
       route: '/compounds',
     },
     {
+      id: 'whiteboards',
+      title: 'Pizarra interactiva',
+      description: 'Únete a las pizarras en vivo de tu clase y revisa las finalizadas.',
+      icon: 'draw',
+      tone: 'green',
+      route: '/student/whiteboards',
+    },
+    {
       id: 'evaluations',
       title: 'Mis evaluaciones',
       description: 'Desarrolla las evaluaciones asignadas por tu docente.',

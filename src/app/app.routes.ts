@@ -191,6 +191,36 @@ export const routes: Routes = [
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
+  {
+    // Carga diferida: el visor en vivo arrastra la dependencia WebSocket/STOMP, que se mantiene
+    // fuera del bundle inicial (igual que el editor docente). Las tres pantallas del estudiante
+    // se cargan bajo demanda al abrir el módulo de pizarra.
+    path: 'student/whiteboards',
+    loadComponent: () =>
+      import('./features/student/whiteboards/student-whiteboards.component').then(
+        (m) => m.StudentWhiteboardsComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    data: { roles: ['ESTUDIANTE'] },
+  },
+  {
+    path: 'student/whiteboards/:id',
+    loadComponent: () =>
+      import('./features/student/whiteboards/student-whiteboard-viewer.component').then(
+        (m) => m.StudentWhiteboardViewerComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    data: { roles: ['ESTUDIANTE'] },
+  },
+  {
+    path: 'student/whiteboards/:id/registro',
+    loadComponent: () =>
+      import('./features/student/whiteboards/student-whiteboard-record.component').then(
+        (m) => m.StudentWhiteboardRecordComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    data: { roles: ['ESTUDIANTE'] },
+  },
 
   { path: '**', component: NotFoundComponent },
 ];
