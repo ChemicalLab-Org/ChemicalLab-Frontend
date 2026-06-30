@@ -2,6 +2,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  HostListener,
   OnDestroy,
   OnInit,
   computed,
@@ -23,12 +24,14 @@ import {
 import { STUDENT_NAV_ITEMS } from '../../../shared/components/sidebar/student-nav';
 import {
   ApiError,
+  WhiteboardBoardStateSnapshot,
   WhiteboardControlEventResponse,
   WhiteboardDrawEventRequest,
   WhiteboardDrawEventResponse,
   WhiteboardPoint,
   WhiteboardSessionStatus,
   WhiteboardStudentSessionResponse,
+  WhiteboardTextRun,
 } from '../../../shared/models';
 
 /**
@@ -45,6 +48,16 @@ const PEN_CURSOR =
 
 /** Herramientas del estudiante: plumón, borrador y desplazamiento. «Borrar todo» es solo docente. */
 type StudentTool = 'PEN' | 'ERASER' | 'MOVE';
+
+/** Objeto de texto que el alumno solo visualiza (lo crea/mueve el docente). */
+interface DisplayTextItem {
+  readonly id: string;
+  readonly wx: number;
+  readonly wy: number;
+  readonly color: string;
+  readonly size: number;
+  readonly runs: readonly WhiteboardTextRun[];
+}
 
 /**
  * Visor en vivo de la pizarra para el estudiante.
@@ -68,19 +81,35 @@ type StudentTool = 'PEN' | 'ERASER' | 'MOVE';
   imports: [SidebarComponent],
   styleUrls: ['./student-whiteboard-viewer.component.scss'],
   template: `
-    <div class="layout">
-      <app-sidebar
-        [navItems]="navItems"
-        [userName]="userName()"
-        [userRole]="userRole"
-        [userInitials]="userInitials()"
-        (onLogout)="handleLogout()"
-      />
+    <div class="layout" [class.layout--fullscreen]="fullscreen()">
+      @if (!fullscreen()) {
+        <app-sidebar
+          [navItems]="navItems"
+          [userName]="userName()"
+          [userRole]="userRole"
+          [userInitials]="userInitials()"
+          (onLogout)="handleLogout()"
+        />
+      }
 
       <main class="main">
-        <button type="button" class="back-link" (click)="goToList()">
-          <span class="material-icons">arrow_back</span> Volver a la pizarra
-        </button>
+        @if (fullscreen()) {
+          <!-- Salida de pantalla completa siempre visible (además de Escape). -->
+          <button
+            type="button"
+            class="fs-exit"
+            title="Salir de pantalla completa (Esc)"
+            (click)="toggleFullscreen()"
+          >
+            <span class="material-icons">fullscreen_exit</span> Salir de pantalla completa
+          </button>
+        }
+
+        @if (!fullscreen()) {
+          <button type="button" class="back-link" (click)="goToList()">
+            <span class="material-icons">arrow_back</span> Volver a la pizarra
+          </button>
+        }
 
         @if (loading()) {
           <div class="loading-state">
@@ -98,27 +127,29 @@ type StudentTool = 'PEN' | 'ERASER' | 'MOVE';
             </div>
           </div>
         } @else if (session(); as s) {
-          <header class="viewer-header">
-            <div class="viewer-header__info">
-              <h1 class="viewer-header__name">{{ s.name }}</h1>
-              <div class="viewer-header__tags">
-                <span class="badge" [class]="statusBadgeClass(s.status)">
-                  <span class="status-dot"></span>{{ statusLabel(s.status) }}
-                </span>
-                <span class="meta-chip">
-                  <span class="material-icons">person</span>{{ s.teacherName }}
-                </span>
-                <span class="meta-chip">
-                  <span class="material-icons">school</span>{{ s.grade }}° · {{ s.section }}
-                </span>
-                @if (!isClosed()) {
-                  <span class="conn" [class]="connClass()">
-                    <span class="status-dot"></span>{{ connLabel() }}
+          @if (!fullscreen()) {
+            <header class="viewer-header">
+              <div class="viewer-header__info">
+                <h1 class="viewer-header__name">{{ s.name }}</h1>
+                <div class="viewer-header__tags">
+                  <span class="badge" [class]="statusBadgeClass(s.status)">
+                    <span class="status-dot"></span>{{ statusLabel(s.status) }}
                   </span>
-                }
+                  <span class="meta-chip">
+                    <span class="material-icons">person</span>{{ s.teacherName }}
+                  </span>
+                  <span class="meta-chip">
+                    <span class="material-icons">school</span>{{ s.grade }}° · {{ s.section }}
+                  </span>
+                  @if (!isClosed()) {
+                    <span class="conn" [class]="connClass()">
+                      <span class="status-dot"></span>{{ connLabel() }}
+                    </span>
+                  }
+                </div>
               </div>
-            </div>
-          </header>
+            </header>
+          }
 
           @if (banner()) {
             <div class="alert page-alert" [class]="bannerClass()">
@@ -194,6 +225,17 @@ type StudentTool = 'PEN' | 'ERASER' | 'MOVE';
                   </button>
                 </div>
 
+                <div class="toolbar__group toolbar__group--right">
+                  <button
+                    type="button"
+                    class="tool-btn"
+                    title="Pantalla completa"
+                    (click)="toggleFullscreen()"
+                  >
+                    <span class="material-icons">fullscreen</span>
+                  </button>
+                </div>
+
                 @if (canDraw() && tool() !== 'MOVE') {
                   <div class="toolbar__group">
                     <label class="tool-field" title="Color">
@@ -253,6 +295,22 @@ type StudentTool = 'PEN' | 'ERASER' | 'MOVE';
                   ></div>
                 }
 
+                <!-- Textos del docente (solo lectura para el alumno): se posicionan en coordenadas
+                     del workspace + el pan, de modo que siguen el desplazamiento de la pizarra. -->
+                @for (item of textItems(); track item.id) {
+                  <div
+                    class="text-item"
+                    [style.left.px]="panX() + item.wx"
+                    [style.top.px]="panY() + item.wy"
+                    [style.color]="item.color"
+                    [style.font-size.px]="item.size"
+                  >@for (run of item.runs; track $index) {<span
+                      [style.font-weight]="run.bold ? 700 : 400"
+                      [style.font-style]="run.italic ? 'italic' : 'normal'"
+                      [style.text-decoration]="run.underline ? 'underline' : 'none'"
+                    >{{ run.text }}</span>}</div>
+                }
+
                 @if (s.status === 'PAUSED') {
                   <div class="canvas-overlay">
                     <span class="material-icons">pause_circle</span>
@@ -268,8 +326,8 @@ type StudentTool = 'PEN' | 'ERASER' | 'MOVE';
 
               <p class="board-note">
                 <span class="material-icons">info</span>
-                Verás los trazos que el docente dibuje a partir de ahora. Si entraste después de que
-                empezó, es posible que no veas lo dibujado previamente.
+                Al entrar verás el estado actual de la pizarra y, a partir de ahí, lo que el docente
+                vaya dibujando en vivo.
               </p>
             </div>
           }
@@ -306,6 +364,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   readonly panY = signal<number>(0);
 
   readonly cursorPos = signal<{ x: number; y: number } | null>(null);
+
+  /** Textos del docente que el alumno solo visualiza (vía estado inicial y eventos en vivo). */
+  readonly textItems = signal<DisplayTextItem[]>([]);
+
+  readonly fullscreen = signal<boolean>(false);
 
   readonly session = signal<WhiteboardStudentSessionResponse | null>(null);
   readonly loading = signal<boolean>(true);
@@ -399,10 +462,19 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.whiteboardService.joinSession(this.sessionId).subscribe({
       next: (detail) => this.onSessionLoaded(detail),
       error: (err: unknown) => {
-        // Si no puede unirse (p. ej. ya cerrada), intenta al menos cargar el detalle para
-        // mostrar el estado real (finalizada) en lugar de un error genérico.
+        // El join solo falla legítimamente si la sesión está cerrada (no se puede unir): en ese
+        // caso se carga el detalle para mostrar el estado real. Cualquier otro fallo del join SÍ
+        // se reporta (un join silenciado dejaría al alumno sin participante: ni aparecería en el
+        // panel del docente ni podría dibujar aunque tuviera permiso).
         this.whiteboardService.getSessionDetail(this.sessionId).subscribe({
-          next: (detail) => this.onSessionLoaded(detail),
+          next: (detail) => {
+            if (detail.status === 'CLOSED') {
+              this.onSessionLoaded(detail);
+            } else {
+              this.loadError.set(this.extractError(err, 'No se pudo unir a la sesión.'));
+              this.loading.set(false);
+            }
+          },
           error: () => {
             this.loadError.set(this.extractError(err, 'No se pudo abrir la sesión.'));
             this.loading.set(false);
@@ -423,7 +495,55 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     requestAnimationFrame(() => {
       this.ensureCanvas();
       this.centerPan();
+      // Reconstruye el estado actual de la pizarra (trazos + textos) para no quedar en blanco al
+      // unirse tarde o recargar; a partir de aquí siguen los eventos en vivo.
+      this.loadBoardState();
     });
+  }
+
+  /** Carga y reproduce el estado actual del lienzo (trazos + textos) de la sesión en vivo. */
+  private loadBoardState(): void {
+    this.whiteboardService.getBoardState(this.sessionId).subscribe({
+      next: (state) => {
+        if (state.stateJson === null || state.stateJson.trim() === '') {
+          return;
+        }
+        let snapshot: WhiteboardBoardStateSnapshot;
+        try {
+          snapshot = JSON.parse(state.stateJson) as WhiteboardBoardStateSnapshot;
+        } catch {
+          return;
+        }
+        this.replayBoardState(snapshot);
+      },
+      error: () => {
+        /* silencioso: sin estado previo el alumno ve solo los eventos nuevos */
+      },
+    });
+  }
+
+  /** Pinta los trazos y muestra los textos de una instantánea del lienzo. */
+  private replayBoardState(snapshot: WhiteboardBoardStateSnapshot): void {
+    const strokes = Array.isArray(snapshot.strokes) ? snapshot.strokes : [];
+    for (const stroke of strokes) {
+      const isErase = stroke.eventType === 'ERASE';
+      const color = isErase ? BOARD_BACKGROUND : stroke.color ?? '#000000';
+      const width = isErase ? stroke.eraserSize ?? 24 : stroke.strokeWidth ?? 4;
+      this.renderStroke(stroke.points, color, width);
+    }
+    const texts = Array.isArray(snapshot.texts) ? snapshot.texts : [];
+    if (texts.length > 0) {
+      this.textItems.set(
+        texts.map((t) => ({
+          id: t.id,
+          wx: t.wx,
+          wy: t.wy,
+          color: t.color,
+          size: t.size,
+          runs: t.runs,
+        }))
+      );
+    }
   }
 
   /** Re-consulta el detalle para recalcular el permiso efectivo tras un cambio de interacción. */
@@ -464,6 +584,23 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   onEraserSize(event: Event): void {
     this.eraserSize.set(Number((event.target as HTMLInputElement).value));
+  }
+
+  /**
+   * Alterna la pantalla completa. Es un modo CSS: no recrea el lienzo ni desconecta el WebSocket,
+   * por lo que no se pierde el contenido ni la conexión. Tras el cambio de tamaño del visor,
+   * re-encaja el desplazamiento para no perder la pizarra.
+   */
+  toggleFullscreen(): void {
+    this.fullscreen.set(!this.fullscreen());
+    requestAnimationFrame(() => this.setPan(this.panX(), this.panY()));
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.fullscreen()) {
+      this.toggleFullscreen();
+    }
   }
 
   // ─── Puntero: dibujo y desplazamiento ────────────────────────────────────────
@@ -582,6 +719,19 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     if (event.eventType === 'CLEAR') {
       this.clearCanvas();
+      this.textItems.set([]);
+      return;
+    }
+    // Texto en vivo del docente: crear/actualizar o eliminar el objeto de texto correspondiente.
+    if (event.eventType === 'TEXT') {
+      this.upsertText(event);
+      return;
+    }
+    if (event.eventType === 'TEXT_DELETE') {
+      if (event.textId !== null) {
+        const id = event.textId;
+        this.textItems.update((items) => items.filter((i) => i.id !== id));
+      }
       return;
     }
     const points = (event.points ?? []) as WhiteboardPoint[];
@@ -589,6 +739,31 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     const color = isErase ? BOARD_BACKGROUND : event.color ?? '#000000';
     const width = isErase ? event.eraserSize ?? 24 : event.strokeWidth ?? 4;
     this.renderStroke(points, color, width);
+  }
+
+  /** Inserta o actualiza un objeto de texto a partir de un evento TEXT del docente. */
+  private upsertText(event: WhiteboardDrawEventResponse): void {
+    const point = event.points?.[0];
+    if (event.textId === null || !point || event.runs === null) {
+      return;
+    }
+    const item: DisplayTextItem = {
+      id: event.textId,
+      wx: point.x,
+      wy: point.y,
+      color: event.color ?? '#1a1a16',
+      size: event.fontSize ?? 32,
+      runs: event.runs ?? [],
+    };
+    this.textItems.update((items) => {
+      const index = items.findIndex((i) => i.id === item.id);
+      if (index === -1) {
+        return [...items, item];
+      }
+      const next = [...items];
+      next[index] = item;
+      return next;
+    });
   }
 
   private onControlEvent(event: WhiteboardControlEventResponse): void {

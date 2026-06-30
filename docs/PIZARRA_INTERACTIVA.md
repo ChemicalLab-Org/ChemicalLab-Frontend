@@ -36,11 +36,11 @@ pendiente para 15.3 el frontend del estudiante y su historial.
 - **Pantalla completa**: modo CSS propio que expande el editor a toda la ventana y oculta sidebar
   y panel de participantes, sin recrear el lienzo ni desconectar el WebSocket; se sale con el
   botón o con Esc.
-- **Texto** (limitación conocida): el texto se **rasteriza en el lienzo** (queda en la pizarra y
-  en la captura final). El backend de la sesión 15.1 **no define un eventType de texto** (solo
-  `DRAW`/`ERASE`/`CLEAR`), por lo que el texto **no se difunde en vivo por WebSocket**; sincronizar
-  texto requeriría ampliar el backend en una sesión futura. Tampoco se implementó mover/editar el
-  texto después de creado (fuera del MVP).
+- **Texto** (objetos movibles): el texto son objetos con formato (color, tamaño, negrita/cursiva/
+  subrayado por fragmento) que el docente puede mover y reeditar; se componen en la captura final.
+  Desde la corrección de 15.3 el texto **se difunde en vivo por WebSocket** mediante los eventos
+  `TEXT`/`TEXT_DELETE` (reservados al docente), de modo que el alumno lo ve sin recargar y lo
+  conserva al reconstruir el estado. El docente también difunde la nueva posición al mover un texto.
 - **Conexión WebSocket/STOMP** con `@stomp/stompjs`: conecta al endpoint del backend enviando
   el JWT en la cabecera `Authorization` del frame CONNECT, se suscribe a
   `/topic/whiteboards/{sessionId}` (eventos de dibujo y de control en el mismo canal, separados
@@ -116,15 +116,40 @@ existente del docente con el rol alumno. No se modificó el backend ni el editor
   al destruir el componente para evitar fugas de memoria. Solo lectura: no permite editar, unirse,
   dibujar ni reabrir.
 
-### Limitación conocida: estado al unirse tarde (pendiente para 15.4)
+### Estado actual al unirse tarde o recargar (corrección 15.3)
 
-El backend (15.1) **no persiste los trazos** ni ofrece snapshot/replay de una sesión **activa**:
-`WhiteboardDrawEventService` valida y **difunde** los eventos en vivo, pero no los almacena, y el
-único snapshot es la **captura final** que el docente sube al cerrar. En consecuencia, un estudiante
-que **entra tarde** ve la pizarra en blanco y solo los trazos **nuevos** desde su conexión. El visor
-lo advierte explícitamente y **no simula** un estado inexistente. Resolverlo (snapshot de sesión
-activa o historial temporal de eventos para reconstruir el estado inicial) requiere un cambio de
-backend y queda como **pendiente crítico para la sesión 15.4**.
+La carencia original —el alumno que entraba tarde o recargaba veía la pizarra en blanco— se resolvió
+con un **estado actual del lienzo** para sesiones en vivo (no solo la imagen final):
+
+- El backend guarda un `current_state_json` por sesión (`PUT /api/whiteboards/teacher/{id}/state`),
+  que el **frontend docente** mantiene de forma **debounced** (~1 s) con una instantánea serializada
+  de **trazos + textos**. Tope de tamaño ~2 MB; el contenido no se registra en los logs de auditoría.
+- Al **entrar o recargar**, el editor docente y el visor estudiante consultan el estado
+  (`GET .../state`) y lo **reproducen** (pintan los trazos y muestran los textos) antes de seguir con
+  los eventos en vivo. Así ni el alumno ni el docente pierden la pizarra al recargar.
+- El docente acumula tanto sus trazos como los de los alumnos para que el estado y la captura final
+  los conserven. La **imagen final** se mantiene aparte para las sesiones cerradas (historial).
+
+### Correcciones de integración docente↔estudiante (15.3)
+
+- **Participantes en vivo:** al unirse un estudiante, el backend difunde el evento de control
+  `PARTICIPANT_JOINED` y el editor docente **refresca el panel de participantes** sin recargar (el
+  botón Actualizar y la recarga del detalle también lo listan).
+- **Texto en vivo:** el docente difunde los objetos de texto por `TEXT`/`TEXT_DELETE`; el visor
+  estudiante los renderiza como overlay de solo lectura (contenido, posición, color, tamaño y
+  formato), y los conserva al reconstruir el estado.
+- **Permisos:** ante `INTERACTION_UPDATED`/`PARTICIPANT_PERMISSION_UPDATED` el alumno vuelve a pedir
+  el detalle y recalcula `canInteract`; si el join falla en una sesión en vivo, el error se
+  **reporta** (ya no se degrada en silencio a solo lectura), evitando que el alumno quede sin
+  participante y sin poder dibujar pese a tener permiso.
+- **Pantalla completa del alumno:** el visor estudiante tiene modo de pantalla completa (botón +
+  Escape, con botón flotante «Salir de pantalla completa») que no recrea el lienzo ni desconecta el
+  WebSocket y no habilita herramientas sin permiso.
+
+### Pendiente para 15.4 (no incluido aquí)
+
+Visualización del participante activo / cursores con nombre de quien dibuja (estilo pizarra
+colaborativa moderna): queda como mejora futura, fuera del alcance de esta corrección.
 
 ### Archivos del estudiante
 
@@ -140,6 +165,6 @@ backend y queda como **pendiente crítico para la sesión 15.4**.
 
 ### Fuera de alcance (15.4 y posteriores)
 
-Reconstrucción del estado inicial de una sesión activa al unirse tarde (requiere backend), chat o
-comentarios, exportación PDF, imágenes externas, motor químico dentro de la pizarra, plantillas
-avanzadas, edición de sesiones cerradas y configuración detallada de despliegue LAN.
+Visualización del participante activo / cursores con nombre, chat o comentarios, exportación PDF,
+imágenes externas, motor químico dentro de la pizarra, plantillas avanzadas, edición de sesiones
+cerradas y configuración detallada de despliegue LAN.

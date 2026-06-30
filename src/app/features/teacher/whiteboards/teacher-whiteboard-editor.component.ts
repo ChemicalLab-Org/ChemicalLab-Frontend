@@ -24,6 +24,7 @@ import {
 import { TEACHER_NAV_ITEMS } from '../../../shared/components/sidebar/teacher-nav';
 import {
   ApiError,
+  WhiteboardBoardStateSnapshot,
   WhiteboardDrawEventRequest,
   WhiteboardDrawEventResponse,
   WhiteboardInteractionOverride,
@@ -31,6 +32,8 @@ import {
   WhiteboardPoint,
   WhiteboardSessionResponse,
   WhiteboardSessionStatus,
+  WhiteboardStrokeRecord,
+  WhiteboardTextRun,
 } from '../../../shared/models';
 
 /**
@@ -597,6 +600,15 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private readonly ownEventIds = new Set<string>();
   private snapshotObjectUrl: string | null = null;
 
+  /**
+   * Trazos acumulados (propios y de los alumnos) para reconstruir el estado del lienzo. Se guarda
+   * de forma debounced en el backend (currentStateJson) para que un alumno que entra tarde o
+   * recarga reconstruya lo ya dibujado. Se reinicia al limpiar la pizarra.
+   */
+  private boardStrokes: WhiteboardStrokeRecord[] = [];
+  private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly STATE_SAVE_DEBOUNCE_MS = 1000;
+
   // Desplazamiento (pan) del lienzo dentro del visor.
   private panning = false;
   private panStart = { x: 0, y: 0, px: 0, py: 0 };
@@ -725,6 +737,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.flushStateSave();
     this.realtime.disconnect();
     this.revokeSnapshotUrl();
   }
@@ -742,10 +755,12 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           this.loadSnapshot();
         } else {
           this.realtime.connect(this.sessionId);
-          // Tras renderizar el lienzo, centra la vista del workspace en el visor.
+          // Tras renderizar el lienzo, centra la vista del workspace en el visor y restaura el
+          // estado guardado (trazos + textos) para no perder la pizarra al recargar.
           requestAnimationFrame(() => {
             this.ensureCanvas();
             this.centerPan();
+            this.loadBoardState();
           });
         }
       },
@@ -975,9 +990,11 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
 
     if (plain === '') {
-      // Edición que se dejó vacía: se elimina el texto existente.
+      // Edición que se dejó vacía: se elimina el texto existente (y se avisa a los alumnos).
       if (editingId !== null) {
         this.textItems.update((items) => items.filter((i) => i.id !== editingId));
+        this.broadcastTextDelete(editingId);
+        this.scheduleStateSave();
       }
       return;
     }
@@ -986,16 +1003,19 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
 
     const base = { color: this.color(), size: this.textSize(), runs };
+    let saved: TextItem;
     if (editingId !== null) {
+      saved = { id: editingId, wx: draft.wx, wy: draft.wy, ...base };
       this.textItems.update((items) =>
         items.map((i) => (i.id === editingId ? { ...i, ...base } : i))
       );
     } else {
-      this.textItems.update((items) => [
-        ...items,
-        { id: this.localId(), wx: draft.wx, wy: draft.wy, ...base },
-      ]);
+      saved = { id: this.localId(), wx: draft.wx, wy: draft.wy, ...base };
+      this.textItems.update((items) => [...items, saved]);
     }
+    // Difunde el texto en vivo para que el alumno lo vea sin recargar y lo guarda en el estado.
+    this.broadcastTextUpsert(saved);
+    this.scheduleStateSave();
   }
 
   cancelText(): void {
@@ -1129,11 +1149,18 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   onTextItemPointerUp(event: PointerEvent): void {
-    if (this.draggingTextId() === null) {
+    const id = this.draggingTextId();
+    if (id === null) {
       return;
     }
     (event.target as HTMLElement).releasePointerCapture?.(event.pointerId);
     this.draggingTextId.set(null);
+    // Difunde la nueva posición del texto en vivo y la guarda en el estado del lienzo.
+    const moved = this.textItems().find((i) => i.id === id);
+    if (moved) {
+      this.broadcastTextUpsert(moved);
+      this.scheduleStateSave();
+    }
   }
 
   /** Doble clic sobre un texto: lo reabre en el editor flotante para cambiar su contenido/estilo. */
@@ -1304,8 +1331,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   confirmClear(): void {
     this.clearOpen.set(false);
     this.clearCanvas();
+    this.boardStrokes = [];
     const clientEventId = this.newEventId();
     this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId });
+    this.scheduleStateSave();
   }
 
   // ─── Acciones de sesión ───────────────────────────────────────────────────────
@@ -1427,6 +1456,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     if (event.eventType === 'CLEAR') {
       this.clearCanvas();
+      this.boardStrokes = [];
+      this.scheduleStateSave();
+      return;
+    }
+    // El texto en vivo lo origina solo el docente; sus ecos se descartan arriba por clientEventId.
+    // Por seguridad, ignoramos cualquier evento de texto entrante en el editor docente.
+    if (event.eventType === 'TEXT' || event.eventType === 'TEXT_DELETE') {
       return;
     }
     const points = (event.points ?? []) as WhiteboardPoint[];
@@ -1434,6 +1470,15 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     const color = isErase ? BOARD_BACKGROUND : event.color ?? '#000000';
     const width = isErase ? event.eraserSize ?? 24 : event.strokeWidth ?? 4;
     this.renderStroke(points, color, width);
+    // Acumula el trazo de otros participantes en el estado para que la captura/recarga lo conserve.
+    this.boardStrokes.push({
+      eventType: isErase ? 'ERASE' : 'DRAW',
+      color: isErase ? null : event.color ?? '#000000',
+      strokeWidth: isErase ? null : event.strokeWidth ?? 4,
+      eraserSize: isErase ? event.eraserSize ?? 24 : null,
+      points,
+    });
+    this.scheduleStateSave();
   }
 
   private onControlEvent(event: { eventType: string; status: WhiteboardSessionStatus | null }): void {
@@ -1456,6 +1501,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         break;
       case 'INTERACTION_UPDATED':
       case 'PARTICIPANT_PERMISSION_UPDATED':
+      case 'PARTICIPANT_JOINED':
+        // Un alumno se unió o cambió un permiso: refresca el panel de participantes en vivo.
         this.refreshParticipants();
         break;
     }
@@ -1544,6 +1591,15 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           clientEventId,
         };
     this.realtime.sendDraw(event);
+    // Acumula el trazo propio en el estado guardado del lienzo.
+    this.boardStrokes.push({
+      eventType: isErase ? 'ERASE' : 'DRAW',
+      color: isErase ? null : this.color(),
+      strokeWidth: isErase ? null : this.strokeWidth(),
+      eraserSize: isErase ? this.eraserSize() : null,
+      points,
+    });
+    this.scheduleStateSave();
   }
 
   private toCanvasPoint(event: PointerEvent): WhiteboardPoint {
@@ -1648,6 +1704,137 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (this.snapshotObjectUrl !== null) {
       URL.revokeObjectURL(this.snapshotObjectUrl);
       this.snapshotObjectUrl = null;
+    }
+  }
+
+  // ─── Texto en vivo (difusión por WebSocket) ───────────────────────────────────
+
+  /** Difunde un objeto de texto (crear/editar/mover) para que el alumno lo vea en vivo. */
+  private broadcastTextUpsert(item: TextItem): void {
+    const clientEventId = this.newEventId();
+    this.realtime.sendDraw({
+      eventType: 'TEXT',
+      tool: 'TEXT',
+      textId: item.id,
+      color: item.color,
+      fontSize: item.size,
+      runs: item.runs as readonly WhiteboardTextRun[],
+      points: [{ x: item.wx, y: item.wy }],
+      clientEventId,
+    });
+  }
+
+  /** Difunde la eliminación de un objeto de texto por su identificador. */
+  private broadcastTextDelete(textId: string): void {
+    const clientEventId = this.newEventId();
+    this.realtime.sendDraw({ eventType: 'TEXT_DELETE', tool: 'TEXT', textId, clientEventId });
+  }
+
+  // ─── Estado actual del lienzo (persistencia para recarga / unión tardía) ───────
+
+  /** Programa el guardado debounced del estado del lienzo (trazos + textos) en el backend. */
+  private scheduleStateSave(): void {
+    if (this.stateSaveTimer !== null) {
+      clearTimeout(this.stateSaveTimer);
+    }
+    this.stateSaveTimer = setTimeout(
+      () => this.flushStateSave(),
+      TeacherWhiteboardEditorComponent.STATE_SAVE_DEBOUNCE_MS
+    );
+  }
+
+  /** Guarda inmediatamente el estado pendiente (al destruir el componente o al vencer el debounce). */
+  private flushStateSave(): void {
+    if (this.stateSaveTimer !== null) {
+      clearTimeout(this.stateSaveTimer);
+      this.stateSaveTimer = null;
+    }
+    const session = this.session();
+    if (session === null || session.status === 'CLOSED') {
+      return;
+    }
+    const snapshot: WhiteboardBoardStateSnapshot = {
+      v: 1,
+      strokes: this.boardStrokes,
+      texts: this.textItems().map((t) => ({
+        id: t.id,
+        wx: t.wx,
+        wy: t.wy,
+        color: t.color,
+        size: t.size,
+        runs: t.runs,
+      })),
+    };
+    let json: string;
+    try {
+      json = JSON.stringify(snapshot);
+    } catch {
+      return;
+    }
+    // No reventar el tope del backend (~2 MB): si se excede, se omite el guardado (se reportará).
+    if (json.length > 1_900_000) {
+      return;
+    }
+    this.whiteboardService.saveBoardState(this.sessionId, json).subscribe({
+      next: () => {
+        /* estado guardado */
+      },
+      error: () => {
+        /* silencioso: el dibujo en vivo no debe interrumpirse por un fallo al guardar el estado */
+      },
+    });
+  }
+
+  /** Restaura el estado guardado del lienzo (trazos + textos) al entrar o recargar. */
+  private loadBoardState(): void {
+    this.whiteboardService.getBoardState(this.sessionId).subscribe({
+      next: (state) => {
+        if (state.stateJson === null || state.stateJson.trim() === '') {
+          return;
+        }
+        let snapshot: WhiteboardBoardStateSnapshot;
+        try {
+          snapshot = JSON.parse(state.stateJson) as WhiteboardBoardStateSnapshot;
+        } catch {
+          return;
+        }
+        this.replayBoardState(snapshot);
+      },
+      error: () => {
+        /* silencioso: sin estado previo el docente sigue dibujando con normalidad */
+      },
+    });
+  }
+
+  /** Pinta los trazos y restaura los textos de una instantánea del lienzo. */
+  private replayBoardState(snapshot: WhiteboardBoardStateSnapshot): void {
+    const restored = (Array.isArray(snapshot.strokes) ? snapshot.strokes : []).map((s) => ({
+      ...s,
+      points: [...s.points],
+    }));
+    // Conserva los trazos en vivo que pudieran haber llegado mientras se cargaba el estado: el
+    // estado guardado es previo a la carga, así que no se solapan; se vuelven a pintar tras limpiar.
+    const pending = this.boardStrokes;
+    this.clearCanvas();
+    this.boardStrokes = [...restored, ...pending];
+    for (const stroke of this.boardStrokes) {
+      const isErase = stroke.eventType === 'ERASE';
+      const color = isErase ? BOARD_BACKGROUND : stroke.color ?? '#000000';
+      const width = isErase ? stroke.eraserSize ?? 24 : stroke.strokeWidth ?? 4;
+      this.renderStroke(stroke.points, color, width);
+    }
+    const texts = Array.isArray(snapshot.texts) ? snapshot.texts : [];
+    if (texts.length > 0 || this.textItems().length === 0) {
+      this.textItems.set(
+        texts.map((t) => ({
+          id: t.id,
+          wx: t.wx,
+          wy: t.wy,
+          color: t.color,
+          size: t.size,
+          runs: t.runs,
+        }))
+      );
     }
   }
 

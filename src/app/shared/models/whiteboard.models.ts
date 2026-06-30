@@ -16,11 +16,14 @@ export type WhiteboardSessionStatus = 'ACTIVE' | 'PAUSED' | 'CLOSED';
  */
 export type WhiteboardInteractionOverride = 'FOLLOW_GLOBAL' | 'ALLOWED' | 'BLOCKED';
 
-/** Tipo de evento de dibujo transportado por WebSocket (enum WhiteboardDrawEventType). */
-export type WhiteboardDrawEventType = 'DRAW' | 'ERASE' | 'CLEAR';
+/**
+ * Tipo de evento de dibujo transportado por WebSocket (enum WhiteboardDrawEventType).
+ * TEXT/TEXT_DELETE transportan los objetos de texto del docente en vivo (reservados al docente).
+ */
+export type WhiteboardDrawEventType = 'DRAW' | 'ERASE' | 'CLEAR' | 'TEXT' | 'TEXT_DELETE';
 
 /** Herramienta usada en un evento de dibujo (enum WhiteboardDrawTool). */
-export type WhiteboardDrawTool = 'PEN' | 'ERASER' | 'CLEAR';
+export type WhiteboardDrawTool = 'PEN' | 'ERASER' | 'CLEAR' | 'TEXT';
 
 /** Evento de control difundido al canal de la sesión (enum WhiteboardControlEventType). */
 export type WhiteboardControlEventType =
@@ -28,7 +31,19 @@ export type WhiteboardControlEventType =
   | 'SESSION_RESUMED'
   | 'SESSION_CLOSED'
   | 'INTERACTION_UPDATED'
-  | 'PARTICIPANT_PERMISSION_UPDATED';
+  | 'PARTICIPANT_PERMISSION_UPDATED'
+  | 'PARTICIPANT_JOINED';
+
+/**
+ * Fragmento de texto con un estilo uniforme (DTO WhiteboardTextRun). El formato
+ * (negrita/cursiva/subrayado) es por fragmento; el color y el tamaño son del bloque de texto.
+ */
+export interface WhiteboardTextRun {
+  readonly text: string;
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly underline: boolean;
+}
 
 /**
  * Vista de una sesión para el docente propietario (listado y resultado de acciones).
@@ -149,6 +164,12 @@ export interface WhiteboardDrawEventRequest {
   readonly points?: readonly WhiteboardPoint[];
   /** Identificador del evento generado por el cliente, para deduplicar el eco propio. */
   readonly clientEventId?: string;
+  /** Solo en eventos de texto (TEXT/TEXT_DELETE): identificador estable del bloque de texto. */
+  readonly textId?: string;
+  /** Solo en TEXT: tamaño de fuente del bloque. */
+  readonly fontSize?: number | null;
+  /** Solo en TEXT: fragmentos con formato del bloque. La posición viaja como único punto en points. */
+  readonly runs?: readonly WhiteboardTextRun[];
 }
 
 /** Evento de dibujo difundido a los suscriptores de /topic/whiteboards/{sessionId}. */
@@ -164,6 +185,12 @@ export interface WhiteboardDrawEventResponse {
   readonly actorDisplayName: string;
   readonly clientEventId: string | null;
   readonly occurredAt: string;
+  /** Solo en eventos de texto: identificador del bloque. */
+  readonly textId: string | null;
+  /** Solo en TEXT: tamaño de fuente del bloque. */
+  readonly fontSize: number | null;
+  /** Solo en TEXT: fragmentos con formato del bloque. */
+  readonly runs: readonly WhiteboardTextRun[] | null;
 }
 
 /** Evento de control difundido al canal cuando el docente actúa por REST. */
@@ -184,12 +211,55 @@ export type WhiteboardTopicMessage =
   | WhiteboardDrawEventResponse
   | WhiteboardControlEventResponse;
 
+/**
+ * Estado actual del lienzo de una sesión en vivo (DTO WhiteboardBoardStateResponse). Permite
+ * reconstruir lo ya dibujado al unirse tarde o recargar. {@link stateJson} es null si todavía no
+ * se guardó ningún estado. El frontend interpreta el contenido del JSON (trazos + textos).
+ */
+export interface WhiteboardBoardStateResponse {
+  readonly sessionId: number;
+  readonly status: WhiteboardSessionStatus;
+  readonly stateJson: string | null;
+  readonly updatedAt: string | null;
+}
+
+/** Trazo serializado dentro del estado del lienzo (DRAW o ERASE). */
+export interface WhiteboardStrokeRecord {
+  readonly eventType: 'DRAW' | 'ERASE';
+  readonly color: string | null;
+  readonly strokeWidth: number | null;
+  readonly eraserSize: number | null;
+  readonly points: readonly WhiteboardPoint[];
+}
+
+/** Objeto de texto serializado dentro del estado del lienzo (coordenadas de workspace). */
+export interface WhiteboardTextRecord {
+  readonly id: string;
+  readonly wx: number;
+  readonly wy: number;
+  readonly color: string;
+  readonly size: number;
+  readonly runs: readonly WhiteboardTextRun[];
+}
+
+/**
+ * Instantánea serializada del lienzo en vivo (lo que viaja en {@link WhiteboardBoardStateResponse#stateJson}).
+ * La interpreta el frontend; el backend la trata como texto opaco. Incluye trazos y textos para que
+ * un alumno que recarga o entra tarde reconstruya el estado actual antes de seguir en vivo.
+ */
+export interface WhiteboardBoardStateSnapshot {
+  readonly v: 1;
+  readonly strokes: readonly WhiteboardStrokeRecord[];
+  readonly texts: readonly WhiteboardTextRecord[];
+}
+
 const CONTROL_EVENT_TYPES: ReadonlySet<string> = new Set<WhiteboardControlEventType>([
   'SESSION_PAUSED',
   'SESSION_RESUMED',
   'SESSION_CLOSED',
   'INTERACTION_UPDATED',
   'PARTICIPANT_PERMISSION_UPDATED',
+  'PARTICIPANT_JOINED',
 ]);
 
 /** Discrimina un mensaje del canal como evento de control (vs. evento de dibujo). */

@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  WhiteboardBoardStateResponse,
   WhiteboardGlobalInteractionRequest,
   WhiteboardParticipantInteractionRequest,
   WhiteboardParticipantResponse,
@@ -91,5 +92,20 @@ export class TeacherWhiteboardService {
   /** Descarga la captura final de una sesión cerrada como imagen (blob). */
   getSnapshot(sessionId: number): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/${sessionId}/snapshot`, { responseType: 'blob' });
+  }
+
+  /**
+   * Guarda el estado actual del lienzo (trazos + textos serializados) de una sesión en vivo.
+   * Se envía de forma debounced para que un alumno que entra tarde o recarga lo reconstruya.
+   */
+  saveBoardState(sessionId: number, stateJson: string): Observable<WhiteboardBoardStateResponse> {
+    return this.http.put<WhiteboardBoardStateResponse>(`${this.baseUrl}/${sessionId}/state`, {
+      stateJson,
+    });
+  }
+
+  /** Obtiene el estado actual del lienzo de una sesión en vivo (para restaurar al recargar). */
+  getBoardState(sessionId: number): Observable<WhiteboardBoardStateResponse> {
+    return this.http.get<WhiteboardBoardStateResponse>(`${this.baseUrl}/${sessionId}/state`);
   }
 }
