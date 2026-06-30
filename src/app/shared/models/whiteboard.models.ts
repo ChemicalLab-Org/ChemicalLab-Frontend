@@ -74,6 +74,44 @@ export interface WhiteboardSessionDetailResponse {
   readonly participants: readonly WhiteboardParticipantResponse[];
 }
 
+/**
+ * Vista segura de una sesión para el estudiante (DTO WhiteboardStudentSessionResponse del
+ * backend). Expone solo lo necesario: no incluye datos internos del docente ni de otros alumnos.
+ * {@link joined} indica si el estudiante ya se unió y {@link canInteract} su permiso efectivo de
+ * dibujo (joined && status === 'ACTIVE' && permiso efectivo combinando global e individual).
+ */
+export interface WhiteboardStudentSessionResponse {
+  readonly id: number;
+  readonly name: string;
+  readonly description: string | null;
+  readonly teacherName: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly status: WhiteboardSessionStatus;
+  readonly interactionEnabled: boolean;
+  readonly joined: boolean;
+  readonly canInteract: boolean;
+  readonly snapshotAvailable: boolean;
+  readonly createdAt: string;
+  readonly startedAt: string | null;
+  readonly closedAt: string | null;
+}
+
+/**
+ * Entrada del historial de sesiones cerradas visible para el estudiante (DTO
+ * WhiteboardHistoryItemResponse): metadata segura y disponibilidad de la captura final.
+ */
+export interface WhiteboardHistoryItemResponse {
+  readonly id: number;
+  readonly name: string;
+  readonly teacherName: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly status: WhiteboardSessionStatus;
+  readonly snapshotAvailable: boolean;
+  readonly closedAt: string | null;
+}
+
 /** Cuerpo de creación de una sesión de pizarra. El docente se resuelve del token. */
 export interface WhiteboardSessionCreateRequest {
   readonly name: string;

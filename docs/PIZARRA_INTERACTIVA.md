@@ -76,8 +76,70 @@ El endpoint WebSocket se toma de `environment.wsUrl` (apunta al transporte WebSo
 endpoint SockJS `/ws` del backend). En desarrollo: `ws://localhost:8080/ws/websocket`. La URL
 para LAN/producción se ajusta junto con `apiUrl` (ver `src/environments/environment.prod.ts`).
 
-### Fuera de alcance (15.3 y posteriores)
+## Frontend del estudiante (sesión 15.3)
 
-Frontend del estudiante (sesiones activas, unirse, visor en vivo, historial), exportación PDF,
-imágenes externas, motor químico, plantillas avanzadas y configuración detallada de despliegue
-LAN.
+La sesión 15.3 implementa la experiencia del **estudiante**, conectando el flujo en vivo ya
+existente del docente con el rol alumno. No se modificó el backend ni el editor docente.
+
+- **Módulo «Pizarra interactiva»** en el panel del estudiante (sidebar y dashboard), ruta
+  `/student/whiteboards`.
+- **Listado con dos pestañas**:
+  - *Sesiones en vivo*: sesiones `ACTIVE`/`PAUSED` del grado/sección del estudiante, con pills de
+    estado (Activa/Pausada), «En vivo», y «Puedes interactuar» / «Solo lectura». Botón Unirse/Continuar.
+  - *Historial*: sesiones `CLOSED` del grado/sección, con indicador de captura disponible y botón
+    «Ver registro».
+  - Estados de carga, error (con reintentar) y vacíos propios para cada pestaña.
+- **Unirse a una sesión** (`POST /api/whiteboards/student/{id}/join`) y carga del detalle
+  (`GET /api/whiteboards/student/{id}`), que devuelve `joined` y el permiso efectivo `canInteract`.
+- **Visor en vivo**: renderiza en tiempo real los trazos del docente (y de otros alumnos
+  permitidos) sobre el mismo workspace lógico (3200×2000) que el editor docente, para que las
+  coordenadas coincidan. Indicadores de estado de la sesión, de conexión (Conectado / Reconectando
+  / Desconectado) y de permiso (Solo visualización / Puedes interactuar / Sesión pausada).
+- **Interacción según permiso**: el estudiante solo ve las herramientas (plumón, color, grosor,
+  borrador) cuando la sesión está `ACTIVE` y tiene permiso efectivo. «Borrar todo» queda reservado
+  al docente (el backend rechaza `CLEAR` de un estudiante). Reacciona en vivo a:
+  - `INTERACTION_UPDATED` / `PARTICIPANT_PERMISSION_UPDATED`: vuelve a pedir el detalle para
+    recalcular `canInteract` (sin recargar la pantalla); si pierde el permiso, vuelve a «Mover».
+  - `SESSION_PAUSED` / `SESSION_RESUMED`: bloquea/restablece el dibujo y avisa.
+  - `SESSION_CLOSED`: desconecta el WebSocket, bloquea el dibujo y ofrece ir al historial o ver la
+    captura final.
+- **Conexión WebSocket/STOMP** propia del estudiante (`StudentWhiteboardRealtimeService`, análoga a
+  la del docente para no acoplar ni romper el editor): mismo transporte (`environment.wsUrl`), JWT
+  en el CONNECT, suscripción a `/topic/whiteboards/{sessionId}` (dibujo + control separados por
+  `eventType`) y a `/user/queue/whiteboard-errors`; publica dibujo en
+  `/app/whiteboards/{sessionId}/draw` y presencia en `/app/whiteboards/{sessionId}/presence`.
+  Deduplicación del eco propio por `clientEventId`. La suscripción y la conexión se limpian al salir
+  de la pantalla (`ngOnDestroy`); stompjs reintenta solo si el socket cae (estado «Reconectando»).
+- **Historial y captura final**: pantalla de registro de sesión cerrada con metadata (nombre,
+  docente, grado/sección, estado, fecha de cierre, descripción) y la captura final en un contenedor
+  amplio, con botón **Descargar**. La captura se consume como `Blob` (object URL), que se **revoca**
+  al destruir el componente para evitar fugas de memoria. Solo lectura: no permite editar, unirse,
+  dibujar ni reabrir.
+
+### Limitación conocida: estado al unirse tarde (pendiente para 15.4)
+
+El backend (15.1) **no persiste los trazos** ni ofrece snapshot/replay de una sesión **activa**:
+`WhiteboardDrawEventService` valida y **difunde** los eventos en vivo, pero no los almacena, y el
+único snapshot es la **captura final** que el docente sube al cerrar. En consecuencia, un estudiante
+que **entra tarde** ve la pizarra en blanco y solo los trazos **nuevos** desde su conexión. El visor
+lo advierte explícitamente y **no simula** un estado inexistente. Resolverlo (snapshot de sesión
+activa o historial temporal de eventos para reconstruir el estado inicial) requiere un cambio de
+backend y queda como **pendiente crítico para la sesión 15.4**.
+
+### Archivos del estudiante
+
+- Modelos (DTOs estudiante añadidos): `src/app/shared/models/whiteboard.models.ts`
+  (`WhiteboardStudentSessionResponse`, `WhiteboardHistoryItemResponse`).
+- Servicio REST: `src/app/core/services/student-whiteboard.service.ts`.
+- Servicio WebSocket/STOMP: `src/app/core/services/student-whiteboard-realtime.service.ts`.
+- Componentes (carga diferida): `src/app/features/student/whiteboards/student-whiteboards.component.ts`
+  (listado), `student-whiteboard-viewer.component.ts` (visor en vivo) y
+  `student-whiteboard-record.component.ts` (registro / captura final).
+- Rutas en `src/app/app.routes.ts`; ítem de navegación en
+  `src/app/shared/components/sidebar/student-nav.ts` y card en el dashboard del estudiante.
+
+### Fuera de alcance (15.4 y posteriores)
+
+Reconstrucción del estado inicial de una sesión activa al unirse tarde (requiere backend), chat o
+comentarios, exportación PDF, imágenes externas, motor químico dentro de la pizarra, plantillas
+avanzadas, edición de sesiones cerradas y configuración detallada de despliegue LAN.
