@@ -1,11 +1,12 @@
 import {
-  AfterViewInit,
   Component,
   DestroyRef,
   ElementRef,
+  HostListener,
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
   viewChild,
@@ -15,10 +16,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TeacherWhiteboardService } from '../../../core/services/teacher-whiteboard.service';
-import {
-  TeacherWhiteboardRealtimeService,
-  WhiteboardConnectionState,
-} from '../../../core/services/teacher-whiteboard-realtime.service';
+import { TeacherWhiteboardRealtimeService } from '../../../core/services/teacher-whiteboard-realtime.service';
 import {
   SidebarComponent,
   SidebarNavItem,
@@ -36,13 +34,16 @@ import {
 } from '../../../shared/models';
 
 /**
- * Resolución lógica fija del lienzo. Garantiza coordenadas coherentes entre clientes. Es un
- * área de trabajo mayor que el área visible: el docente se desplaza por ella con la herramienta
- * "Mover". No es un lienzo infinito; es un área preparada amplia.
+ * Área de trabajo (workspace) de la pizarra: grande pero limitada (no infinita). Es la
+ * resolución lógica del lienzo y el espacio de coordenadas que viaja por WebSocket, de modo que
+ * todos los clientes comparten el mismo sistema de referencia. El docente se desplaza por ella
+ * con la herramienta "Mover"; el visor muestra solo una parte.
  */
-const CANVAS_WIDTH = 2400;
-const CANVAS_HEIGHT = 1500;
+const WORKSPACE_WIDTH = 3200;
+const WORKSPACE_HEIGHT = 2000;
 const BOARD_BACKGROUND = '#ffffff';
+/** Ancho máximo de la captura final (se reescala para mantener un peso razonable). */
+const SNAPSHOT_MAX_WIDTH = 2400;
 
 /**
  * Cursor del plumón: un lápiz dibujado en SVG (hotspot en la punta, abajo-izquierda) en vez del
@@ -51,7 +52,14 @@ const BOARD_BACKGROUND = '#ffffff';
 const PEN_CURSOR =
   'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMyAxNy4yNVYyMWgzLjc1TDE3LjgxIDkuOTRsLTMuNzUtMy43NUwzIDE3LjI1eiIgZmlsbD0iIzFhMWExNiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0yMC43MSA3LjA0YTEgMSAwIDAgMCAwLTEuNDFsLTIuMzQtMi4zNGExIDEgMCAwIDAtMS40MSAwbC0xLjgzIDEuODMgMy43NSAzLjc1IDEuODMtMS44M3oiIGZpbGw9IiMxZDllNzUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=") 3 25, crosshair';
 
-type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
+type DrawTool = 'PEN' | 'ERASER' | 'TEXT' | 'MOVE';
+
+interface TextDraft {
+  readonly screenX: number;
+  readonly screenY: number;
+  readonly wx: number;
+  readonly wy: number;
+}
 
 @Component({
   selector: 'app-teacher-whiteboard-editor',
@@ -59,19 +67,23 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
   imports: [SidebarComponent],
   styleUrls: ['./teacher-whiteboard-editor.component.scss'],
   template: `
-    <div class="layout">
-      <app-sidebar
-        [navItems]="navItems"
-        [userName]="userName()"
-        [userRole]="userRole"
-        [userInitials]="userInitials()"
-        (onLogout)="handleLogout()"
-      />
+    <div class="layout" [class.layout--fullscreen]="fullscreen()">
+      @if (!fullscreen()) {
+        <app-sidebar
+          [navItems]="navItems"
+          [userName]="userName()"
+          [userRole]="userRole"
+          [userInitials]="userInitials()"
+          (onLogout)="handleLogout()"
+        />
+      }
 
       <main class="main">
-        <button type="button" class="back-link" (click)="goToList()">
-          <span class="material-icons">arrow_back</span> Volver a las sesiones
-        </button>
+        @if (!fullscreen()) {
+          <button type="button" class="back-link" (click)="goToList()">
+            <span class="material-icons">arrow_back</span> Volver a las sesiones
+          </button>
+        }
 
         @if (loading()) {
           <div class="loading-state">
@@ -86,24 +98,26 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
             <button type="button" class="btn btn-secondary" (click)="reload()">Reintentar</button>
           </div>
         } @else if (session(); as s) {
-          <header class="editor-header">
-            <div class="editor-header__info">
-              <h1 class="editor-header__name">{{ s.name }}</h1>
-              <div class="editor-header__tags">
-                <span class="badge" [class]="statusBadgeClass(s.status)">
-                  <span class="status-dot"></span>{{ statusLabel(s.status) }}
-                </span>
-                <span class="meta-chip">
-                  <span class="material-icons">school</span>{{ s.grade }}° · {{ s.section }}
-                </span>
-                @if (!isClosed()) {
-                  <span class="conn" [class]="connClass()">
-                    <span class="status-dot"></span>{{ connLabel() }}
+          @if (!fullscreen()) {
+            <header class="editor-header">
+              <div class="editor-header__info">
+                <h1 class="editor-header__name">{{ s.name }}</h1>
+                <div class="editor-header__tags">
+                  <span class="badge" [class]="statusBadgeClass(s.status)">
+                    <span class="status-dot"></span>{{ statusLabel(s.status) }}
                   </span>
-                }
+                  <span class="meta-chip">
+                    <span class="material-icons">school</span>{{ s.grade }}° · {{ s.section }}
+                  </span>
+                  @if (!isClosed()) {
+                    <span class="conn" [class]="connClass()">
+                      <span class="status-dot"></span>{{ connLabel() }}
+                    </span>
+                  }
+                </div>
               </div>
-            </div>
-          </header>
+            </header>
+          }
 
           @if (banner()) {
             <div class="alert page-alert" [class]="bannerClass()">
@@ -142,7 +156,7 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
             </section>
           } @else {
             <!-- Editor en vivo -->
-            <div class="editor-grid">
+            <div class="editor-grid" [class.editor-grid--full]="fullscreen()">
               <div class="board-area">
                 <div class="toolbar">
                   <div class="toolbar__group">
@@ -169,6 +183,16 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
                     <button
                       type="button"
                       class="tool-btn"
+                      [class.tool-btn--active]="tool() === 'TEXT'"
+                      [disabled]="!canDraw()"
+                      title="Texto"
+                      (click)="selectTool('TEXT')"
+                    >
+                      <span class="material-icons">title</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="tool-btn"
                       [class.tool-btn--active]="tool() === 'MOVE'"
                       title="Mover pizarra"
                       (click)="selectTool('MOVE')"
@@ -178,30 +202,19 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
                   </div>
 
                   <div class="toolbar__group">
-                    <label class="tool-field" title="Color">
-                      <span class="material-icons">palette</span>
-                      <input
-                        type="color"
-                        [value]="color()"
-                        [disabled]="!canDraw()"
-                        (input)="onColor($event)"
-                      />
-                    </label>
-
-                    @if (tool() === 'ERASER') {
-                      <label class="tool-field tool-field--range" title="Tamaño del borrador">
-                        <span class="material-icons">format_size</span>
+                    @if (tool() !== 'MOVE') {
+                      <label class="tool-field" title="Color">
+                        <span class="material-icons">palette</span>
                         <input
-                          type="range"
-                          min="8"
-                          max="60"
-                          [value]="eraserSize()"
+                          type="color"
+                          [value]="color()"
                           [disabled]="!canDraw()"
-                          (input)="onEraserSize($event)"
+                          (input)="onColor($event)"
                         />
-                        <span class="tool-field__value">{{ eraserSize() }}</span>
                       </label>
-                    } @else {
+                    }
+
+                    @if (tool() === 'PEN') {
                       <label class="tool-field tool-field--range" title="Grosor del trazo">
                         <span class="material-icons">line_weight</span>
                         <input
@@ -214,12 +227,76 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
                         />
                         <span class="tool-field__value">{{ strokeWidth() }}</span>
                       </label>
+                    } @else if (tool() === 'ERASER') {
+                      <label class="tool-field tool-field--range" title="Tamaño del borrador">
+                        <span class="material-icons">format_size</span>
+                        <input
+                          type="range"
+                          min="8"
+                          max="80"
+                          [value]="eraserSize()"
+                          [disabled]="!canDraw()"
+                          (input)="onEraserSize($event)"
+                        />
+                        <span class="tool-field__value">{{ eraserSize() }}</span>
+                      </label>
+                    } @else if (tool() === 'TEXT') {
+                      <label class="tool-field tool-field--range" title="Tamaño del texto">
+                        <span class="material-icons">format_size</span>
+                        <input
+                          type="range"
+                          min="14"
+                          max="96"
+                          step="2"
+                          [value]="textSize()"
+                          [disabled]="!canDraw()"
+                          (input)="onTextSize($event)"
+                        />
+                        <span class="tool-field__value">{{ textSize() }}</span>
+                      </label>
+
+                      <div class="toolbar__group toolbar__group--tight">
+                        <button
+                          type="button"
+                          class="tool-btn tool-btn--sm"
+                          [class.tool-btn--active]="textBold()"
+                          [disabled]="!canDraw()"
+                          title="Negrita"
+                          (mousedown)="$event.preventDefault()"
+                          (click)="textBold.set(!textBold())"
+                        >
+                          <span class="material-icons">format_bold</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="tool-btn tool-btn--sm"
+                          [class.tool-btn--active]="textItalic()"
+                          [disabled]="!canDraw()"
+                          title="Cursiva"
+                          (mousedown)="$event.preventDefault()"
+                          (click)="textItalic.set(!textItalic())"
+                        >
+                          <span class="material-icons">format_italic</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="tool-btn tool-btn--sm"
+                          [class.tool-btn--active]="textUnderline()"
+                          [disabled]="!canDraw()"
+                          title="Subrayado"
+                          (mousedown)="$event.preventDefault()"
+                          (click)="textUnderline.set(!textUnderline())"
+                        >
+                          <span class="material-icons">format_underlined</span>
+                        </button>
+                      </div>
                     }
 
                     <button
                       type="button"
                       class="btn btn-secondary btn-sm"
                       [disabled]="!canDraw()"
+                      title="Borrar toda la pizarra"
                       (click)="askClear()"
                     >
                       <span class="material-icons">delete_sweep</span>
@@ -228,6 +305,14 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
                   </div>
 
                   <div class="toolbar__group toolbar__group--right">
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      title="{{ fullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa' }}"
+                      (click)="toggleFullscreen()"
+                    >
+                      <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
+                    </button>
                     @if (s.status === 'ACTIVE') {
                       <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="pause()">
                         <span class="material-icons">pause</span> Pausar
@@ -243,7 +328,7 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
                   </div>
                 </div>
 
-                <div #canvasWrap class="canvas-wrap">
+                <div #canvasWrap class="board-viewport">
                   <canvas
                     #boardCanvas
                     class="board-canvas"
@@ -266,6 +351,26 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
                     ></div>
                   }
 
+                  @if (textDraft(); as draft) {
+                    <input
+                      #textEditor
+                      class="text-input"
+                      [value]="textValue()"
+                      [style.left.px]="draft.screenX"
+                      [style.top.px]="draft.screenY"
+                      [style.color]="color()"
+                      [style.font-size.px]="textSize()"
+                      [style.font-weight]="textBold() ? 700 : 400"
+                      [style.font-style]="textItalic() ? 'italic' : 'normal'"
+                      [style.text-decoration]="textUnderline() ? 'underline' : 'none'"
+                      placeholder="Escribe y pulsa Enter…"
+                      (input)="onTextInput($event)"
+                      (keydown.enter)="commitText()"
+                      (keydown.escape)="onTextEscape($event)"
+                      (blur)="commitText()"
+                    />
+                  }
+
                   @if (s.status === 'PAUSED') {
                     <div class="canvas-overlay">
                       <span class="material-icons">pause_circle</span>
@@ -280,59 +385,61 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
                 </div>
               </div>
 
-              <aside class="participants card">
-                <div class="participants__header">
-                  <h2 class="card-title">Participantes</h2>
-                  <button type="button" class="icon-btn" title="Actualizar" (click)="refreshParticipants()">
-                    <span class="material-icons">refresh</span>
-                  </button>
-                </div>
+              @if (!fullscreen()) {
+                <aside class="participants card">
+                  <div class="participants__header">
+                    <h2 class="card-title">Participantes</h2>
+                    <button type="button" class="icon-btn" title="Actualizar" (click)="refreshParticipants()">
+                      <span class="material-icons">refresh</span>
+                    </button>
+                  </div>
 
-                <label class="global-toggle">
-                  <input
-                    type="checkbox"
-                    [checked]="s.interactionEnabled"
-                    [disabled]="busy()"
-                    (change)="toggleGlobalInteraction($event)"
-                  />
-                  <span class="global-toggle__text">
-                    Interacción de todos los alumnos
-                    <small>{{ s.interactionEnabled ? 'Habilitada' : 'Deshabilitada' }}</small>
-                  </span>
-                </label>
+                  <label class="global-toggle">
+                    <input
+                      type="checkbox"
+                      [checked]="s.interactionEnabled"
+                      [disabled]="busy()"
+                      (change)="toggleGlobalInteraction($event)"
+                    />
+                    <span class="global-toggle__text">
+                      Interacción de todos los alumnos
+                      <small>{{ s.interactionEnabled ? 'Habilitada' : 'Deshabilitada' }}</small>
+                    </span>
+                  </label>
 
-                @if (participants().length === 0) {
-                  <p class="participants__empty">
-                    Todavía no se ha unido ningún estudiante a esta sesión.
-                  </p>
-                } @else {
-                  <ul class="participants__list">
-                    @for (p of participants(); track p.studentId) {
-                      <li class="participant">
-                        <div class="participant__info">
-                          <div class="participant__avatar">{{ initials(p.studentName) }}</div>
-                          <div>
-                            <div class="participant__name">{{ p.studentName }}</div>
-                            <div class="participant__perm" [class]="permClass(p)">
-                              {{ permLabel(p) }}
+                  @if (participants().length === 0) {
+                    <p class="participants__empty">
+                      Todavía no se ha unido ningún estudiante a esta sesión.
+                    </p>
+                  } @else {
+                    <ul class="participants__list">
+                      @for (p of participants(); track p.studentId) {
+                        <li class="participant">
+                          <div class="participant__info">
+                            <div class="participant__avatar">{{ initials(p.studentName) }}</div>
+                            <div>
+                              <div class="participant__name">{{ p.studentName }}</div>
+                              <div class="participant__perm" [class]="permClass(p)">
+                                {{ permLabel(p) }}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <select
-                          class="select participant__select"
-                          [value]="p.interactionOverride"
-                          [disabled]="busy()"
-                          (change)="changeParticipant(p, $event)"
-                        >
-                          <option value="FOLLOW_GLOBAL">Según regla global</option>
-                          <option value="ALLOWED">Permitir</option>
-                          <option value="BLOCKED">Bloquear</option>
-                        </select>
-                      </li>
-                    }
-                  </ul>
-                }
-              </aside>
+                          <select
+                            class="select participant__select"
+                            [value]="p.interactionOverride"
+                            [disabled]="busy()"
+                            (change)="changeParticipant(p, $event)"
+                          >
+                            <option value="FOLLOW_GLOBAL">Según regla global</option>
+                            <option value="ALLOWED">Permitir</option>
+                            <option value="BLOCKED">Bloquear</option>
+                          </select>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </aside>
+              }
             </div>
           }
         }
@@ -385,7 +492,7 @@ type DrawTool = 'PEN' | 'ERASER' | 'MOVE';
     }
   `,
 })
-export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, OnDestroy {
+export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly whiteboardService = inject(TeacherWhiteboardService);
   private readonly realtime = inject(TeacherWhiteboardRealtimeService);
@@ -398,23 +505,30 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('boardCanvas');
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
+  private readonly textEditorRef = viewChild<ElementRef<HTMLInputElement>>('textEditor');
 
   private sessionId = 0;
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
   private currentStroke: WhiteboardPoint[] = [];
+  /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
+  private readonly ownEventIds = new Set<string>();
+  private snapshotObjectUrl: string | null = null;
 
-  // Desplazamiento (pan) del lienzo con la herramienta "Mover".
+  // Desplazamiento (pan) del lienzo dentro del visor.
   private panning = false;
   private panStart = { x: 0, y: 0, px: 0, py: 0 };
   readonly panX = signal<number>(0);
   readonly panY = signal<number>(0);
 
-  // Posición del puntero dentro del visor, para el cursor circular del borrador.
+  // Cursor circular del borrador.
   readonly cursorPos = signal<{ x: number; y: number } | null>(null);
-  /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
-  private readonly ownEventIds = new Set<string>();
-  private snapshotObjectUrl: string | null = null;
+
+  // Edición de texto en curso (entrada flotante sobre el visor).
+  readonly textDraft = signal<TextDraft | null>(null);
+  readonly textValue = signal<string>('');
+
+  readonly fullscreen = signal<boolean>(false);
 
   readonly session = signal<WhiteboardSessionResponse | null>(null);
   readonly participants = signal<WhiteboardParticipantResponse[]>([]);
@@ -435,7 +549,11 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   readonly tool = signal<DrawTool>('PEN');
   readonly color = signal<string>('#1d9e75');
   readonly strokeWidth = signal<number>(4);
-  readonly eraserSize = signal<number>(24);
+  readonly eraserSize = signal<number>(28);
+  readonly textSize = signal<number>(32);
+  readonly textBold = signal<boolean>(false);
+  readonly textItalic = signal<boolean>(false);
+  readonly textUnderline = signal<boolean>(false);
 
   readonly connectionState = this.realtime.connectionState;
 
@@ -468,11 +586,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
       return 'not-allowed';
     }
     if (this.tool() === 'ERASER') {
-      // El círculo de vista previa hace de cursor; se oculta el cursor nativo.
-      return 'none';
+      return 'none'; // el círculo de vista previa hace de cursor
+    }
+    if (this.tool() === 'TEXT') {
+      return 'text';
     }
     return PEN_CURSOR;
   });
+
+  constructor() {
+    // Inicializa el contexto del lienzo en cuanto el elemento existe en el DOM (evita la
+    // condición de carrera de hacerlo en ngAfterViewInit cuando aún estaba cargando la sesión).
+    effect(() => {
+      if (this.canvasRef()) {
+        this.ensureCanvas();
+      }
+    });
+  }
 
   ngOnInit(): void {
     const idParam = this.route.snapshot.paramMap.get('id');
@@ -497,11 +627,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     this.reload();
   }
 
-  ngAfterViewInit(): void {
-    // El contexto se inicializa de forma perezosa cuando el lienzo existe en el DOM.
-    queueMicrotask(() => this.ensureCanvas());
-  }
-
   ngOnDestroy(): void {
     this.realtime.disconnect();
     this.revokeSnapshotUrl();
@@ -520,7 +645,11 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
           this.loadSnapshot();
         } else {
           this.realtime.connect(this.sessionId);
-          queueMicrotask(() => this.ensureCanvas());
+          // Tras renderizar el lienzo, centra la vista del workspace en el visor.
+          requestAnimationFrame(() => {
+            this.ensureCanvas();
+            this.centerPan();
+          });
         }
       },
       error: (err: unknown) => {
@@ -533,6 +662,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   // ─── Herramientas ───────────────────────────────────────────────────────────
 
   selectTool(tool: DrawTool): void {
+    if (this.tool() === 'TEXT' && tool !== 'TEXT') {
+      this.commitText();
+    }
     this.tool.set(tool);
     if (tool !== 'ERASER') {
       this.cursorPos.set(null);
@@ -551,11 +683,42 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     this.eraserSize.set(Number((event.target as HTMLInputElement).value));
   }
 
-  // ─── Dibujo y desplazamiento en el lienzo ─────────────────────────────────────
+  onTextSize(event: Event): void {
+    this.textSize.set(Number((event.target as HTMLInputElement).value));
+  }
+
+  onTextInput(event: Event): void {
+    this.textValue.set((event.target as HTMLInputElement).value);
+  }
+
+  toggleFullscreen(): void {
+    this.fullscreen.set(!this.fullscreen());
+    // Al cambiar el tamaño del visor, re-encaja el desplazamiento para no perder la pizarra.
+    requestAnimationFrame(() => this.setPan(this.panX(), this.panY()));
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.textDraft() !== null) {
+      this.cancelText();
+    } else if (this.finalizeOpen()) {
+      this.finalizeOpen.set(false);
+    } else if (this.clearOpen()) {
+      this.clearOpen.set(false);
+    } else if (this.fullscreen()) {
+      this.toggleFullscreen();
+    }
+  }
+
+  // ─── Puntero: dibujo, texto y desplazamiento ──────────────────────────────────
 
   onPointerDown(event: PointerEvent): void {
     if (this.tool() === 'MOVE') {
       this.startPan(event);
+      return;
+    }
+    if (this.tool() === 'TEXT') {
+      this.placeText(event);
       return;
     }
     if (!this.canDraw()) {
@@ -610,7 +773,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   }
 
   onPointerLeave(event: PointerEvent): void {
-    // Oculta el cursor del borrador al salir del lienzo y cierra el trazo/desplazamiento en curso.
     this.cursorPos.set(null);
     this.onPointerUp(event);
   }
@@ -635,15 +797,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     (event.target as HTMLCanvasElement).releasePointerCapture?.(event.pointerId);
   }
 
-  /** Aplica el desplazamiento limitándolo para que el lienzo no se salga por completo del visor. */
+  /** Limita el desplazamiento para que el lienzo no se salga por completo del visor. */
   private setPan(x: number, y: number): void {
     const wrap = this.wrapRef()?.nativeElement;
-    const viewW = wrap?.clientWidth ?? CANVAS_WIDTH;
-    const viewH = wrap?.clientHeight ?? CANVAS_HEIGHT;
-    const minX = Math.min(0, viewW - CANVAS_WIDTH);
-    const minY = Math.min(0, viewH - CANVAS_HEIGHT);
+    const viewW = wrap?.clientWidth ?? WORKSPACE_WIDTH;
+    const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
+    const minX = Math.min(0, viewW - WORKSPACE_WIDTH);
+    const minY = Math.min(0, viewH - WORKSPACE_HEIGHT);
     this.panX.set(Math.max(minX, Math.min(0, x)));
     this.panY.set(Math.max(minY, Math.min(0, y)));
+  }
+
+  /** Centra la vista del workspace en el visor. */
+  private centerPan(): void {
+    const wrap = this.wrapRef()?.nativeElement;
+    const viewW = wrap?.clientWidth ?? WORKSPACE_WIDTH;
+    const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
+    this.setPan((viewW - WORKSPACE_WIDTH) / 2, (viewH - WORKSPACE_HEIGHT) / 2);
   }
 
   private updateCursorPos(event: PointerEvent): void {
@@ -654,6 +824,88 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     const rect = wrap.getBoundingClientRect();
     this.cursorPos.set({ x: event.clientX - rect.left, y: event.clientY - rect.top });
   }
+
+  // ─── Texto (se rasteriza en el lienzo; ver nota de WebSocket) ──────────────────
+
+  private placeText(event: PointerEvent): void {
+    if (!this.canDraw()) {
+      return;
+    }
+    // Si ya había un texto en edición, confírmalo antes de abrir otro.
+    this.commitText();
+    const wrap = this.wrapRef()?.nativeElement;
+    if (!wrap) {
+      return;
+    }
+    const rect = wrap.getBoundingClientRect();
+    const wp = this.toCanvasPoint(event);
+    this.textValue.set('');
+    this.textDraft.set({
+      screenX: event.clientX - rect.left,
+      screenY: event.clientY - rect.top,
+      wx: wp.x,
+      wy: wp.y,
+    });
+    setTimeout(() => this.textEditorRef()?.nativeElement.focus(), 0);
+  }
+
+  /**
+   * Confirma el texto en edición dibujándolo en el lienzo. El backend no define un eventType de
+   * texto, por lo que el texto se rasteriza localmente: forma parte de la captura final pero no
+   * se difunde en vivo por WebSocket (limitación documentada).
+   */
+  commitText(): void {
+    const draft = this.textDraft();
+    if (draft === null) {
+      return;
+    }
+    const value = this.textValue().trim();
+    this.textDraft.set(null);
+    this.textValue.set('');
+    if (value === '' || !this.canDraw()) {
+      return;
+    }
+    const ctx = this.ensureCanvas();
+    if (ctx === null) {
+      return;
+    }
+    const size = this.textSize();
+    ctx.save();
+    ctx.font = this.canvasFont(size);
+    ctx.fillStyle = this.color();
+    ctx.textBaseline = 'top';
+    ctx.fillText(value, draft.wx, draft.wy);
+    if (this.textUnderline()) {
+      const width = ctx.measureText(value).width;
+      const underlineY = draft.wy + size * 1.08;
+      ctx.strokeStyle = this.color();
+      ctx.lineWidth = Math.max(1, size / 14);
+      ctx.beginPath();
+      ctx.moveTo(draft.wx, underlineY);
+      ctx.lineTo(draft.wx + width, underlineY);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  cancelText(): void {
+    this.textDraft.set(null);
+    this.textValue.set('');
+  }
+
+  /** Esc dentro del campo de texto: cancela el texto sin afectar a la pantalla completa. */
+  onTextEscape(event: Event): void {
+    event.stopPropagation();
+    this.cancelText();
+  }
+
+  private canvasFont(size: number): string {
+    const style = this.textItalic() ? 'italic ' : '';
+    const weight = this.textBold() ? '700' : '400';
+    return `${style}${weight} ${size}px "Plus Jakarta Sans", system-ui, sans-serif`;
+  }
+
+  // ─── Borrar todo ──────────────────────────────────────────────────────────────
 
   askClear(): void {
     if (!this.canDraw()) {
@@ -696,45 +948,39 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   }
 
   askFinalize(): void {
+    this.commitText();
     this.finalizeError.set(null);
     this.finalizeOpen.set(true);
   }
 
   confirmFinalize(): void {
-    const canvas = this.canvasRef()?.nativeElement;
-    if (!canvas) {
-      this.finalizeError.set('No se pudo generar la captura del lienzo.');
-      return;
-    }
     this.busy.set(true);
     this.finalizeError.set(null);
-    canvas.toBlob(
-      (blob) => {
-        if (blob === null) {
-          this.busy.set(false);
-          this.finalizeError.set('No se pudo generar la captura del lienzo.');
-          return;
-        }
-        this.whiteboardService
-          .closeSession(this.sessionId, blob, `pizarra-${this.sessionId}.png`)
-          .subscribe({
-            next: (updated) => {
-              this.busy.set(false);
-              this.finalizeOpen.set(false);
-              this.realtime.disconnect();
-              this.session.set(updated);
-              this.participants.set([]);
-              this.showBanner('Sesión finalizada. Se guardó la captura final.', 'success');
-              this.loadSnapshot();
-            },
-            error: (err: unknown) => {
-              this.busy.set(false);
-              this.finalizeError.set(this.extractError(err, 'No se pudo finalizar la sesión.'));
-            },
-          });
-      },
-      'image/png'
-    );
+    this.exportSnapshot((blob) => {
+      if (blob === null) {
+        this.busy.set(false);
+        this.finalizeError.set('No se pudo generar la captura del lienzo.');
+        return;
+      }
+      this.whiteboardService
+        .closeSession(this.sessionId, blob, `pizarra-${this.sessionId}.png`)
+        .subscribe({
+          next: (updated) => {
+            this.busy.set(false);
+            this.finalizeOpen.set(false);
+            this.fullscreen.set(false);
+            this.realtime.disconnect();
+            this.session.set(updated);
+            this.participants.set([]);
+            this.showBanner('Sesión finalizada. Se guardó la captura final.', 'success');
+            this.loadSnapshot();
+          },
+          error: (err: unknown) => {
+            this.busy.set(false);
+            this.finalizeError.set(this.extractError(err, 'No se pudo finalizar la sesión.'));
+          },
+        });
+    });
   }
 
   // ─── Participantes e interacción ──────────────────────────────────────────────
@@ -777,7 +1023,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     this.whiteboardService.listParticipants(this.sessionId).subscribe({
       next: (list) => this.participants.set(list),
       error: (err: unknown) =>
-        this.showBanner(this.extractError(err, 'No se pudieron actualizar los participantes.'), 'warning'),
+        this.showBanner(
+          this.extractError(err, 'No se pudieron actualizar los participantes.'),
+          'warning'
+        ),
     });
   }
 
@@ -835,8 +1084,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     if (!canvas) {
       return null;
     }
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
+    canvas.width = WORKSPACE_WIDTH;
+    canvas.height = WORKSPACE_HEIGHT;
     const context = canvas.getContext('2d');
     if (context === null) {
       return null;
@@ -854,7 +1103,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
       return;
     }
     ctx.fillStyle = BOARD_BACKGROUND;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
   }
 
   private renderSegment(from: WhiteboardPoint, to: WhiteboardPoint, color: string, width: number): void {
@@ -913,12 +1162,14 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     if (!canvas) {
       return { x: 0, y: 0 };
     }
+    // getBoundingClientRect refleja el desplazamiento (translate), por lo que el punto resultante
+    // es la coordenada real dentro del workspace, no la posición visible en el viewport.
     const rect = canvas.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * CANVAS_WIDTH;
-    const y = ((event.clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
+    const x = ((event.clientX - rect.left) / rect.width) * WORKSPACE_WIDTH;
+    const y = ((event.clientY - rect.top) / rect.height) * WORKSPACE_HEIGHT;
     return {
-      x: Math.round(Math.max(0, Math.min(CANVAS_WIDTH, x)) * 100) / 100,
-      y: Math.round(Math.max(0, Math.min(CANVAS_HEIGHT, y)) * 100) / 100,
+      x: Math.round(Math.max(0, Math.min(WORKSPACE_WIDTH, x)) * 100) / 100,
+      y: Math.round(Math.max(0, Math.min(WORKSPACE_HEIGHT, y)) * 100) / 100,
     };
   }
 
@@ -940,6 +1191,32 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
   }
 
   // ─── Captura final / historial ────────────────────────────────────────────────
+
+  /** Genera la captura del lienzo (solo la pizarra), reescalada para un peso razonable. */
+  private exportSnapshot(callback: (blob: Blob | null) => void): void {
+    const canvas = this.canvasRef()?.nativeElement;
+    if (!canvas) {
+      callback(null);
+      return;
+    }
+    if (canvas.width <= SNAPSHOT_MAX_WIDTH) {
+      canvas.toBlob(callback, 'image/png');
+      return;
+    }
+    const scale = SNAPSHOT_MAX_WIDTH / canvas.width;
+    const off = document.createElement('canvas');
+    off.width = Math.round(canvas.width * scale);
+    off.height = Math.round(canvas.height * scale);
+    const octx = off.getContext('2d');
+    if (octx === null) {
+      canvas.toBlob(callback, 'image/png');
+      return;
+    }
+    octx.fillStyle = BOARD_BACKGROUND;
+    octx.fillRect(0, 0, off.width, off.height);
+    octx.drawImage(canvas, 0, 0, off.width, off.height);
+    off.toBlob(callback, 'image/png');
+  }
 
   private loadSnapshot(): void {
     if (this.session()?.snapshotAvailable !== true) {
@@ -1082,10 +1359,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, AfterViewInit, 
     });
   }
 
-  private showBanner(
-    message: string,
-    tone: 'info' | 'success' | 'warning' | 'danger'
-  ): void {
+  private showBanner(message: string, tone: 'info' | 'success' | 'warning' | 'danger'): void {
     this.bannerTone.set(tone);
     this.banner.set(message);
     setTimeout(() => this.banner.set(null), 4500);

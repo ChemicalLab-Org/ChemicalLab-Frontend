@@ -17,15 +17,30 @@ pendiente para 15.3 el frontend del estudiante y su historial.
   Pausar/Reanudar). Estados de carga, error (con reintento) y vacío.
 - **Crear sesión** (modal): nombre, grado (1–6), sección (una letra, normalizada a mayúscula)
   y descripción opcional. Al crear, redirige al editor de la sesión.
-- **Editor Canvas en vivo** (`/teacher/whiteboards/:id`): lienzo HTML5 con resolución lógica
-  fija (2400×1500) para coordenadas coherentes entre clientes; se muestra a escala 1:1 dentro
-  de un visor que recorta un área de trabajo mayor. Soporta mouse y eventos táctiles (Pointer
-  Events).
-- **Herramientas**: plumón (cursor de lápiz en SVG), selector de color, grosor del trazo,
-  borrador (cursor circular cuyo diámetro sigue el tamaño del borrador), tamaño del borrador,
-  borrar toda la pizarra (con confirmación) y **Mover** (mano) para desplazar/pan el lienzo sin
-  dibujar. El borrador se implementa como trazo del color de fondo (blanco), lo que mantiene la
-  captura final con fondo limpio.
+- **Editor Canvas en vivo** (`/teacher/whiteboards/:id`): área de trabajo (workspace) amplia
+  pero limitada (3200×2000 px lógicos) que define el sistema de coordenadas compartido entre
+  clientes. Se muestra a escala 1:1 dentro de un **visor** que recorta una parte; el resto se
+  alcanza desplazándose. El lienzo se inicializa de forma fiable cuando entra en el DOM (effect
+  sobre el `viewChild`), por lo que se ve completo y limpio, no como una zona blanca pequeña.
+  Soporta mouse y eventos táctiles (Pointer Events).
+- **Herramientas**: plumón (cursor de lápiz en SVG), borrador (cursor circular cuyo diámetro
+  sigue el tamaño del borrador y funciona aunque la pizarra esté desplazada), **texto** con
+  formato (color, tamaño, negrita, cursiva, subrayado), **Mover** (mano) para desplazar/pan el
+  lienzo sin dibujar, selector de color, grosor del trazo, tamaño del borrador, borrar toda la
+  pizarra (con confirmación) y **Pantalla completa**. El borrador se implementa como trazo del
+  color de fondo (blanco), lo que mantiene la captura final con fondo limpio.
+- **Mover / pan**: arrastrar con la herramienta mano desplaza la vista; el desplazamiento se
+  limita para no perder el workspace. Las coordenadas de dibujo se calculan sobre el workspace
+  real (no sobre el viewport visible), por lo que el dibujo cae en la posición correcta tras
+  desplazar y la captura final conserva todo el contenido.
+- **Pantalla completa**: modo CSS propio que expande el editor a toda la ventana y oculta sidebar
+  y panel de participantes, sin recrear el lienzo ni desconectar el WebSocket; se sale con el
+  botón o con Esc.
+- **Texto** (limitación conocida): el texto se **rasteriza en el lienzo** (queda en la pizarra y
+  en la captura final). El backend de la sesión 15.1 **no define un eventType de texto** (solo
+  `DRAW`/`ERASE`/`CLEAR`), por lo que el texto **no se difunde en vivo por WebSocket**; sincronizar
+  texto requeriría ampliar el backend en una sesión futura. Tampoco se implementó mover/editar el
+  texto después de creado (fuera del MVP).
 - **Conexión WebSocket/STOMP** con `@stomp/stompjs`: conecta al endpoint del backend enviando
   el JWT en la cabecera `Authorization` del frame CONNECT, se suscribe a
   `/topic/whiteboards/{sessionId}` (eventos de dibujo y de control en el mismo canal, separados

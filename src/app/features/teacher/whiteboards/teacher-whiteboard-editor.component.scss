@@ -8,6 +8,42 @@
   height: 100vh;
   overflow: hidden;
   background: var(--color-neutral-50);
+
+  // Pantalla completa: el editor ocupa toda la ventana, sin sidebar ni panel de participantes.
+  &--fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+
+    .main {
+      padding: var(--space-4);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .editor-grid {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .board-area {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+    }
+
+    .board-viewport {
+      flex: 1;
+      height: auto;
+    }
+  }
 }
 
 .main {
@@ -119,6 +155,11 @@
   @media (max-width: 1024px) {
     grid-template-columns: 1fr;
   }
+
+  &--full {
+    grid-template-columns: 1fr;
+    height: 100%;
+  }
 }
 
 .board-area {
@@ -147,6 +188,10 @@
     &--right {
       margin-left: auto;
     }
+
+    &--tight {
+      gap: var(--space-1);
+    }
   }
 }
 
@@ -164,6 +209,15 @@
 
   .material-icons {
     font-size: 20px;
+  }
+
+  &--sm {
+    width: 32px;
+    height: 32px;
+
+    .material-icons {
+      font-size: 18px;
+    }
   }
 
   &:hover:not(:disabled) {
@@ -227,37 +281,52 @@
   }
 }
 
-// Lienzo: el visor recorta un área de trabajo mayor; el docente la desplaza con "Mover".
-.canvas-wrap {
+// Visor de la pizarra: ventana que recorta el área de trabajo (workspace), mayor que el visor.
+.board-viewport {
   position: relative;
   border: 1.5px solid var(--color-neutral-200);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  background: var(--color-neutral-100);
+  // Fondo neutro del "escritorio": solo se ve al desplazarse hasta el borde del workspace.
+  background: var(--color-neutral-200);
   box-shadow: var(--shadow-sm);
-  height: clamp(380px, 62vh, 760px);
+  height: clamp(420px, 64vh, 760px);
 }
 
-// Sin tamaño CSS: el lienzo se muestra a escala 1:1 con su resolución lógica (2400×1500),
-// por lo que el visor solo muestra una parte y el desplazamiento (pan) tiene sentido.
+// El lienzo se muestra a escala 1:1 con su resolución lógica (workspace), por lo que el visor
+// solo muestra una parte y el desplazamiento (pan) tiene sentido. Sin tamaño CSS para no escalar.
 .board-canvas {
   display: block;
   touch-action: none;
   transform-origin: top left;
-  background: #fff;
-  will-change: transform;
+  background: var(--color-neutral-0);
 }
 
-// Cursor circular del borrador: su diámetro coincide con el tamaño del borrador (px lógicos = px
+// Cursor circular del borrador: el diámetro coincide con el tamaño del borrador (px lógicos = px
 // en pantalla al estar a escala 1:1), para que se vea el área que se borrará.
 .eraser-cursor {
   position: absolute;
   border-radius: 50%;
-  border: 2px solid var(--color-neutral-600);
-  background: rgba(26, 26, 22, 0.06);
+  border: 2px solid var(--color-neutral-700);
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
   transform: translate(-50%, -50%);
   pointer-events: none;
   z-index: 3;
+}
+
+// Entrada de texto flotante mientras se escribe (se rasteriza en el lienzo al confirmar).
+.text-input {
+  position: absolute;
+  z-index: 4;
+  margin: 0;
+  padding: 0 2px;
+  border: 1px dashed var(--color-primary-500);
+  background: rgba(255, 255, 255, 0.9);
+  outline: none;
+  line-height: 1.1;
+  min-width: 40px;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
 .canvas-overlay {
@@ -485,7 +554,7 @@
   }
 }
 
-// Modales de confirmación (mismo patrón del resto de pantallas docentes)
+// Modales de confirmación
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -494,7 +563,7 @@
   display: grid;
   place-items: center;
   padding: var(--space-4);
-  z-index: 100;
+  z-index: 300;
 }
 
 .modal {
