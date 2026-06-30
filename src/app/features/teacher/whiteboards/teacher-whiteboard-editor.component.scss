@@ -172,13 +172,29 @@
 // Barra de herramientas
 .toolbar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-4);
+  flex-direction: column;
+  gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background: var(--color-neutral-0);
   border: 1.5px solid var(--color-neutral-200);
   border-radius: var(--radius-lg);
+
+  // Cada fila agrupa controles. La fila superior (herramientas + acciones) es siempre igual; la
+  // de opciones tiene altura mínima constante, de modo que cambiar de herramienta no desplaza el
+  // lienzo ni los botones Pausar/Finalizar.
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+
+    &--options {
+      min-height: 40px;
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-neutral-200);
+    }
+  }
 
   &__group {
     display: flex;
@@ -371,7 +387,8 @@
   }
 }
 
-// Entrada de texto flotante mientras se escribe (se guarda como objeto movible al confirmar).
+// Editor de texto flotante (contenteditable) mientras se escribe/formatea; al confirmar se guarda
+// como objeto movible con formato por runs.
 .text-input {
   position: absolute;
   z-index: 5;
@@ -382,7 +399,15 @@
   outline: none;
   line-height: 1.1;
   min-width: 40px;
+  white-space: pre;
+  cursor: text;
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  &:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-neutral-400);
+    pointer-events: none;
+  }
 }
 
 .canvas-overlay {

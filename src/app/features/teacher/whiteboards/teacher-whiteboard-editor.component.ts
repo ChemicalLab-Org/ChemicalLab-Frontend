@@ -61,17 +61,25 @@ interface TextDraft {
   readonly wy: number;
 }
 
+/**
+ * Fragmento de texto con un estilo uniforme. El formato (negrita/cursiva/subrayado) es por run,
+ * lo que permite formato parcial dentro de un mismo texto. El color y el tamaño son del bloque.
+ */
+interface TextRun {
+  readonly text: string;
+  readonly bold: boolean;
+  readonly italic: boolean;
+  readonly underline: boolean;
+}
+
 /** Texto colocado sobre la pizarra como objeto movible (coordenadas del workspace). */
 interface TextItem {
   readonly id: string;
   readonly wx: number;
   readonly wy: number;
-  readonly text: string;
   readonly color: string;
   readonly size: number;
-  readonly bold: boolean;
-  readonly italic: boolean;
-  readonly underline: boolean;
+  readonly runs: readonly TextRun[];
 }
 
 @Component({
@@ -171,147 +179,180 @@ interface TextItem {
             <!-- Editor en vivo -->
             <div class="editor-grid" [class.editor-grid--full]="fullscreen()">
               <div class="board-area">
+                <!-- Toolbar en dos filas fijas: la fila superior (herramientas + acciones) nunca
+                     cambia, y las opciones de cada herramienta viven en una segunda fila de altura
+                     constante. Así el lienzo y los botones Pausar/Finalizar no se desplazan al
+                     cambiar de herramienta. -->
                 <div class="toolbar">
-                  <div class="toolbar__group">
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'PEN'"
-                      [disabled]="!canDraw()"
-                      title="Plumón"
-                      (click)="selectTool('PEN')"
-                    >
-                      <span class="material-icons">edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'ERASER'"
-                      [disabled]="!canDraw()"
-                      title="Borrador"
-                      (click)="selectTool('ERASER')"
-                    >
-                      <!-- Borrador en SVG inline: el set "Material Icons" clásico (el único cargado
-                           en index.html) no incluye un glifo de borrador, por eso antes se veía un
-                           recuadro vacío. -->
-                      <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path
-                          fill="currentColor"
-                          d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53c-1.56 1.56-4.09 1.56-5.66 0l-3.53-3.53c-.78-.79-.78-2.05 0-2.84L13.41 3.56c.79-.78 2.05-.78 2.83 0M4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95Z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'TEXT'"
-                      [disabled]="!canDraw()"
-                      title="Texto"
-                      (click)="selectTool('TEXT')"
-                    >
-                      <span class="material-icons">title</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'MOVE'"
-                      title="Mover pizarra"
-                      (click)="selectTool('MOVE')"
-                    >
-                      <span class="material-icons">pan_tool</span>
-                    </button>
+                  <div class="toolbar__row">
+                    <div class="toolbar__group">
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'PEN'"
+                        [disabled]="!canDraw()"
+                        title="Plumón"
+                        (click)="selectTool('PEN')"
+                      >
+                        <span class="material-icons">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'ERASER'"
+                        [disabled]="!canDraw()"
+                        title="Borrador"
+                        (click)="selectTool('ERASER')"
+                      >
+                        <!-- Borrador en SVG inline: el set "Material Icons" clásico (el único cargado
+                             en index.html) no incluye un glifo de borrador, por eso antes se veía un
+                             recuadro vacío. -->
+                        <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path
+                            fill="currentColor"
+                            d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53c-1.56 1.56-4.09 1.56-5.66 0l-3.53-3.53c-.78-.79-.78-2.05 0-2.84L13.41 3.56c.79-.78 2.05-.78 2.83 0M4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95Z"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'TEXT'"
+                        [disabled]="!canDraw()"
+                        title="Texto"
+                        (click)="selectTool('TEXT')"
+                      >
+                        <span class="material-icons">title</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'MOVE'"
+                        title="Mover pizarra"
+                        (click)="selectTool('MOVE')"
+                      >
+                        <span class="material-icons">pan_tool</span>
+                      </button>
+                    </div>
+
+                    <div class="toolbar__group toolbar__group--right">
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        title="{{ fullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa' }}"
+                        (click)="toggleFullscreen()"
+                      >
+                        <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
+                      </button>
+                      @if (s.status === 'ACTIVE') {
+                        <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="pause()">
+                          <span class="material-icons">pause</span> Pausar
+                        </button>
+                      } @else if (s.status === 'PAUSED') {
+                        <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" (click)="resume()">
+                          <span class="material-icons">play_arrow</span> Reanudar
+                        </button>
+                      }
+                      <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="askFinalize()">
+                        <span class="material-icons">stop_circle</span> Finalizar
+                      </button>
+                    </div>
                   </div>
 
-                  <div class="toolbar__group">
-                    @if (tool() !== 'MOVE') {
-                      <label class="tool-field" title="Color">
-                        <span class="material-icons">palette</span>
-                        <input
-                          type="color"
-                          [value]="color()"
-                          [disabled]="!canDraw()"
-                          (input)="onColor($event)"
-                        />
-                      </label>
-                    }
+                  <div class="toolbar__row toolbar__row--options">
+                    <div class="toolbar__group">
+                      @if (tool() !== 'MOVE') {
+                        <label class="tool-field" title="Color">
+                          <span class="material-icons">palette</span>
+                          <input
+                            type="color"
+                            [value]="color()"
+                            [disabled]="!canDraw()"
+                            (mousedown)="keepEditorFocus()"
+                            (input)="onColor($event)"
+                          />
+                        </label>
+                      }
 
-                    @if (tool() === 'PEN') {
-                      <label class="tool-field tool-field--range" title="Grosor del trazo">
-                        <span class="material-icons">line_weight</span>
-                        <input
-                          type="range"
-                          min="1"
-                          max="24"
-                          [value]="strokeWidth()"
-                          [disabled]="!canDraw()"
-                          (input)="onStrokeWidth($event)"
-                        />
-                        <span class="tool-field__value">{{ strokeWidth() }}</span>
-                      </label>
-                    } @else if (tool() === 'ERASER') {
-                      <label class="tool-field tool-field--range" title="Tamaño del borrador">
-                        <span class="material-icons">format_size</span>
-                        <input
-                          type="range"
-                          min="8"
-                          max="80"
-                          [value]="eraserSize()"
-                          [disabled]="!canDraw()"
-                          (input)="onEraserSize($event)"
-                        />
-                        <span class="tool-field__value">{{ eraserSize() }}</span>
-                      </label>
-                    } @else if (tool() === 'TEXT') {
-                      <label class="tool-field" title="Tamaño del texto">
-                        <span class="material-icons">format_size</span>
-                        <select
-                          class="select tool-field__select"
-                          [value]="textSize()"
-                          [disabled]="!canDraw()"
-                          (change)="onTextSize($event)"
-                        >
-                          @for (size of textSizes; track size) {
-                            <option [value]="size">{{ size }}</option>
-                          }
-                        </select>
-                      </label>
+                      @if (tool() === 'PEN') {
+                        <label class="tool-field tool-field--range" title="Grosor del trazo">
+                          <span class="material-icons">line_weight</span>
+                          <input
+                            type="range"
+                            min="1"
+                            max="24"
+                            [value]="strokeWidth()"
+                            [disabled]="!canDraw()"
+                            (input)="onStrokeWidth($event)"
+                          />
+                          <span class="tool-field__value">{{ strokeWidth() }}</span>
+                        </label>
+                      } @else if (tool() === 'ERASER') {
+                        <label class="tool-field tool-field--range" title="Tamaño del borrador">
+                          <span class="material-icons">format_size</span>
+                          <input
+                            type="range"
+                            min="8"
+                            max="80"
+                            [value]="eraserSize()"
+                            [disabled]="!canDraw()"
+                            (input)="onEraserSize($event)"
+                          />
+                          <span class="tool-field__value">{{ eraserSize() }}</span>
+                        </label>
+                      } @else if (tool() === 'TEXT') {
+                        <label class="tool-field" title="Tamaño del texto">
+                          <span class="material-icons">format_size</span>
+                          <select
+                            class="select tool-field__select"
+                            [value]="textSize()"
+                            [disabled]="!canDraw()"
+                            (mousedown)="keepEditorFocus()"
+                            (change)="onTextSize($event)"
+                          >
+                            @for (size of textSizes; track size) {
+                              <option [value]="size">{{ size }}</option>
+                            }
+                          </select>
+                        </label>
 
-                      <div class="toolbar__group toolbar__group--tight">
-                        <button
-                          type="button"
-                          class="tool-btn tool-btn--sm"
-                          [class.tool-btn--active]="textBold()"
-                          [disabled]="!canDraw()"
-                          title="Negrita"
-                          (mousedown)="$event.preventDefault()"
-                          (click)="textBold.set(!textBold())"
-                        >
-                          <span class="material-icons">format_bold</span>
-                        </button>
-                        <button
-                          type="button"
-                          class="tool-btn tool-btn--sm"
-                          [class.tool-btn--active]="textItalic()"
-                          [disabled]="!canDraw()"
-                          title="Cursiva"
-                          (mousedown)="$event.preventDefault()"
-                          (click)="textItalic.set(!textItalic())"
-                        >
-                          <span class="material-icons">format_italic</span>
-                        </button>
-                        <button
-                          type="button"
-                          class="tool-btn tool-btn--sm"
-                          [class.tool-btn--active]="textUnderline()"
-                          [disabled]="!canDraw()"
-                          title="Subrayado"
-                          (mousedown)="$event.preventDefault()"
-                          (click)="textUnderline.set(!textUnderline())"
-                        >
-                          <span class="material-icons">format_underlined</span>
-                        </button>
-                      </div>
-                    }
+                        <div class="toolbar__group toolbar__group--tight">
+                          <button
+                            type="button"
+                            class="tool-btn tool-btn--sm"
+                            [class.tool-btn--active]="textBold()"
+                            [disabled]="textDraft() === null"
+                            title="Negrita (selecciona texto para aplicarlo a una parte)"
+                            (mousedown)="$event.preventDefault()"
+                            (click)="applyFormat('bold')"
+                          >
+                            <span class="material-icons">format_bold</span>
+                          </button>
+                          <button
+                            type="button"
+                            class="tool-btn tool-btn--sm"
+                            [class.tool-btn--active]="textItalic()"
+                            [disabled]="textDraft() === null"
+                            title="Cursiva (selecciona texto para aplicarlo a una parte)"
+                            (mousedown)="$event.preventDefault()"
+                            (click)="applyFormat('italic')"
+                          >
+                            <span class="material-icons">format_italic</span>
+                          </button>
+                          <button
+                            type="button"
+                            class="tool-btn tool-btn--sm"
+                            [class.tool-btn--active]="textUnderline()"
+                            [disabled]="textDraft() === null"
+                            title="Subrayado (selecciona texto para aplicarlo a una parte)"
+                            (mousedown)="$event.preventDefault()"
+                            (click)="applyFormat('underline')"
+                          >
+                            <span class="material-icons">format_underlined</span>
+                          </button>
+                        </div>
+                      }
+                    </div>
 
                     <button
                       type="button"
@@ -322,29 +363,6 @@ interface TextItem {
                     >
                       <span class="material-icons">delete_sweep</span>
                       Borrar todo
-                    </button>
-                  </div>
-
-                  <div class="toolbar__group toolbar__group--right">
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      title="{{ fullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa' }}"
-                      (click)="toggleFullscreen()"
-                    >
-                      <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
-                    </button>
-                    @if (s.status === 'ACTIVE') {
-                      <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="pause()">
-                        <span class="material-icons">pause</span> Pausar
-                      </button>
-                    } @else if (s.status === 'PAUSED') {
-                      <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" (click)="resume()">
-                        <span class="material-icons">play_arrow</span> Reanudar
-                      </button>
-                    }
-                    <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="askFinalize()">
-                      <span class="material-icons">stop_circle</span> Finalizar
                     </button>
                   </div>
                 </div>
@@ -386,36 +404,38 @@ interface TextItem {
                         [style.top.px]="panY() + item.wy"
                         [style.color]="item.color"
                         [style.font-size.px]="item.size"
-                        [style.font-weight]="item.bold ? 700 : 400"
-                        [style.font-style]="item.italic ? 'italic' : 'normal'"
-                        [style.text-decoration]="item.underline ? 'underline' : 'none'"
                         (pointerdown)="onTextItemPointerDown(item, $event)"
                         (pointermove)="onTextItemPointerMove($event)"
                         (pointerup)="onTextItemPointerUp($event)"
                         (pointercancel)="onTextItemPointerUp($event)"
                         (dblclick)="onTextItemDblClick(item, $event)"
-                      >{{ item.text }}</div>
+                      >@for (run of item.runs; track $index) {<span
+                          [style.font-weight]="run.bold ? 700 : 400"
+                          [style.font-style]="run.italic ? 'italic' : 'normal'"
+                          [style.text-decoration]="run.underline ? 'underline' : 'none'"
+                        >{{ run.text }}</span>}</div>
                     }
                   }
 
                   @if (textDraft(); as draft) {
-                    <input
+                    <!-- Editor temporal contenteditable: permite seleccionar partes del texto y
+                         aplicar negrita/cursiva/subrayado solo a la selección (execCommand). Al
+                         confirmar, su contenido se convierte en runs con estilo propio. -->
+                    <div
                       #textEditor
                       class="text-input"
-                      [value]="textValue()"
+                      contenteditable="true"
+                      data-placeholder="Escribe y pulsa Enter…"
                       [style.left.px]="draft.screenX"
                       [style.top.px]="draft.screenY"
                       [style.color]="color()"
                       [style.font-size.px]="textSize()"
-                      [style.font-weight]="textBold() ? 700 : 400"
-                      [style.font-style]="textItalic() ? 'italic' : 'normal'"
-                      [style.text-decoration]="textUnderline() ? 'underline' : 'none'"
-                      placeholder="Escribe y pulsa Enter…"
-                      (input)="onTextInput($event)"
-                      (keydown.enter)="commitText()"
+                      (keydown.enter)="onEditorEnter($event)"
                       (keydown.escape)="onTextEscape($event)"
-                      (blur)="commitText()"
-                    />
+                      (keyup)="refreshFormatStates()"
+                      (mouseup)="refreshFormatStates()"
+                      (blur)="onEditorBlur()"
+                    ></div>
                   }
 
                   @if (s.status === 'PAUSED') {
@@ -552,7 +572,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('boardCanvas');
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
-  private readonly textEditorRef = viewChild<ElementRef<HTMLInputElement>>('textEditor');
+  private readonly textEditorRef = viewChild<ElementRef<HTMLDivElement>>('textEditor');
 
   private sessionId = 0;
   private ctx: CanvasRenderingContext2D | null = null;
@@ -571,9 +591,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   // Cursor circular del borrador.
   readonly cursorPos = signal<{ x: number; y: number } | null>(null);
 
-  // Edición de texto en curso (entrada flotante sobre el visor).
+  // Edición de texto en curso (editor flotante contenteditable sobre el visor).
   readonly textDraft = signal<TextDraft | null>(null);
-  readonly textValue = signal<string>('');
 
   // Textos colocados sobre la pizarra (objetos movibles).
   readonly textItems = signal<TextItem[]>([]);
@@ -582,6 +601,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   /** id del texto que se está arrastrando, o null. */
   readonly draggingTextId = signal<string | null>(null);
   private textDragStart = { wx: 0, wy: 0, clientX: 0, clientY: 0 };
+  /** Evita que el editor se confirme al tocar controles de tamaño/color (que roban el foco). */
+  private keepEditorOpen = false;
 
   readonly fullscreen = signal<boolean>(false);
 
@@ -608,6 +629,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   readonly textSize = signal<number>(32);
   /** Tamaños de texto disponibles en el selector (estilo editor de texto). */
   readonly textSizes: readonly number[] = [12, 14, 16, 18, 24, 32, 48];
+  // Estado activo de los botones B/I/U: refleja el formato de la selección actual del editor.
   readonly textBold = signal<boolean>(false);
   readonly textItalic = signal<boolean>(false);
   readonly textUnderline = signal<boolean>(false);
@@ -733,6 +755,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   onColor(event: Event): void {
     this.color.set((event.target as HTMLInputElement).value);
+    this.restoreEditorAfterToolbar();
   }
 
   onStrokeWidth(event: Event): void {
@@ -745,10 +768,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   onTextSize(event: Event): void {
     this.textSize.set(Number((event.target as HTMLSelectElement).value));
-  }
-
-  onTextInput(event: Event): void {
-    this.textValue.set((event.target as HTMLInputElement).value);
+    this.restoreEditorAfterToolbar();
   }
 
   toggleFullscreen(): void {
@@ -885,7 +905,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.cursorPos.set({ x: event.clientX - rect.left, y: event.clientY - rect.top });
   }
 
-  // ─── Texto (se rasteriza en el lienzo; ver nota de WebSocket) ──────────────────
+  // ─── Texto: editor con formato parcial (ver nota de WebSocket) ─────────────────
 
   private placeText(event: PointerEvent): void {
     if (!this.canDraw()) {
@@ -900,33 +920,46 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     const rect = wrap.getBoundingClientRect();
     const wp = this.toCanvasPoint(event);
     this.editingTextId.set(null);
-    this.textValue.set('');
+    this.resetFormatStates();
     this.textDraft.set({
       screenX: event.clientX - rect.left,
       screenY: event.clientY - rect.top,
       wx: wp.x,
       wy: wp.y,
     });
-    setTimeout(() => this.textEditorRef()?.nativeElement.focus(), 0);
+    setTimeout(() => {
+      const editor = this.textEditorRef()?.nativeElement;
+      if (editor) {
+        editor.innerHTML = '';
+        editor.focus();
+      }
+    }, 0);
   }
 
   /**
-   * Confirma el texto en edición guardándolo como objeto movible sobre la pizarra. Los textos se
-   * rasterizan solo al generar la captura final (forman parte de ella); no se difunden en vivo por
-   * WebSocket porque el backend no define un eventType de texto (limitación documentada).
+   * Confirma el texto en edición guardándolo como objeto movible. El contenido del editor
+   * contenteditable se convierte en "runs" (fragmentos con su propio negrita/cursiva/subrayado),
+   * de modo que el formato parcial se conserva. Los textos se rasterizan solo al generar la captura
+   * final; no se difunden en vivo por WebSocket porque el backend no define un eventType de texto
+   * (limitación documentada).
    */
   commitText(): void {
     const draft = this.textDraft();
     if (draft === null) {
       return;
     }
-    const value = this.textValue().trim();
+    const editor = this.textEditorRef()?.nativeElement ?? null;
     const editingId = this.editingTextId();
-    this.textDraft.set(null);
-    this.textValue.set('');
-    this.editingTextId.set(null);
+    const runs = editor ? this.parseRuns(editor) : [];
+    const plain = runs.map((r) => r.text).join('').trim();
 
-    if (value === '') {
+    this.textDraft.set(null);
+    this.editingTextId.set(null);
+    if (editor) {
+      editor.innerHTML = '';
+    }
+
+    if (plain === '') {
       // Edición que se dejó vacía: se elimina el texto existente.
       if (editingId !== null) {
         this.textItems.update((items) => items.filter((i) => i.id !== editingId));
@@ -937,37 +970,113 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const attrs = {
-      text: value,
-      color: this.color(),
-      size: this.textSize(),
-      bold: this.textBold(),
-      italic: this.textItalic(),
-      underline: this.textUnderline(),
-    };
+    const base = { color: this.color(), size: this.textSize(), runs };
     if (editingId !== null) {
       this.textItems.update((items) =>
-        items.map((i) => (i.id === editingId ? { ...i, ...attrs } : i))
+        items.map((i) => (i.id === editingId ? { ...i, ...base } : i))
       );
     } else {
       this.textItems.update((items) => [
         ...items,
-        { id: this.localId(), wx: draft.wx, wy: draft.wy, ...attrs },
+        { id: this.localId(), wx: draft.wx, wy: draft.wy, ...base },
       ]);
     }
   }
 
   cancelText(): void {
     // Si se cancela una reedición, el objeto original se conserva sin cambios.
+    const editor = this.textEditorRef()?.nativeElement;
+    if (editor) {
+      editor.innerHTML = '';
+    }
     this.textDraft.set(null);
-    this.textValue.set('');
     this.editingTextId.set(null);
   }
 
-  /** Esc dentro del campo de texto: cancela el texto sin afectar a la pantalla completa. */
+  /** Enter confirma el texto (evita el salto de línea del contenteditable). */
+  onEditorEnter(event: Event): void {
+    event.preventDefault();
+    this.commitText();
+  }
+
+  /**
+   * El editor pierde el foco. Si fue por tocar un control de la toolbar (tamaño/color), NO se
+   * confirma el texto: el control aplicará su cambio y se devolverá el foco al editor.
+   */
+  onEditorBlur(): void {
+    if (this.keepEditorOpen) {
+      this.keepEditorOpen = false;
+      return;
+    }
+    this.commitText();
+  }
+
+  /** mousedown sobre tamaño/color: marca que el editor debe seguir abierto pese al blur. */
+  keepEditorFocus(): void {
+    if (this.textDraft() !== null) {
+      this.keepEditorOpen = true;
+    }
+  }
+
+  /** Tras aplicar tamaño/color desde la toolbar, devuelve el foco al editor en curso. */
+  private restoreEditorAfterToolbar(): void {
+    this.keepEditorOpen = false;
+    if (this.textDraft() === null) {
+      return;
+    }
+    setTimeout(() => {
+      const editor = this.textEditorRef()?.nativeElement;
+      if (editor) {
+        editor.focus();
+        this.caretToEnd(editor);
+      }
+    }, 0);
+  }
+
+  /** Esc dentro del editor: cancela el texto sin afectar a la pantalla completa. */
   onTextEscape(event: Event): void {
     event.stopPropagation();
     this.cancelText();
+  }
+
+  /**
+   * Aplica negrita/cursiva/subrayado a la SELECCIÓN actual del editor. Si no hay selección, queda
+   * activado para el texto que se escriba a continuación (comportamiento nativo del contenteditable).
+   * Se usa `execCommand`: está obsoleto pero es la vía nativa para editar formato sin librerías.
+   */
+  applyFormat(command: 'bold' | 'italic' | 'underline'): void {
+    const editor = this.textEditorRef()?.nativeElement;
+    if (this.textDraft() === null || !editor) {
+      return;
+    }
+    editor.focus();
+    try {
+      document.execCommand(command);
+    } catch {
+      /* no-op: navegador sin soporte de execCommand */
+    }
+    this.refreshFormatStates();
+  }
+
+  /** Sincroniza el estado activo de los botones B/I/U con el formato de la selección. */
+  refreshFormatStates(): void {
+    const editor = this.textEditorRef()?.nativeElement;
+    if (this.textDraft() === null || !editor || document.activeElement !== editor) {
+      return;
+    }
+    try {
+      this.textBold.set(document.queryCommandState('bold'));
+      this.textItalic.set(document.queryCommandState('italic'));
+      this.textUnderline.set(document.queryCommandState('underline'));
+    } catch {
+      /* no-op */
+    }
+  }
+
+  private resetFormatStates(): void {
+    this.textBold.set(false);
+    this.textItalic.set(false);
+    this.textUnderline.set(false);
   }
 
   // ─── Texto movible: selección, arrastre y reedición ──────────────────────────
@@ -1022,44 +1131,143 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.commitText();
     this.color.set(item.color);
     this.textSize.set(item.size);
-    this.textBold.set(item.bold);
-    this.textItalic.set(item.italic);
-    this.textUnderline.set(item.underline);
+    this.resetFormatStates();
     this.editingTextId.set(item.id);
-    this.textValue.set(item.text);
     this.textDraft.set({
       screenX: this.panX() + item.wx,
       screenY: this.panY() + item.wy,
       wx: item.wx,
       wy: item.wy,
     });
-    setTimeout(() => this.textEditorRef()?.nativeElement.focus(), 0);
+    setTimeout(() => {
+      const editor = this.textEditorRef()?.nativeElement;
+      if (editor) {
+        editor.innerHTML = this.runsToHtml(item.runs);
+        editor.focus();
+        this.caretToEnd(editor);
+        this.refreshFormatStates();
+      }
+    }, 0);
   }
 
-  /** Dibuja un texto en un contexto (se usa al componer la captura final). */
+  /** Dibuja un texto (con formato por runs) en un contexto; se usa al componer la captura final. */
   private drawTextItem(ctx: CanvasRenderingContext2D, item: TextItem): void {
     ctx.save();
-    ctx.font = this.fontFor(item);
     ctx.fillStyle = item.color;
+    ctx.strokeStyle = item.color;
     ctx.textBaseline = 'top';
-    ctx.fillText(item.text, item.wx, item.wy);
-    if (item.underline) {
-      const width = ctx.measureText(item.text).width;
-      const underlineY = item.wy + item.size * 1.08;
-      ctx.strokeStyle = item.color;
-      ctx.lineWidth = Math.max(1, item.size / 14);
-      ctx.beginPath();
-      ctx.moveTo(item.wx, underlineY);
-      ctx.lineTo(item.wx + width, underlineY);
-      ctx.stroke();
+    let x = item.wx;
+    for (const run of item.runs) {
+      ctx.font = this.runFont(item.size, run);
+      const width = ctx.measureText(run.text).width;
+      ctx.fillText(run.text, x, item.wy);
+      if (run.underline) {
+        const underlineY = item.wy + item.size * 1.08;
+        ctx.lineWidth = Math.max(1, item.size / 14);
+        ctx.beginPath();
+        ctx.moveTo(x, underlineY);
+        ctx.lineTo(x + width, underlineY);
+        ctx.stroke();
+      }
+      x += width;
     }
     ctx.restore();
   }
 
-  private fontFor(item: TextItem): string {
-    const style = item.italic ? 'italic ' : '';
-    const weight = item.bold ? '700' : '400';
-    return `${style}${weight} ${item.size}px "Plus Jakarta Sans", system-ui, sans-serif`;
+  private runFont(size: number, run: TextRun): string {
+    const style = run.italic ? 'italic ' : '';
+    const weight = run.bold ? '700' : '400';
+    return `${style}${weight} ${size}px "Plus Jakarta Sans", system-ui, sans-serif`;
+  }
+
+  /** Convierte el DOM del editor contenteditable en runs con estilo uniforme. */
+  private parseRuns(root: HTMLElement): TextRun[] {
+    const runs: TextRun[] = [];
+    const walk = (node: Node, bold: boolean, italic: boolean, underline: boolean): void => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent ?? '';
+        if (text.length > 0) {
+          runs.push({ text, bold, italic, underline });
+        }
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+      const el = node as HTMLElement;
+      if (el.tagName === 'BR') {
+        return; // editor de una sola línea: ignoramos saltos
+      }
+      const style = el.style;
+      const fontWeight = style.fontWeight;
+      const nextBold =
+        bold ||
+        el.tagName === 'B' ||
+        el.tagName === 'STRONG' ||
+        fontWeight === 'bold' ||
+        (fontWeight !== '' && Number(fontWeight) >= 600);
+      const nextItalic = italic || el.tagName === 'I' || el.tagName === 'EM' || style.fontStyle === 'italic';
+      const decoration = `${style.textDecoration} ${style.textDecorationLine}`;
+      const nextUnderline = underline || el.tagName === 'U' || decoration.includes('underline');
+      el.childNodes.forEach((child) => walk(child, nextBold, nextItalic, nextUnderline));
+    };
+    root.childNodes.forEach((n) => walk(n, false, false, false));
+    return this.mergeRuns(runs);
+  }
+
+  /** Une runs adyacentes con el mismo formato (evita fragmentación innecesaria). */
+  private mergeRuns(runs: TextRun[]): TextRun[] {
+    const merged: TextRun[] = [];
+    for (const run of runs) {
+      const last = merged[merged.length - 1];
+      if (
+        last &&
+        last.bold === run.bold &&
+        last.italic === run.italic &&
+        last.underline === run.underline
+      ) {
+        merged[merged.length - 1] = { ...last, text: last.text + run.text };
+      } else {
+        merged.push(run);
+      }
+    }
+    return merged;
+  }
+
+  /** Serializa runs a HTML para volver a poblar el editor al reeditar. */
+  private runsToHtml(runs: readonly TextRun[]): string {
+    return runs
+      .map((run) => {
+        let html = this.escapeHtml(run.text);
+        if (run.bold) {
+          html = `<b>${html}</b>`;
+        }
+        if (run.italic) {
+          html = `<i>${html}</i>`;
+        }
+        if (run.underline) {
+          html = `<u>${html}</u>`;
+        }
+        return html;
+      })
+      .join('');
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  /** Coloca el cursor al final del contenido del editor. */
+  private caretToEnd(editor: HTMLElement): void {
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
   }
 
   /** Identificador local para objetos que no viajan por WebSocket (textos). */
