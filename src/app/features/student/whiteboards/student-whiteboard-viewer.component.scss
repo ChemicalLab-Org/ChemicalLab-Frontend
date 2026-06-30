@@ -435,6 +435,10 @@
     box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
   }
 
+  &--text-mode {
+    cursor: text;
+  }
+
   &--dragging {
     outline: 1px dashed var(--color-primary-500);
     outline-offset: 2px;

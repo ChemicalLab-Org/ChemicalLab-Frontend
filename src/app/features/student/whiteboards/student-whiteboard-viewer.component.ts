@@ -379,9 +379,10 @@ type DisplayTextItem = WhiteboardTextObject;
                   @if (editingTextId() !== item.id) {
                     <div
                       class="text-item"
-                      [class.text-item--editable]="canSelectObject()"
+                      [class.text-item--editable]="canSelectObject() || canEditText()"
                       [class.text-item--selected]="selectedTextId() === item.id"
                       [class.text-item--dragging]="draggingTextId() === item.id"
+                      [class.text-item--text-mode]="canEditText()"
                       [style.left.px]="panX() + item.wx"
                       [style.top.px]="panY() + item.wy"
                       [style.color]="item.color"
@@ -937,6 +938,12 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   // ─── Texto movible: arrastre y reedición ──────────────────────────────────────
 
   onTextItemPointerDown(item: DisplayTextItem, event: PointerEvent): void {
+    if (this.canEditText()) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.beginTextEdit(item);
+      return;
+    }
     if (!this.canSelectObject()) {
       return;
     }
@@ -990,7 +997,12 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     event.preventDefault();
     event.stopPropagation();
+    this.beginTextEdit(item);
+  }
+
+  private beginTextEdit(item: DisplayTextItem): void {
     this.commitText();
+    this.clearSelection();
     this.color.set(item.color);
     this.textSize.set(item.size);
     this.resetFormatStates();
