@@ -38,6 +38,7 @@ import {
   caretToEnd,
   eraserHitsText,
   localTextId,
+  measureTextWidth,
   parseRuns,
   runsToHtml,
 } from '../../../shared/whiteboard/whiteboard-text.util';
@@ -60,7 +61,7 @@ const PEN_CURSOR =
  * negrita/cursiva/subrayado, mover, reeditar) reutilizando la lógica compartida
  * ({@link ../../../shared/whiteboard/whiteboard-text.util}), y se difunde por WebSocket.
  */
-type StudentTool = 'PEN' | 'ERASER' | 'TEXT' | 'MOVE';
+type StudentTool = 'PEN' | 'ERASER' | 'TEXT' | 'SELECT' | 'MOVE';
 
 /** Texto en edición (editor flotante contenteditable sobre el visor). */
 interface TextDraft {
@@ -224,6 +225,15 @@ type DisplayTextItem = WhiteboardTextObject;
                     >
                       <span class="material-icons">title</span>
                     </button>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [class.tool-btn--active]="tool() === 'SELECT'"
+                      title="Seleccionar"
+                      (click)="selectTool('SELECT')"
+                    >
+                      <span class="material-icons">near_me</span>
+                    </button>
                   }
                   <button
                     type="button"
@@ -248,7 +258,7 @@ type DisplayTextItem = WhiteboardTextObject;
                   </button>
                 </div>
 
-                @if (canDraw() && tool() !== 'MOVE') {
+                @if (canDraw() && tool() !== 'MOVE' && tool() !== 'SELECT') {
                   <div class="toolbar__group">
                     <label class="tool-field" title="Color">
                       <span class="material-icons">palette</span>
@@ -363,13 +373,14 @@ type DisplayTextItem = WhiteboardTextObject;
                 }
 
                 <!-- Textos sobre la pizarra (del alumno, del docente o de otros): se posicionan en
-                     coordenadas del workspace + el pan. Con permiso y la herramienta Texto se pueden
-                     mover (arrastrar) y reeditar (doble clic); si no, solo se visualizan. -->
+                     coordenadas del workspace + el pan. Con permiso, Seleccionar los mueve y Texto
+                     permite crear/reeditar; si no, solo se visualizan. -->
                 @for (item of textItems(); track item.id) {
                   @if (editingTextId() !== item.id) {
                     <div
                       class="text-item"
-                      [class.text-item--editable]="canEditText()"
+                      [class.text-item--editable]="canSelectObject()"
+                      [class.text-item--selected]="selectedTextId() === item.id"
                       [class.text-item--dragging]="draggingTextId() === item.id"
                       [style.left.px]="panX() + item.wx"
                       [style.top.px]="panY() + item.wy"
@@ -470,6 +481,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   readonly textItems = signal<DisplayTextItem[]>([]);
   /** id del texto que se está reeditando (se oculta su objeto mientras se edita). */
   readonly editingTextId = signal<string | null>(null);
+  /** id del texto seleccionado localmente. No se persiste ni se difunde. */
+  readonly selectedTextId = signal<string | null>(null);
   /** id del texto que se está arrastrando, o null. */
   readonly draggingTextId = signal<string | null>(null);
   private textDragStart = { wx: 0, wy: 0, clientX: 0, clientY: 0 };
@@ -525,7 +538,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     () => this.tool() === 'ERASER' && this.canDraw() && this.cursorPos() !== null && !this.panning
   );
 
-  /** Los textos solo se pueden seleccionar/mover/reeditar con la herramienta Texto y permiso. */
+  /** Los objetos solo se pueden seleccionar/mover con la herramienta Seleccionar y permiso efectivo. */
+  readonly canSelectObject = computed<boolean>(() => this.tool() === 'SELECT' && this.canDraw());
+
+  /** La reedición de texto existente permanece ligada a la herramienta Texto. */
   readonly canEditText = computed<boolean>(() => this.tool() === 'TEXT' && this.canDraw());
 
   readonly canvasCursor = computed<string>(() => {
@@ -537,6 +553,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     if (this.tool() === 'ERASER') {
       return 'none';
+    }
+    if (this.tool() === 'SELECT') {
+      return 'pointer';
     }
     if (this.tool() === 'TEXT') {
       return 'text';
@@ -698,6 +717,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
         // Si perdió el permiso o se pausó, vuelve a «Mover» para no dejar una herramienta inválida.
         if (!this.canDraw() && this.tool() !== 'MOVE') {
           this.cancelText();
+          this.clearSelection();
           this.tool.set('MOVE');
         }
       },
@@ -719,6 +739,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.tool.set(tool);
     if (tool !== 'ERASER') {
       this.cursorPos.set(null);
+    }
+    if (tool !== 'SELECT') {
+      this.clearSelection();
     }
   }
 
@@ -914,13 +937,14 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   // ─── Texto movible: arrastre y reedición ──────────────────────────────────────
 
   onTextItemPointerDown(item: DisplayTextItem, event: PointerEvent): void {
-    if (!this.canEditText()) {
+    if (!this.canSelectObject()) {
       return;
     }
     // Evita que el clic llegue al lienzo (crearía un texto nuevo) o inicie el pan.
     event.preventDefault();
     event.stopPropagation();
     (event.target as HTMLElement).setPointerCapture?.(event.pointerId);
+    this.selectedTextId.set(item.id);
     this.draggingTextId.set(item.id);
     this.textDragStart = { wx: item.wx, wy: item.wy, clientX: event.clientX, clientY: event.clientY };
   }
@@ -935,8 +959,13 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     // desplazamiento en coordenadas del workspace.
     const dx = event.clientX - this.textDragStart.clientX;
     const dy = event.clientY - this.textDragStart.clientY;
-    const wx = Math.max(0, Math.min(WORKSPACE_WIDTH, this.textDragStart.wx + dx));
-    const wy = Math.max(0, Math.min(WORKSPACE_HEIGHT, this.textDragStart.wy + dy));
+    const item = this.textItems().find((i) => i.id === id);
+    if (!item) {
+      return;
+    }
+    const next = this.clampTextPosition(item, this.textDragStart.wx + dx, this.textDragStart.wy + dy);
+    const wx = next.wx;
+    const wy = next.wy;
     this.textItems.update((items) => items.map((i) => (i.id === id ? { ...i, wx, wy } : i)));
   }
 
@@ -949,7 +978,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.draggingTextId.set(null);
     // Difunde la nueva posición para que el docente y los demás la vean (manteniendo el formato).
     const moved = this.textItems().find((i) => i.id === id);
-    if (moved) {
+    if (moved && (moved.wx !== this.textDragStart.wx || moved.wy !== this.textDragStart.wy)) {
       this.broadcastTextUpsert(moved);
     }
   }
@@ -984,6 +1013,26 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   /** Difunde un objeto de texto del alumno para que el docente y los demás lo vean en vivo. */
+  private clearSelection(): void {
+    this.selectedTextId.set(null);
+    this.draggingTextId.set(null);
+  }
+
+  private clampTextPosition(
+    item: DisplayTextItem,
+    wx: number,
+    wy: number
+  ): { wx: number; wy: number } {
+    const ctx = this.ensureCanvas();
+    const width = ctx === null ? 0 : measureTextWidth(ctx, item);
+    const maxX = Math.max(0, WORKSPACE_WIDTH - width);
+    const maxY = Math.max(0, WORKSPACE_HEIGHT - item.size);
+    return {
+      wx: Math.round(Math.max(0, Math.min(maxX, wx)) * 100) / 100,
+      wy: Math.round(Math.max(0, Math.min(maxY, wy)) * 100) / 100,
+    };
+  }
+
   private broadcastTextUpsert(item: DisplayTextItem): void {
     const clientEventId = this.newEventId();
     this.realtime.sendDraw({
@@ -1028,6 +1077,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   onPointerDown(event: PointerEvent): void {
     if (this.tool() === 'MOVE' || !this.canDraw()) {
       this.startPan(event);
+      return;
+    }
+    if (this.tool() === 'SELECT') {
+      this.clearSelection();
       return;
     }
     if (this.tool() === 'TEXT') {
@@ -1187,6 +1240,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     if (event.eventType === 'CLEAR') {
       this.clearCanvas();
+      this.clearSelection();
       this.textItems.set([]);
       return;
     }
@@ -1198,6 +1252,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     if (event.eventType === 'TEXT_DELETE') {
       if (event.textId !== null) {
         const id = event.textId;
+        if (this.selectedTextId() === id) {
+          this.clearSelection();
+        }
         this.textItems.update((items) => items.filter((i) => i.id !== id));
       }
       return;
@@ -1242,6 +1299,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     switch (event.eventType) {
       case 'SESSION_PAUSED':
         this.session.set({ ...current, status: 'PAUSED', canInteract: false });
+        this.clearSelection();
         if (this.tool() !== 'MOVE') {
           this.cancelText();
           this.tool.set('MOVE');
@@ -1254,6 +1312,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
         this.refreshDetail();
         break;
       case 'SESSION_CLOSED':
+        this.clearSelection();
         this.realtime.disconnect();
         this.showBanner('La sesión fue finalizada por el docente.', 'warning');
         this.refreshDetail();
@@ -1296,6 +1355,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     ctx.fillStyle = BOARD_BACKGROUND;
     ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
+    this.clearSelection();
   }
 
   private renderSegment(from: WhiteboardPoint, to: WhiteboardPoint, color: string, width: number): void {

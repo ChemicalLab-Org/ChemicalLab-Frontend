@@ -371,7 +371,7 @@
 }
 
 // Texto colocado sobre la pizarra como objeto movible. Por defecto no intercepta el puntero (para
-// poder dibujar/borrar/desplazar por encima); solo es seleccionable con la herramienta Texto.
+// poder dibujar/borrar/desplazar por encima); solo es seleccionable con la herramienta Seleccionar.
 .text-item {
   position: absolute;
   z-index: 4;
@@ -385,7 +385,7 @@
 
   &--editable {
     pointer-events: auto;
-    cursor: move;
+    cursor: pointer;
 
     &:hover {
       outline: 1px solid var(--color-primary-300);
@@ -393,9 +393,16 @@
     }
   }
 
+  &--selected {
+    outline: 1.5px solid var(--color-primary-500);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 3px rgba(29, 158, 117, 0.12);
+  }
+
   &--dragging {
     outline: 1px dashed var(--color-primary-500);
     outline-offset: 2px;
+    cursor: grabbing;
   }
 }
 

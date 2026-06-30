@@ -223,7 +223,10 @@ export interface WhiteboardBoardStateResponse {
   readonly updatedAt: string | null;
 }
 
-/** Trazo serializado dentro del estado del lienzo (DRAW o ERASE). */
+/**
+ * Trazo serializado dentro del estado del lienzo (DRAW o ERASE).
+ * Pendiente: para seleccionar/mover trazos se requiere convertirlos a objetos agrupados con id estable.
+ */
 export interface WhiteboardStrokeRecord {
   readonly eventType: 'DRAW' | 'ERASE';
   readonly color: string | null;
