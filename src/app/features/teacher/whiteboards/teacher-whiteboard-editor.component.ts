@@ -89,6 +89,30 @@ interface TextDraft {
 /** Texto colocado sobre la pizarra como objeto movible (coordenadas del workspace). */
 type TextItem = WhiteboardTextObject;
 type ShapeItem = WhiteboardShapeObject;
+type UndoableObjectType = 'TEXT' | 'SHAPE' | 'STROKE';
+type UndoableObject = TextItem | ShapeItem | WhiteboardStrokeRecord;
+type WhiteboardUndoActionType =
+  | 'CREATE_OBJECT'
+  | 'UPDATE_OBJECT'
+  | 'MOVE_OBJECT'
+  | 'DELETE_OBJECT'
+  | 'CREATE_STROKE'
+  | 'ERASE_STROKE';
+
+interface WhiteboardUndoAction {
+  readonly id: string;
+  readonly actorId: number | string;
+  readonly type: WhiteboardUndoActionType;
+  readonly objectId: string;
+  readonly objectType: UndoableObjectType;
+  readonly before: UndoableObject | null;
+  readonly after: UndoableObject | null;
+  readonly strokeIndex?: number;
+  readonly gestureId?: string;
+  readonly timestamp: number;
+}
+
+const UNDO_STACK_LIMIT = 80;
 
 @Component({
   selector: 'app-teacher-whiteboard-editor',
@@ -294,6 +318,24 @@ type ShapeItem = WhiteboardShapeObject;
                     </div>
 
                     <div class="toolbar__group toolbar__group--right">
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [disabled]="!canUndo()"
+                        title="Deshacer (Ctrl+Z)"
+                        (click)="undoWhiteboardAction()"
+                      >
+                        <span class="material-icons">undo</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [disabled]="!canRedo()"
+                        title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
+                        (click)="redoWhiteboardAction()"
+                      >
+                        <span class="material-icons">redo</span>
+                      </button>
                       <button
                         type="button"
                         class="tool-btn"
@@ -743,6 +785,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
   private currentStroke: WhiteboardPoint[] = [];
+  private currentEraserGestureId: string | null = null;
   private shapeStart: WhiteboardPoint | null = null;
   /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
   private readonly ownEventIds = new Set<string>();
@@ -793,6 +836,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private keepEditorOpen = false;
 
   readonly fullscreen = signal<boolean>(false);
+  private readonly undoStack = signal<WhiteboardUndoAction[]>([]);
+  private readonly redoStack = signal<WhiteboardUndoAction[]>([]);
 
   readonly session = signal<WhiteboardSessionResponse | null>(null);
   readonly participants = signal<WhiteboardParticipantResponse[]>([]);
@@ -852,6 +897,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   /** La reedición de texto existente permanece ligada a la herramienta Texto. */
   readonly canEditText = computed<boolean>(() => this.tool() === 'TEXT' && this.canDraw());
+  readonly canUndo = computed<boolean>(() => this.canDraw() && this.textDraft() === null && this.undoStack().length > 0);
+  readonly canRedo = computed<boolean>(() => this.canDraw() && this.textDraft() === null && this.redoStack().length > 0);
 
   /** Cursor del lienzo según la herramienta y el estado de la sesión. */
   readonly canvasCursor = computed<string>(() => {
@@ -1007,10 +1054,22 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   onDocumentKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'Delete' && event.key !== 'Backspace') {
+    if (this.textDraft() !== null || this.isEditableTarget(event.target)) {
       return;
     }
-    if (this.textDraft() !== null || this.isEditableTarget(event.target)) {
+    const key = event.key.toLowerCase();
+    const modifier = event.ctrlKey || event.metaKey;
+    const wantsUndo = modifier && key === 'z' && !event.shiftKey;
+    const wantsRedo = modifier && (key === 'y' || (key === 'z' && event.shiftKey));
+    if (wantsUndo || wantsRedo) {
+      const applied = wantsUndo ? this.undoWhiteboardAction() : this.redoWhiteboardAction();
+      if (applied) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+    if (event.key !== 'Delete' && event.key !== 'Backspace') {
       return;
     }
     if (this.deleteSelectedObject()) {
@@ -1051,6 +1110,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.drawing = true;
     const start = this.toCanvasPoint(event);
     this.currentStroke = [start];
+    this.currentEraserGestureId = this.tool() === 'ERASER' ? this.localHistoryId() : null;
     this.renderStroke(this.currentStroke, this.activeColor(), this.activeWidth());
     if (this.tool() === 'ERASER') {
       this.eraseTextsAt(start);
@@ -1109,8 +1169,16 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     const hitIds = new Set(hit.map((i) => i.id));
     this.textItems.update((list) => list.filter((i) => !hitIds.has(i.id)));
-    for (const id of hitIds) {
-      this.broadcastTextDelete(id);
+    for (const item of hit) {
+      this.recordUndoAction({
+        type: 'DELETE_OBJECT',
+        objectId: item.id,
+        objectType: 'TEXT',
+        before: this.cloneTextItem(item),
+        after: null,
+        gestureId: this.currentEraserGestureId ?? undefined,
+      });
+      this.broadcastTextDelete(item.id);
     }
     this.scheduleStateSave();
   }
@@ -1127,8 +1195,16 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     const hitIds = new Set(hit.map((shape) => shape.id));
     this.shapeItems.update((items) => items.filter((shape) => !hitIds.has(shape.id)));
-    for (const id of hitIds) {
-      this.broadcastShapeDelete(id);
+    for (const shape of hit) {
+      this.recordUndoAction({
+        type: 'DELETE_OBJECT',
+        objectId: shape.id,
+        objectType: 'SHAPE',
+        before: this.cloneShapeItem(shape),
+        after: null,
+        gestureId: this.currentEraserGestureId ?? undefined,
+      });
+      this.broadcastShapeDelete(shape.id);
     }
     this.scheduleStateSave();
   }
@@ -1148,6 +1224,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       (event.target as HTMLCanvasElement).releasePointerCapture?.(event.pointerId);
       if (preview !== null && !isShapeTooSmall(preview) && this.canDraw()) {
         this.shapeItems.update((items) => [...items, preview]);
+        this.recordUndoAction({
+          type: 'CREATE_OBJECT',
+          objectId: preview.id,
+          objectType: 'SHAPE',
+          before: null,
+          after: this.cloneShapeItem(preview),
+        });
         this.broadcastShapeUpsert(preview);
         this.scheduleStateSave();
       }
@@ -1159,6 +1242,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     const points = this.currentStroke;
     this.currentStroke = [];
     this.publishStroke(points);
+    this.currentEraserGestureId = null;
   }
 
   onPointerLeave(event: PointerEvent): void {
@@ -1258,6 +1342,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     const editor = this.textEditorRef()?.nativeElement ?? null;
     const editingId = this.editingTextId();
+    const beforeEdit = editingId !== null ? this.textItems().find((item) => item.id === editingId) ?? null : null;
     const runs = editor ? parseRuns(editor) : [];
     const plain = runs.map((r) => r.text).join('').trim();
 
@@ -1269,8 +1354,15 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
     if (plain === '') {
       // Edición que se dejó vacía: se elimina el texto existente (y se avisa a los alumnos).
-      if (editingId !== null) {
+      if (editingId !== null && beforeEdit !== null) {
         this.textItems.update((items) => items.filter((i) => i.id !== editingId));
+        this.recordUndoAction({
+          type: 'DELETE_OBJECT',
+          objectId: editingId,
+          objectType: 'TEXT',
+          before: this.cloneTextItem(beforeEdit),
+          after: null,
+        });
         this.broadcastTextDelete(editingId);
         this.scheduleStateSave();
       }
@@ -1287,9 +1379,25 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       this.textItems.update((items) =>
         items.map((i) => (i.id === editingId ? saved : i))
       );
+      if (beforeEdit !== null && !this.sameObject(beforeEdit, saved)) {
+        this.recordUndoAction({
+          type: 'UPDATE_OBJECT',
+          objectId: saved.id,
+          objectType: 'TEXT',
+          before: this.cloneTextItem(beforeEdit),
+          after: this.cloneTextItem(saved),
+        });
+      }
     } else {
       saved = { id: localTextId(), wx: draft.wx, wy: draft.wy, ...base };
       this.textItems.update((items) => [...items, saved]);
+      this.recordUndoAction({
+        type: 'CREATE_OBJECT',
+        objectId: saved.id,
+        objectType: 'TEXT',
+        before: null,
+        after: this.cloneTextItem(saved),
+      });
     }
     // Difunde el texto en vivo para que el alumno lo vea sin recargar y lo guarda en el estado.
     this.broadcastTextUpsert(saved);
@@ -1448,6 +1556,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     // Difunde la nueva posición del texto en vivo y la guarda en el estado del lienzo.
     const moved = this.textItems().find((i) => i.id === id);
     if (moved && (moved.wx !== this.textDragStart.wx || moved.wy !== this.textDragStart.wy)) {
+      this.recordUndoAction({
+        type: 'MOVE_OBJECT',
+        objectId: moved.id,
+        objectType: 'TEXT',
+        before: this.cloneTextItem({ ...moved, wx: this.textDragStart.wx, wy: this.textDragStart.wy }),
+        after: this.cloneTextItem(moved),
+      });
       this.broadcastTextUpsert(moved);
       this.scheduleStateSave();
     }
@@ -1507,13 +1622,20 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (id === null || !this.canDraw()) {
       return false;
     }
-    const exists = this.textItems().some((item) => item.id === id);
-    if (!exists) {
+    const item = this.textItems().find((current) => current.id === id) ?? null;
+    if (item === null) {
       this.clearSelection();
       return false;
     }
     this.textItems.update((items) => items.filter((item) => item.id !== id));
     this.clearSelection();
+    this.recordUndoAction({
+      type: 'DELETE_OBJECT',
+      objectId: id,
+      objectType: 'TEXT',
+      before: this.cloneTextItem(item),
+      after: null,
+    });
     this.broadcastTextDelete(id);
     this.scheduleStateSave();
     return true;
@@ -1524,13 +1646,20 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (id === null || !this.canDraw()) {
       return false;
     }
-    const exists = this.shapeItems().some((shape) => shape.id === id);
-    if (!exists) {
+    const shape = this.shapeItems().find((current) => current.id === id) ?? null;
+    if (shape === null) {
       this.clearSelection();
       return false;
     }
     this.shapeItems.update((items) => items.filter((shape) => shape.id !== id));
     this.clearSelection();
+    this.recordUndoAction({
+      type: 'DELETE_OBJECT',
+      objectId: id,
+      objectType: 'SHAPE',
+      before: this.cloneShapeItem(shape),
+      after: null,
+    });
     this.broadcastShapeDelete(id);
     this.scheduleStateSave();
     return true;
@@ -1619,6 +1748,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       moved &&
       (moved.x1 !== start.x1 || moved.y1 !== start.y1 || moved.x2 !== start.x2 || moved.y2 !== start.y2)
     ) {
+      this.recordUndoAction({
+        type: 'MOVE_OBJECT',
+        objectId: moved.id,
+        objectType: 'SHAPE',
+        before: this.cloneShapeItem(start),
+        after: this.cloneShapeItem(moved),
+      });
       this.broadcastShapeUpsert(moved);
       this.scheduleStateSave();
     }
@@ -1626,6 +1762,264 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
 
   // ─── Borrar todo ──────────────────────────────────────────────────────────────
+
+  undoWhiteboardAction(): boolean {
+    if (!this.canUndo()) {
+      return false;
+    }
+    const stack = this.undoStack();
+    const actions = this.takeGestureActions(stack);
+    this.undoStack.set(stack.slice(0, stack.length - actions.length));
+    if (!this.applyHistoryActions(actions, 'undo')) {
+      for (const action of actions) {
+        this.discardObjectHistory(action);
+      }
+      this.showBanner('No se pudo deshacer: el objeto cambio en otra sesion.', 'warning');
+      return true;
+    }
+    this.redoStack.update((items) => [...items, ...actions]);
+    return true;
+  }
+
+  redoWhiteboardAction(): boolean {
+    if (!this.canRedo()) {
+      return false;
+    }
+    const stack = this.redoStack();
+    const actions = this.takeGestureActions(stack);
+    this.redoStack.set(stack.slice(0, stack.length - actions.length));
+    if (!this.applyHistoryActions(actions, 'redo')) {
+      for (const action of actions) {
+        this.discardObjectHistory(action);
+      }
+      this.showBanner('No se pudo rehacer: el objeto cambio en otra sesion.', 'warning');
+      return true;
+    }
+    this.undoStack.update((items) => [...items, ...actions]);
+    return true;
+  }
+
+  private takeGestureActions(stack: WhiteboardUndoAction[]): WhiteboardUndoAction[] {
+    const last = stack[stack.length - 1];
+    if (last?.gestureId === undefined) {
+      return last ? [last] : [];
+    }
+    let start = stack.length - 1;
+    while (start > 0 && stack[start - 1].gestureId === last.gestureId) {
+      start--;
+    }
+    return stack.slice(start);
+  }
+
+  private applyHistoryActions(actions: WhiteboardUndoAction[], direction: 'undo' | 'redo'): boolean {
+    const ordered = direction === 'undo' ? [...actions].reverse() : actions;
+    for (const action of ordered) {
+      if (!this.applyHistoryAction(action, direction)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private recordUndoAction(
+    action: Omit<WhiteboardUndoAction, 'id' | 'actorId' | 'timestamp'>
+  ): void {
+    if (!this.canDraw()) {
+      return;
+    }
+    const fullAction: WhiteboardUndoAction = {
+      ...action,
+      id: this.localHistoryId(),
+      actorId: this.currentUser()?.userId ?? this.userName(),
+      timestamp: Date.now(),
+    };
+    this.undoStack.update((items) => [...items, fullAction].slice(-UNDO_STACK_LIMIT));
+    this.redoStack.set([]);
+  }
+
+  private applyHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): boolean {
+    if (action.objectType === 'STROKE') {
+      return this.applyStrokeHistoryAction(action, direction);
+    }
+    const expected = direction === 'undo' ? action.after : action.before;
+    const target = direction === 'undo' ? action.before : action.after;
+    const current = this.findUndoObject(action);
+    if (!this.sameNullableObject(current, expected)) {
+      return false;
+    }
+    this.applyUndoObjectState(action, target);
+    return true;
+  }
+
+  private applyUndoObjectState(action: WhiteboardUndoAction, object: UndoableObject | null): void {
+    if (action.objectType === 'TEXT') {
+      if (object === null) {
+        if (this.editingTextId() === action.objectId) {
+          this.cancelText();
+        }
+        this.textItems.update((items) => items.filter((item) => item.id !== action.objectId));
+        if (this.selectedTextId() === action.objectId) {
+          this.clearSelection();
+        }
+        this.broadcastTextDelete(action.objectId);
+      } else {
+        const item = this.cloneTextItem(object as TextItem);
+        this.textItems.update((items) => this.upsertTextItem(items, item));
+        this.broadcastTextUpsert(item);
+      }
+    } else if (object === null) {
+      this.shapeItems.update((items) => items.filter((shape) => shape.id !== action.objectId));
+      if (this.selectedShapeId() === action.objectId) {
+        this.clearSelection();
+      }
+      this.broadcastShapeDelete(action.objectId);
+    } else {
+      const shape = this.cloneShapeItem(object as ShapeItem);
+      this.shapeItems.update((items) => this.upsertShapeItem(items, shape));
+      this.broadcastShapeUpsert(shape);
+    }
+    this.scheduleStateSave();
+  }
+
+  private findUndoObject(action: WhiteboardUndoAction): UndoableObject | null {
+    if (action.objectType === 'TEXT') {
+      const item = this.textItems().find((current) => current.id === action.objectId) ?? null;
+      return item === null ? null : this.cloneTextItem(item);
+    }
+    if (action.objectType === 'STROKE') {
+      const stroke = this.boardStrokes.find((current) => current.id === action.objectId) ?? null;
+      return stroke === null ? null : this.cloneStrokeRecord(stroke);
+    }
+    const shape = this.shapeItems().find((current) => current.id === action.objectId) ?? null;
+    return shape === null ? null : this.cloneShapeItem(shape);
+  }
+
+  private applyStrokeHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): boolean {
+    const target = direction === 'undo' ? action.before : action.after;
+    const expected = direction === 'undo' ? action.after : action.before;
+    if (target !== null && !this.isStrokeRecord(target)) {
+      return false;
+    }
+    if (expected !== null && !this.isStrokeRecord(expected)) {
+      return false;
+    }
+    const currentIndex = this.findStrokeIndex(action.objectId);
+    if (target === null) {
+      if (expected === null || currentIndex === -1) {
+        return false;
+      }
+      const current = this.boardStrokes[currentIndex];
+      if (!this.sameObject(current, expected)) {
+        return false;
+      }
+      this.boardStrokes = this.boardStrokes.filter((_, index) => index !== currentIndex);
+    } else {
+      if (expected !== null || currentIndex !== -1) {
+        return false;
+      }
+      const insertAt = Math.max(0, Math.min(action.strokeIndex ?? this.boardStrokes.length, this.boardStrokes.length));
+      this.boardStrokes = [
+        ...this.boardStrokes.slice(0, insertAt),
+        this.cloneStrokeRecord(target),
+        ...this.boardStrokes.slice(insertAt),
+      ];
+    }
+    this.redrawCanvasFromStrokes();
+    this.broadcastBoardRecompose();
+    this.scheduleStateSave();
+    return true;
+  }
+
+  private findStrokeIndex(strokeId: string): number {
+    return this.boardStrokes.findIndex((stroke) => stroke.id === strokeId);
+  }
+
+  private isStrokeRecord(value: UndoableObject): value is WhiteboardStrokeRecord {
+    return 'eventType' in value && (value.eventType === 'DRAW' || value.eventType === 'ERASE');
+  }
+
+  private discardObjectHistory(action: WhiteboardUndoAction): void {
+    this.undoStack.update((items) =>
+      items.filter((item) => item.objectType !== action.objectType || item.objectId !== action.objectId)
+    );
+    this.redoStack.update((items) =>
+      items.filter((item) => item.objectType !== action.objectType || item.objectId !== action.objectId)
+    );
+  }
+
+  private clearUndoHistory(): void {
+    this.undoStack.set([]);
+    this.redoStack.set([]);
+  }
+
+  private upsertTextItem(items: TextItem[], item: TextItem): TextItem[] {
+    const index = items.findIndex((current) => current.id === item.id);
+    if (index === -1) {
+      return [...items, item];
+    }
+    const next = [...items];
+    next[index] = item;
+    return next;
+  }
+
+  private upsertShapeItem(items: ShapeItem[], shape: ShapeItem): ShapeItem[] {
+    const index = items.findIndex((current) => current.id === shape.id);
+    if (index === -1) {
+      return [...items, shape];
+    }
+    const next = [...items];
+    next[index] = shape;
+    return next;
+  }
+
+  private sameNullableObject(a: UndoableObject | null, b: UndoableObject | null): boolean {
+    if (a === null || b === null) {
+      return a === b;
+    }
+    return this.sameObject(a, b);
+  }
+
+  private sameObject(a: UndoableObject, b: UndoableObject): boolean {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+
+  private cloneTextItem(item: TextItem): TextItem {
+    return {
+      id: item.id,
+      wx: item.wx,
+      wy: item.wy,
+      color: item.color,
+      size: item.size,
+      runs: item.runs.map((run) => ({ ...run })),
+    };
+  }
+
+  private cloneShapeItem(shape: ShapeItem): ShapeItem {
+    return { ...shape };
+  }
+
+  private cloneStrokeRecord(stroke: WhiteboardStrokeRecord): WhiteboardStrokeRecord {
+    return {
+      id: stroke.id,
+      eventType: stroke.eventType,
+      color: stroke.color,
+      strokeWidth: stroke.strokeWidth,
+      eraserSize: stroke.eraserSize,
+      points: stroke.points.map((point) => ({ ...point })),
+    };
+  }
+
+  private localHistoryId(): string {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `undo-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  private localStrokeId(): string {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? `stroke-${crypto.randomUUID()}`
+      : `stroke-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
 
   askClear(): void {
     if (!this.canDraw()) {
@@ -1641,6 +2035,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.boardStrokes = [];
     this.shapeItems.set([]);
     this.clearSelection();
+    this.clearUndoHistory();
     const clientEventId = this.newEventId();
     this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId });
     this.scheduleStateSave();
@@ -1776,11 +2171,18 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     if (event.eventType === 'CLEAR') {
-      this.cancelText();
-      this.cancelShapePreview();
-      this.clearCanvas();
+      const isRecompose = event.clientEventId?.startsWith('recompose-') === true;
+      if (isRecompose) {
+        this.clearStrokeCanvas();
+      } else {
+        this.cancelText();
+        this.cancelShapePreview();
+        this.clearCanvas();
+      }
       this.boardStrokes = [];
-      this.shapeItems.set([]);
+      if (!isRecompose) {
+        this.clearUndoHistory();
+      }
       this.scheduleStateSave();
       return;
     }
@@ -1829,6 +2231,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.renderStroke(points, color, width);
     // Acumula el trazo de otros participantes en el estado para que la captura/recarga lo conserve.
     this.boardStrokes.push({
+      id: event.clientEventId ?? undefined,
       eventType: isErase ? 'ERASE' : 'DRAW',
       color: isErase ? null : event.color ?? '#000000',
       strokeWidth: isErase ? null : event.strokeWidth ?? 4,
@@ -1899,12 +2302,20 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (ctx === null) {
       return;
     }
-    ctx.fillStyle = BOARD_BACKGROUND;
-    ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
+    this.clearStrokeCanvas();
     // Textos y formas son objetos sobre la pizarra: "Borrar todo" tambien los retira.
     this.clearSelection();
     this.textItems.set([]);
     this.shapeItems.set([]);
+  }
+
+  private clearStrokeCanvas(): void {
+    const ctx = this.ensureCanvas();
+    if (ctx === null) {
+      return;
+    }
+    ctx.fillStyle = BOARD_BACKGROUND;
+    ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
   }
 
   private renderSegment(from: WhiteboardPoint, to: WhiteboardPoint, color: string, width: number): void {
@@ -1942,9 +2353,98 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     ctx.stroke();
   }
 
+  private redrawCanvasFromStrokes(): void {
+    const ctx = this.ensureCanvas();
+    if (ctx === null) {
+      return;
+    }
+    ctx.fillStyle = BOARD_BACKGROUND;
+    ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
+    for (const stroke of this.boardStrokes) {
+      const isErase = stroke.eventType === 'ERASE';
+      const color = isErase ? BOARD_BACKGROUND : stroke.color ?? '#000000';
+      const width = isErase ? stroke.eraserSize ?? 24 : stroke.strokeWidth ?? 4;
+      this.renderStroke(stroke.points, color, width);
+    }
+  }
+
+  private broadcastBoardRecompose(): void {
+    this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId: this.newEventId('recompose') });
+    for (const stroke of this.boardStrokes) {
+      this.broadcastStrokeRecord(stroke);
+    }
+  }
+
+  private broadcastStrokeRecord(stroke: WhiteboardStrokeRecord): void {
+    const clientEventId = this.newEventId('recompose');
+    if (stroke.eventType === 'ERASE') {
+      this.realtime.sendDraw({
+        eventType: 'ERASE',
+        tool: 'ERASER',
+        eraserSize: stroke.eraserSize ?? 24,
+        points: stroke.points,
+        clientEventId,
+      });
+      return;
+    }
+    this.realtime.sendDraw({
+      eventType: 'DRAW',
+      tool: 'PEN',
+      color: stroke.color ?? '#000000',
+      strokeWidth: stroke.strokeWidth ?? 4,
+      points: stroke.points,
+      clientEventId,
+    });
+  }
+
+  private eraserTouchesDrawStroke(points: readonly WhiteboardPoint[], eraserSize: number): boolean {
+    const radius = Math.max(eraserSize / 2 + 3, 8);
+    return this.boardStrokes.some(
+      (stroke) =>
+        stroke.eventType === 'DRAW' &&
+        points.some((point) => this.strokeRecordContainsPoint(stroke, point, radius))
+    );
+  }
+
+  private strokeRecordContainsPoint(
+    stroke: WhiteboardStrokeRecord,
+    point: WhiteboardPoint,
+    radius: number
+  ): boolean {
+    const strokePoints = stroke.points;
+    if (strokePoints.length === 0) {
+      return false;
+    }
+    const tolerance = radius + (stroke.strokeWidth ?? 4) / 2;
+    if (strokePoints.length === 1) {
+      return Math.hypot(point.x - strokePoints[0].x, point.y - strokePoints[0].y) <= tolerance;
+    }
+    for (let i = 1; i < strokePoints.length; i++) {
+      if (this.distanceToSegment(point, strokePoints[i - 1], strokePoints[i]) <= tolerance) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private distanceToSegment(point: WhiteboardPoint, from: WhiteboardPoint, to: WhiteboardPoint): number {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    if (dx === 0 && dy === 0) {
+      return Math.hypot(point.x - from.x, point.y - from.y);
+    }
+    const t = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(point.x - (from.x + t * dx), point.y - (from.y + t * dy));
+  }
+
   private publishStroke(points: WhiteboardPoint[]): void {
     const clientEventId = this.newEventId();
     const isErase = this.tool() === 'ERASER';
+    const shouldKeepStroke = !isErase || this.eraserTouchesDrawStroke(points, this.eraserSize());
+    if (isErase && !shouldKeepStroke) {
+      this.currentEraserGestureId = null;
+      return;
+    }
     const event: WhiteboardDrawEventRequest = isErase
       ? { eventType: 'ERASE', tool: 'ERASER', eraserSize: this.eraserSize(), points, clientEventId }
       : {
@@ -1957,12 +2457,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         };
     this.realtime.sendDraw(event);
     // Acumula el trazo propio en el estado guardado del lienzo.
-    this.boardStrokes.push({
+    const strokeRecord: WhiteboardStrokeRecord = {
+      id: this.localStrokeId(),
       eventType: isErase ? 'ERASE' : 'DRAW',
       color: isErase ? null : this.color(),
       strokeWidth: isErase ? null : this.strokeWidth(),
       eraserSize: isErase ? this.eraserSize() : null,
       points,
+    };
+    this.boardStrokes.push(strokeRecord);
+    this.recordUndoAction({
+      type: isErase ? 'ERASE_STROKE' : 'CREATE_STROKE',
+      objectId: strokeRecord.id ?? clientEventId,
+      objectType: 'STROKE',
+      before: null,
+      after: this.cloneStrokeRecord(strokeRecord),
+      strokeIndex: this.boardStrokes.length - 1,
+      gestureId: this.currentEraserGestureId ?? undefined,
     });
     this.scheduleStateSave();
   }
@@ -2014,11 +2525,11 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
   }
 
-  private newEventId(): string {
+  private newEventId(prefix = 'evt'): string {
     const id =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `evt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        ? `${prefix}-${crypto.randomUUID()}`
+        : `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     this.ownEventIds.add(id);
     return id;
   }
