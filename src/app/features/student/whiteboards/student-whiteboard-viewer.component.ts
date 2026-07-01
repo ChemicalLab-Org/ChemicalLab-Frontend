@@ -62,6 +62,11 @@ import {
 const WORKSPACE_WIDTH = 3200;
 const WORKSPACE_HEIGHT = 2000;
 const BOARD_BACKGROUND = '#ffffff';
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+// Deshacer/rehacer queda desactivado temporalmente hasta estabilizar la sincronizacion colaborativa.
+const UNDO_REDO_ENABLED = false;
 
 const PEN_CURSOR =
   'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMyAxNy4yNVYyMWgzLjc1TDE3LjgxIDkuOTRsLTMuNzUtMy43NUwzIDE3LjI1eiIgZmlsbD0iIzFhMWExNiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0yMC43MSA3LjA0YTEgMSAwIDAgMCAwLTEuNDFsLTIuMzQtMi4zNGExIDEgMCAwIDAtMS40MSAwbC0xLjgzIDEuODMgMy43NSAzLjc1IDEuODMtMS44M3oiIGZpbGw9IiMxZDllNzUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=") 3 25, crosshair';
@@ -77,8 +82,6 @@ type StudentTool = 'PEN' | 'ERASER' | 'TEXT' | 'SELECT' | 'MOVE' | ShapeTool;
 
 /** Texto en edición (editor flotante contenteditable sobre el visor). */
 interface TextDraft {
-  readonly screenX: number;
-  readonly screenY: number;
   readonly wx: number;
   readonly wy: number;
 }
@@ -320,24 +323,47 @@ const UNDO_STACK_LIMIT = 80;
                 </div>
 
                 <div class="toolbar__group toolbar__group--right">
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    [disabled]="!canUndo()"
-                    title="Deshacer (Ctrl+Z)"
-                    (click)="undoWhiteboardAction()"
-                  >
-                    <span class="material-icons">undo</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    [disabled]="!canRedo()"
-                    title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
-                    (click)="redoWhiteboardAction()"
-                  >
-                    <span class="material-icons">redo</span>
-                  </button>
+                  <div class="zoom-control" aria-label="Zoom de pizarra">
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [disabled]="!canZoomOut()"
+                      title="Alejar"
+                      (click)="zoomOut()"
+                    >
+                      <span class="material-icons">remove</span>
+                    </button>
+                    <span class="zoom-control__value">{{ zoomPercent() }}%</span>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [disabled]="!canZoomIn()"
+                      title="Acercar"
+                      (click)="zoomIn()"
+                    >
+                      <span class="material-icons">add</span>
+                    </button>
+                  </div>
+                  @if (undoRedoEnabled) {
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [disabled]="!canUndo()"
+                      title="Deshacer (Ctrl+Z)"
+                      (click)="undoWhiteboardAction()"
+                    >
+                      <span class="material-icons">undo</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [disabled]="!canRedo()"
+                      title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
+                      (click)="redoWhiteboardAction()"
+                    >
+                      <span class="material-icons">redo</span>
+                    </button>
+                  }
                   <button
                     type="button"
                     class="tool-btn"
@@ -554,8 +580,8 @@ const UNDO_STACK_LIMIT = 80;
                     class="eraser-cursor"
                     [style.left.px]="cursorPos()!.x"
                     [style.top.px]="cursorPos()!.y"
-                    [style.width.px]="eraserSize()"
-                    [style.height.px]="eraserSize()"
+                    [style.width.px]="eraserSize() * zoomLevel()"
+                    [style.height.px]="eraserSize() * zoomLevel()"
                   ></div>
                 }
 
@@ -570,10 +596,10 @@ const UNDO_STACK_LIMIT = 80;
                       [class.text-item--selected]="selectedTextId() === item.id"
                       [class.text-item--dragging]="draggingTextId() === item.id"
                       [class.text-item--text-mode]="canEditText()"
-                      [style.left.px]="panX() + item.wx"
-                      [style.top.px]="panY() + item.wy"
+                      [style.left.px]="toScreenX(item.wx)"
+                      [style.top.px]="toScreenY(item.wy)"
                       [style.color]="item.color"
-                      [style.font-size.px]="item.size"
+                      [style.font-size.px]="item.size * zoomLevel()"
                       (pointerdown)="onTextItemPointerDown(item, $event)"
                       (pointermove)="onTextItemPointerMove($event)"
                       (pointerup)="onTextItemPointerUp($event)"
@@ -596,10 +622,10 @@ const UNDO_STACK_LIMIT = 80;
                     class="text-input"
                     contenteditable="true"
                     data-placeholder="Escribe y pulsa Enter…"
-                    [style.left.px]="draft.screenX"
-                    [style.top.px]="draft.screenY"
+                    [style.left.px]="toScreenX(draft.wx)"
+                    [style.top.px]="toScreenY(draft.wy)"
                     [style.color]="color()"
-                    [style.font-size.px]="textSize()"
+                    [style.font-size.px]="textSize() * zoomLevel()"
                     (keydown.enter)="onEditorEnter($event)"
                     (keydown.escape)="onTextEscape($event)"
                     (keyup)="refreshFormatStates()"
@@ -645,6 +671,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   readonly userRole = 'Estudiante';
   readonly workspaceWidth = WORKSPACE_WIDTH;
   readonly workspaceHeight = WORKSPACE_HEIGHT;
+  readonly undoRedoEnabled = UNDO_REDO_ENABLED;
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('boardCanvas');
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
@@ -668,6 +695,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private panStart = { x: 0, y: 0, px: 0, py: 0 };
   readonly panX = signal<number>(0);
   readonly panY = signal<number>(0);
+  readonly zoomLevel = signal<number>(1);
+  readonly zoomPercent = computed<number>(() => Math.round(this.zoomLevel() * 100));
+  readonly canZoomOut = computed<boolean>(() => this.zoomLevel() > ZOOM_MIN);
+  readonly canZoomIn = computed<boolean>(() => this.zoomLevel() < ZOOM_MAX);
 
   readonly cursorPos = signal<{ x: number; y: number } | null>(null);
 
@@ -736,7 +767,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   );
 
   readonly boardTransform = computed<string>(
-    () => `translate(${this.panX()}px, ${this.panY()}px)`
+    () => `translate(${this.panX()}px, ${this.panY()}px) scale(${this.zoomLevel()})`
   );
 
   readonly showEraserCursor = computed<boolean>(
@@ -748,8 +779,12 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   /** La reedición de texto existente permanece ligada a la herramienta Texto. */
   readonly canEditText = computed<boolean>(() => this.tool() === 'TEXT' && this.canDraw());
-  readonly canUndo = computed<boolean>(() => this.canDraw() && this.textDraft() === null && this.undoStack().length > 0);
-  readonly canRedo = computed<boolean>(() => this.canDraw() && this.textDraft() === null && this.redoStack().length > 0);
+  readonly canUndo = computed<boolean>(
+    () => this.undoRedoEnabled && this.canDraw() && this.textDraft() === null && this.undoStack().length > 0
+  );
+  readonly canRedo = computed<boolean>(
+    () => this.undoRedoEnabled && this.canDraw() && this.textDraft() === null && this.redoStack().length > 0
+  );
 
   readonly canvasCursor = computed<string>(() => {
     if (this.tool() === 'MOVE') {
@@ -1019,17 +1054,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     // Si ya había un texto en edición, confírmalo antes de abrir otro.
     this.commitText();
-    const wrap = this.wrapRef()?.nativeElement;
-    if (!wrap) {
-      return;
-    }
-    const rect = wrap.getBoundingClientRect();
     const wp = this.toCanvasPoint(event);
     this.editingTextId.set(null);
     this.resetFormatStates();
     this.textDraft.set({
-      screenX: event.clientX - rect.left,
-      screenY: event.clientY - rect.top,
       wx: wp.x,
       wy: wp.y,
     });
@@ -1232,10 +1260,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       return;
     }
     event.preventDefault();
-    // El lienzo se muestra a escala 1:1, por lo que el desplazamiento en pantalla equivale al
-    // desplazamiento en coordenadas del workspace.
-    const dx = event.clientX - this.textDragStart.clientX;
-    const dy = event.clientY - this.textDragStart.clientY;
+    const dx = (event.clientX - this.textDragStart.clientX) / this.zoomLevel();
+    const dy = (event.clientY - this.textDragStart.clientY) / this.zoomLevel();
     const item = this.textItems().find((i) => i.id === id);
     if (!item) {
       return;
@@ -1285,8 +1311,6 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.resetFormatStates();
     this.editingTextId.set(item.id);
     this.textDraft.set({
-      screenX: this.panX() + item.wx,
-      screenY: this.panY() + item.wy,
       wx: item.wx,
       wy: item.wy,
     });
@@ -1450,8 +1474,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       return;
     }
     event.preventDefault();
-    const dx = event.clientX - this.shapeDragStart.clientX;
-    const dy = event.clientY - this.shapeDragStart.clientY;
+    const dx = (event.clientX - this.shapeDragStart.clientX) / this.zoomLevel();
+    const dy = (event.clientY - this.shapeDragStart.clientY) / this.zoomLevel();
     const moved = moveShape(start, dx, dy, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
     this.shapeItems.update((items) => items.map((shape) => (shape.id === id ? moved : shape)));
   }
@@ -1503,38 +1527,40 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   undoWhiteboardAction(): boolean {
-    if (!this.canUndo()) {
+    if (!this.undoRedoEnabled || !this.canUndo()) {
       return false;
     }
     const stack = this.undoStack();
     const actions = this.takeGestureActions(stack);
+    const redoActions = this.prepareHistoryActions(actions, 'undo');
     this.undoStack.set(stack.slice(0, stack.length - actions.length));
-    if (!this.applyHistoryActions(actions, 'undo')) {
-      for (const action of actions) {
+    if (!this.applyHistoryActions(redoActions, 'undo')) {
+      for (const action of redoActions) {
         this.discardObjectHistory(action);
       }
       this.showBanner('No se pudo deshacer: el objeto cambio en otra sesion.', 'warning');
       return true;
     }
-    this.redoStack.update((items) => [...items, ...actions]);
+    this.redoStack.update((items) => [...items, ...redoActions]);
     return true;
   }
 
   redoWhiteboardAction(): boolean {
-    if (!this.canRedo()) {
+    if (!this.undoRedoEnabled || !this.canRedo()) {
       return false;
     }
     const stack = this.redoStack();
     const actions = this.takeGestureActions(stack);
+    const undoActions = this.prepareHistoryActions(actions, 'redo');
     this.redoStack.set(stack.slice(0, stack.length - actions.length));
-    if (!this.applyHistoryActions(actions, 'redo')) {
-      for (const action of actions) {
+    if (!this.applyHistoryActions(undoActions, 'redo')) {
+      for (const action of undoActions) {
         this.discardObjectHistory(action);
       }
       this.showBanner('No se pudo rehacer: el objeto cambio en otra sesion.', 'warning');
       return true;
     }
-    this.undoStack.update((items) => [...items, ...actions]);
+    this.undoStack.update((items) => [...items, ...undoActions]);
     return true;
   }
 
@@ -1558,6 +1584,16 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       }
     }
     return true;
+  }
+
+  private prepareHistoryActions(
+    actions: WhiteboardUndoAction[],
+    direction: 'undo' | 'redo'
+  ): WhiteboardUndoAction[] {
+    if (direction !== 'undo') {
+      return actions;
+    }
+    return actions.map((action) => this.captureCurrentCreateState(action));
   }
 
   private recordUndoAction(
@@ -1588,6 +1624,33 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     this.applyUndoObjectState(action, target);
     return true;
+  }
+
+  private captureCurrentCreateState(action: WhiteboardUndoAction): WhiteboardUndoAction {
+    if ((action.type !== 'CREATE_OBJECT' && action.type !== 'CREATE_STROKE') || action.before !== null) {
+      return action;
+    }
+    const current = this.findUndoObject(action);
+    if (current === null) {
+      return action;
+    }
+    return {
+      ...action,
+      after: this.cloneUndoObjectForAction(action, current),
+    };
+  }
+
+  private cloneUndoObjectForAction(
+    action: WhiteboardUndoAction,
+    object: UndoableObject
+  ): UndoableObject {
+    if (action.objectType === 'TEXT') {
+      return this.cloneTextItem(object as DisplayTextItem);
+    }
+    if (action.objectType === 'SHAPE') {
+      return this.cloneShapeItem(object as DisplayShapeItem);
+    }
+    return this.cloneStrokeRecord(object as WhiteboardStrokeRecord);
   }
 
   private applyUndoObjectState(action: WhiteboardUndoAction, object: UndoableObject | null): void {
@@ -1663,7 +1726,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       ];
     }
     this.redrawCanvasFromStrokes();
-    this.broadcastStrokeHistoryChange(action, direction, target, expected);
+    this.broadcastBoardRecompose();
     return true;
   }
 
@@ -1768,6 +1831,23 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     requestAnimationFrame(() => this.setPan(this.panX(), this.panY()));
   }
 
+  zoomOut(): void {
+    this.setZoom(this.zoomLevel() - ZOOM_STEP);
+  }
+
+  zoomIn(): void {
+    this.setZoom(this.zoomLevel() + ZOOM_STEP);
+  }
+
+  private setZoom(value: number): void {
+    const next = Math.round(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value)) * 100) / 100;
+    if (next === this.zoomLevel()) {
+      return;
+    }
+    this.zoomLevel.set(next);
+    this.setPan(this.panX(), this.panY());
+  }
+
   @HostListener('document:keydown.escape')
   onEscape(): void {
     if (this.shapePreview() !== null) {
@@ -1791,6 +1871,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     const wantsUndo = modifier && key === 'z' && !event.shiftKey;
     const wantsRedo = modifier && (key === 'y' || (key === 'z' && event.shiftKey));
     if (wantsUndo || wantsRedo) {
+      if (!this.undoRedoEnabled) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       const applied = wantsUndo ? this.undoWhiteboardAction() : this.redoWhiteboardAction();
       if (applied) {
         event.preventDefault();
@@ -1999,8 +2084,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     const wrap = this.wrapRef()?.nativeElement;
     const viewW = wrap?.clientWidth ?? WORKSPACE_WIDTH;
     const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
-    const minX = Math.min(0, viewW - WORKSPACE_WIDTH);
-    const minY = Math.min(0, viewH - WORKSPACE_HEIGHT);
+    const scaledW = WORKSPACE_WIDTH * this.zoomLevel();
+    const scaledH = WORKSPACE_HEIGHT * this.zoomLevel();
+    const minX = Math.min(0, viewW - scaledW);
+    const minY = Math.min(0, viewH - scaledH);
     this.panX.set(Math.max(minX, Math.min(0, x)));
     this.panY.set(Math.max(minY, Math.min(0, y)));
   }
@@ -2009,7 +2096,18 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     const wrap = this.wrapRef()?.nativeElement;
     const viewW = wrap?.clientWidth ?? WORKSPACE_WIDTH;
     const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
-    this.setPan((viewW - WORKSPACE_WIDTH) / 2, (viewH - WORKSPACE_HEIGHT) / 2);
+    this.setPan(
+      (viewW - WORKSPACE_WIDTH * this.zoomLevel()) / 2,
+      (viewH - WORKSPACE_HEIGHT * this.zoomLevel()) / 2
+    );
+  }
+
+  toScreenX(wx: number): number {
+    return this.panX() + wx * this.zoomLevel();
+  }
+
+  toScreenY(wy: number): number {
+    return this.panY() + wy * this.zoomLevel();
   }
 
   private updateCursorPos(event: PointerEvent): void {
@@ -2084,19 +2182,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       }
       return;
     }
-    const points = (event.points ?? []) as WhiteboardPoint[];
-    const isErase = event.eventType === 'ERASE';
-    const color = isErase ? BOARD_BACKGROUND : event.color ?? '#000000';
-    const width = isErase ? event.eraserSize ?? 24 : event.strokeWidth ?? 4;
-    this.renderStroke(points, color, width);
-    this.boardStrokes.push({
-      id: event.clientEventId ?? undefined,
-      eventType: isErase ? 'ERASE' : 'DRAW',
-      color: isErase ? null : event.color ?? '#000000',
-      strokeWidth: isErase ? null : event.strokeWidth ?? 4,
-      eraserSize: isErase ? event.eraserSize ?? 24 : null,
-      points,
-    });
+    this.applyRemoteStrokeEvent(event);
   }
 
   /** Inserta o actualiza un objeto de texto a partir de un evento TEXT del docente. */
@@ -2277,39 +2363,45 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
   }
 
-  private broadcastStrokeHistoryChange(
-    action: WhiteboardUndoAction,
-    direction: 'undo' | 'redo',
-    target: WhiteboardStrokeRecord | null,
-    expected: WhiteboardStrokeRecord | null
-  ): void {
-    if (action.type === 'ERASE_STROKE' && direction === 'undo' && target === null) {
-      this.broadcastStrokeOverlaySequence();
-      return;
-    }
-    if (target !== null) {
-      this.broadcastStrokeRecord(target);
-      return;
-    }
-    if (expected?.eventType === 'DRAW') {
-      this.broadcastStrokeErase(expected);
-    }
+  private applyRemoteStrokeEvent(event: WhiteboardDrawEventResponse): void {
+    const stroke = this.strokeRecordFromEvent(event);
+    this.boardStrokes = this.upsertStrokeRecord(this.boardStrokes, stroke);
+    this.redrawCanvasFromStrokes();
   }
 
-  private broadcastStrokeOverlaySequence(): void {
+  private strokeRecordFromEvent(event: WhiteboardDrawEventResponse): WhiteboardStrokeRecord {
+    const isErase = event.eventType === 'ERASE';
+    return {
+      id: event.clientEventId ?? undefined,
+      eventType: isErase ? 'ERASE' : 'DRAW',
+      color: isErase ? null : event.color ?? '#000000',
+      strokeWidth: isErase ? null : event.strokeWidth ?? 4,
+      eraserSize: isErase ? event.eraserSize ?? 24 : null,
+      points: ((event.points ?? []) as WhiteboardPoint[]).map((point) => ({ ...point })),
+    };
+  }
+
+  private upsertStrokeRecord(
+    strokes: WhiteboardStrokeRecord[],
+    stroke: WhiteboardStrokeRecord
+  ): WhiteboardStrokeRecord[] {
+    if (stroke.id === undefined) {
+      return [...strokes, this.cloneStrokeRecord(stroke)];
+    }
+    const index = strokes.findIndex((current) => current.id === stroke.id);
+    if (index === -1) {
+      return [...strokes, this.cloneStrokeRecord(stroke)];
+    }
+    const next = [...strokes];
+    next[index] = this.cloneStrokeRecord(stroke);
+    return next;
+  }
+
+  private broadcastBoardRecompose(): void {
+    this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId: this.newEventId('recompose') });
     for (const stroke of this.boardStrokes) {
       this.broadcastStrokeRecord(stroke);
     }
-  }
-
-  private broadcastStrokeErase(stroke: WhiteboardStrokeRecord): void {
-    this.realtime.sendDraw({
-      eventType: 'ERASE',
-      tool: 'ERASER',
-      eraserSize: Math.max((stroke.strokeWidth ?? 4) + 6, 12),
-      points: stroke.points,
-      clientEventId: this.newEventId('undo-stroke'),
-    });
   }
 
   private broadcastStrokeRecord(stroke: WhiteboardStrokeRecord): void {
