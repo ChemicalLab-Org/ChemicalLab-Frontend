@@ -32,9 +32,20 @@ import {
   WhiteboardPoint,
   WhiteboardSessionResponse,
   WhiteboardSessionStatus,
+  WhiteboardShapeType,
   WhiteboardStrokeRecord,
   WhiteboardTextRun,
 } from '../../../shared/models';
+import {
+  WhiteboardShapeObject,
+  arrowHeadPoints,
+  drawShapeItem,
+  eraserHitsShape,
+  isShapeTooSmall,
+  localShapeId,
+  moveShape,
+  normalizedShapeBox,
+} from '../../../shared/whiteboard/whiteboard-shape.util';
 import {
   WhiteboardTextObject,
   caretToEnd,
@@ -65,7 +76,8 @@ const SNAPSHOT_MAX_WIDTH = 2400;
 const PEN_CURSOR =
   'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMyAxNy4yNVYyMWgzLjc1TDE3LjgxIDkuOTRsLTMuNzUtMy43NUwzIDE3LjI1eiIgZmlsbD0iIzFhMWExNiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0yMC43MSA3LjA0YTEgMSAwIDAgMCAwLTEuNDFsLTIuMzQtMi4zNGExIDEgMCAwIDAtMS40MSAwbC0xLjgzIDEuODMgMy43NSAzLjc1IDEuODMtMS44M3oiIGZpbGw9IiMxZDllNzUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=") 3 25, crosshair';
 
-type DrawTool = 'PEN' | 'ERASER' | 'TEXT' | 'SELECT' | 'MOVE';
+type ShapeTool = WhiteboardShapeType;
+type DrawTool = 'PEN' | 'ERASER' | 'TEXT' | 'SELECT' | 'MOVE' | ShapeTool;
 
 interface TextDraft {
   readonly screenX: number;
@@ -76,6 +88,7 @@ interface TextDraft {
 
 /** Texto colocado sobre la pizarra como objeto movible (coordenadas del workspace). */
 type TextItem = WhiteboardTextObject;
+type ShapeItem = WhiteboardShapeObject;
 
 @Component({
   selector: 'app-teacher-whiteboard-editor',
@@ -222,6 +235,46 @@ type TextItem = WhiteboardTextObject;
                       <button
                         type="button"
                         class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'RECTANGLE'"
+                        [disabled]="!canDraw()"
+                        title="Rectangulo"
+                        (click)="selectTool('RECTANGLE')"
+                      >
+                        <span class="material-icons">crop_square</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'CIRCLE'"
+                        [disabled]="!canDraw()"
+                        title="Circulo"
+                        (click)="selectTool('CIRCLE')"
+                      >
+                        <span class="material-icons">radio_button_unchecked</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'LINE'"
+                        [disabled]="!canDraw()"
+                        title="Linea"
+                        (click)="selectTool('LINE')"
+                      >
+                        <span class="material-icons">horizontal_rule</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'ARROW'"
+                        [disabled]="!canDraw()"
+                        title="Flecha"
+                        (click)="selectTool('ARROW')"
+                      >
+                        <span class="material-icons">arrow_forward</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
                         [class.tool-btn--active]="tool() === 'SELECT'"
                         [disabled]="!canDraw()"
                         title="Seleccionar"
@@ -280,7 +333,7 @@ type TextItem = WhiteboardTextObject;
                         </label>
                       }
 
-                      @if (tool() === 'PEN') {
+                      @if (tool() === 'PEN' || isShapeTool(tool())) {
                         <label class="tool-field tool-field--range" title="Grosor del trazo">
                           <span class="material-icons">line_weight</span>
                           <input
@@ -385,6 +438,108 @@ type TextItem = WhiteboardTextObject;
                     (pointerleave)="onPointerLeave($event)"
                     (pointercancel)="onPointerUp($event)"
                   ></canvas>
+
+                  <svg
+                    class="shape-layer"
+                    [style.transform]="boardTransform()"
+                    [attr.viewBox]="'0 0 ' + workspaceWidth + ' ' + workspaceHeight"
+                    aria-hidden="true"
+                  >
+                    @for (shape of shapeItems(); track shape.id) {
+                      <g
+                        class="shape-item"
+                        [class.shape-item--interactive]="canSelectObject()"
+                        [class.shape-item--selected]="selectedShapeId() === shape.id"
+                        [class.shape-item--dragging]="draggingShapeId() === shape.id"
+                        (pointerdown)="onShapePointerDown(shape, $event)"
+                        (pointermove)="onShapePointerMove($event)"
+                        (pointerup)="onShapePointerUp($event)"
+                        (pointercancel)="onShapePointerUp($event)"
+                      >
+                        @if (shape.type === 'RECTANGLE') {
+                          <rect
+                            [attr.x]="shapeBox(shape).x"
+                            [attr.y]="shapeBox(shape).y"
+                            [attr.width]="shapeBox(shape).width"
+                            [attr.height]="shapeBox(shape).height"
+                            [attr.stroke]="shape.color"
+                            [attr.stroke-width]="shape.strokeWidth"
+                          />
+                        } @else if (shape.type === 'CIRCLE') {
+                          <ellipse
+                            [attr.cx]="shapeBox(shape).x + shapeBox(shape).width / 2"
+                            [attr.cy]="shapeBox(shape).y + shapeBox(shape).height / 2"
+                            [attr.rx]="shapeBox(shape).width / 2"
+                            [attr.ry]="shapeBox(shape).height / 2"
+                            [attr.stroke]="shape.color"
+                            [attr.stroke-width]="shape.strokeWidth"
+                          />
+                        } @else {
+                          <line
+                            class="shape-hit"
+                            [attr.x1]="shape.x1"
+                            [attr.y1]="shape.y1"
+                            [attr.x2]="shape.x2"
+                            [attr.y2]="shape.y2"
+                            [attr.stroke-width]="shapeHitWidth(shape)"
+                          />
+                          <line
+                            [attr.x1]="shape.x1"
+                            [attr.y1]="shape.y1"
+                            [attr.x2]="shape.x2"
+                            [attr.y2]="shape.y2"
+                            [attr.stroke]="shape.color"
+                            [attr.stroke-width]="shape.strokeWidth"
+                          />
+                          @if (shape.type === 'ARROW') {
+                            <polygon
+                              [attr.points]="shapeArrowPoints(shape)"
+                              [attr.fill]="shape.color"
+                            />
+                          }
+                        }
+                      </g>
+                    }
+
+                    @if (shapePreview(); as preview) {
+                      <g class="shape-preview">
+                        @if (preview.type === 'RECTANGLE') {
+                          <rect
+                            [attr.x]="shapeBox(preview).x"
+                            [attr.y]="shapeBox(preview).y"
+                            [attr.width]="shapeBox(preview).width"
+                            [attr.height]="shapeBox(preview).height"
+                            [attr.stroke]="preview.color"
+                            [attr.stroke-width]="preview.strokeWidth"
+                          />
+                        } @else if (preview.type === 'CIRCLE') {
+                          <ellipse
+                            [attr.cx]="shapeBox(preview).x + shapeBox(preview).width / 2"
+                            [attr.cy]="shapeBox(preview).y + shapeBox(preview).height / 2"
+                            [attr.rx]="shapeBox(preview).width / 2"
+                            [attr.ry]="shapeBox(preview).height / 2"
+                            [attr.stroke]="preview.color"
+                            [attr.stroke-width]="preview.strokeWidth"
+                          />
+                        } @else {
+                          <line
+                            [attr.x1]="preview.x1"
+                            [attr.y1]="preview.y1"
+                            [attr.x2]="preview.x2"
+                            [attr.y2]="preview.y2"
+                            [attr.stroke]="preview.color"
+                            [attr.stroke-width]="preview.strokeWidth"
+                          />
+                          @if (preview.type === 'ARROW') {
+                            <polygon
+                              [attr.points]="shapeArrowPoints(preview)"
+                              [attr.fill]="preview.color"
+                            />
+                          }
+                        }
+                      </g>
+                    }
+                  </svg>
 
                   @if (showEraserCursor()) {
                     <div
@@ -577,6 +732,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
   readonly userRole = 'Docente';
+  readonly workspaceWidth = WORKSPACE_WIDTH;
+  readonly workspaceHeight = WORKSPACE_HEIGHT;
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('boardCanvas');
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
@@ -586,6 +743,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
   private currentStroke: WhiteboardPoint[] = [];
+  private shapeStart: WhiteboardPoint | null = null;
   /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
   private readonly ownEventIds = new Set<string>();
   private snapshotObjectUrl: string | null = null;
@@ -622,6 +780,15 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   /** id del texto que se está arrastrando, o null. */
   readonly draggingTextId = signal<string | null>(null);
   private textDragStart = { wx: 0, wy: 0, clientX: 0, clientY: 0 };
+  readonly shapeItems = signal<ShapeItem[]>([]);
+  readonly shapePreview = signal<ShapeItem | null>(null);
+  readonly selectedShapeId = signal<string | null>(null);
+  readonly draggingShapeId = signal<string | null>(null);
+  private shapeDragStart: { shape: ShapeItem | null; clientX: number; clientY: number } = {
+    shape: null,
+    clientX: 0,
+    clientY: 0,
+  };
   /** Evita que el editor se confirme al tocar controles de tamaño/color (que roban el foco). */
   private keepEditorOpen = false;
 
@@ -702,6 +869,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     if (this.tool() === 'TEXT') {
       return 'text';
+    }
+    if (this.isShapeTool(this.tool())) {
+      return 'crosshair';
     }
     return PEN_CURSOR;
   });
@@ -784,6 +954,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (this.tool() === 'TEXT' && tool !== 'TEXT') {
       this.commitText();
     }
+    if (this.tool() !== tool) {
+      this.cancelShapePreview();
+    }
     this.tool.set(tool);
     if (tool !== 'ERASER') {
       this.cursorPos.set(null);
@@ -819,7 +992,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
-    if (this.textDraft() !== null) {
+    if (this.shapePreview() !== null) {
+      this.cancelShapePreview();
+    } else if (this.textDraft() !== null) {
       this.cancelText();
     } else if (this.finalizeOpen()) {
       this.finalizeOpen.set(false);
@@ -838,7 +1013,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (this.textDraft() !== null || this.isEditableTarget(event.target)) {
       return;
     }
-    if (this.deleteSelectedText()) {
+    if (this.deleteSelectedObject()) {
       event.preventDefault();
       event.stopPropagation();
     }
@@ -847,19 +1022,24 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   // ─── Puntero: dibujo, texto y desplazamiento ──────────────────────────────────
 
   onPointerDown(event: PointerEvent): void {
-    if (this.tool() === 'MOVE') {
+    const activeTool = this.tool();
+    if (activeTool === 'MOVE') {
       this.startPan(event);
       return;
     }
-    if (this.tool() === 'SELECT') {
+    if (activeTool === 'SELECT') {
       this.clearSelection();
       return;
     }
-    if (this.tool() === 'TEXT') {
+    if (activeTool === 'TEXT') {
       this.placeText(event);
       return;
     }
     if (!this.canDraw()) {
+      return;
+    }
+    if (this.isShapeTool(activeTool)) {
+      this.startShape(event, activeTool);
       return;
     }
     const ctx = this.ensureCanvas();
@@ -874,6 +1054,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.renderStroke(this.currentStroke, this.activeColor(), this.activeWidth());
     if (this.tool() === 'ERASER') {
       this.eraseTextsAt(start);
+      this.eraseShapesAt(start);
     }
   }
 
@@ -889,6 +1070,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     event.preventDefault();
+    if (this.shapeStart !== null && this.isShapeTool(this.tool())) {
+      this.updateShapePreview(this.toCanvasPoint(event));
+      return;
+    }
     const point = this.toCanvasPoint(event);
     const previous = this.currentStroke[this.currentStroke.length - 1];
     this.currentStroke.push(point);
@@ -898,6 +1083,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     // El borrador también elimina los objetos de texto que toca (no solo trazos del lienzo).
     if (this.tool() === 'ERASER') {
       this.eraseTextsAt(point);
+      this.eraseShapesAt(point);
     }
   }
 
@@ -929,6 +1115,24 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.scheduleStateSave();
   }
 
+  private eraseShapesAt(point: WhiteboardPoint): void {
+    const shapes = this.shapeItems();
+    if (shapes.length === 0) {
+      return;
+    }
+    const radius = this.eraserSize() / 2;
+    const hit = shapes.filter((shape) => eraserHitsShape(shape, point.x, point.y, radius));
+    if (hit.length === 0) {
+      return;
+    }
+    const hitIds = new Set(hit.map((shape) => shape.id));
+    this.shapeItems.update((items) => items.filter((shape) => !hitIds.has(shape.id)));
+    for (const id of hitIds) {
+      this.broadcastShapeDelete(id);
+    }
+    this.scheduleStateSave();
+  }
+
   onPointerUp(event: PointerEvent): void {
     if (this.panning) {
       this.endPan(event);
@@ -938,6 +1142,17 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     this.drawing = false;
+    if (this.shapeStart !== null) {
+      const preview = this.shapePreview();
+      this.cancelShapePreview();
+      (event.target as HTMLCanvasElement).releasePointerCapture?.(event.pointerId);
+      if (preview !== null && !isShapeTooSmall(preview) && this.canDraw()) {
+        this.shapeItems.update((items) => [...items, preview]);
+        this.broadcastShapeUpsert(preview);
+        this.scheduleStateSave();
+      }
+      return;
+    }
     if (this.currentStroke.length === 0) {
       return;
     }
@@ -1275,6 +1490,16 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private clearSelection(): void {
     this.selectedTextId.set(null);
     this.draggingTextId.set(null);
+    this.selectedShapeId.set(null);
+    this.draggingShapeId.set(null);
+    this.shapeDragStart = { shape: null, clientX: 0, clientY: 0 };
+  }
+
+  private deleteSelectedObject(): boolean {
+    if (this.deleteSelectedText()) {
+      return true;
+    }
+    return this.deleteSelectedShape();
   }
 
   private deleteSelectedText(): boolean {
@@ -1294,6 +1519,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     return true;
   }
 
+  private deleteSelectedShape(): boolean {
+    const id = this.selectedShapeId();
+    if (id === null || !this.canDraw()) {
+      return false;
+    }
+    const exists = this.shapeItems().some((shape) => shape.id === id);
+    if (!exists) {
+      this.clearSelection();
+      return false;
+    }
+    this.shapeItems.update((items) => items.filter((shape) => shape.id !== id));
+    this.clearSelection();
+    this.broadcastShapeDelete(id);
+    this.scheduleStateSave();
+    return true;
+  }
+
   private clampTextPosition(item: TextItem, wx: number, wy: number): { wx: number; wy: number } {
     const ctx = this.ensureCanvas();
     const width = ctx === null ? 0 : measureTextWidth(ctx, item);
@@ -1303,6 +1545,83 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       wx: Math.round(Math.max(0, Math.min(maxX, wx)) * 100) / 100,
       wy: Math.round(Math.max(0, Math.min(maxY, wy)) * 100) / 100,
     };
+  }
+
+  private startShape(event: PointerEvent, type: ShapeTool): void {
+    event.preventDefault();
+    (event.target as HTMLCanvasElement).setPointerCapture?.(event.pointerId);
+    const start = this.toCanvasPoint(event);
+    this.drawing = true;
+    this.shapeStart = start;
+    this.shapePreview.set({
+      id: localShapeId(),
+      type,
+      x1: start.x,
+      y1: start.y,
+      x2: start.x,
+      y2: start.y,
+      color: this.color(),
+      strokeWidth: this.strokeWidth(),
+    });
+  }
+
+  private updateShapePreview(point: WhiteboardPoint): void {
+    const preview = this.shapePreview();
+    if (preview === null) {
+      return;
+    }
+    this.shapePreview.set({ ...preview, x2: point.x, y2: point.y });
+  }
+
+  private cancelShapePreview(): void {
+    this.shapeStart = null;
+    this.shapePreview.set(null);
+  }
+
+  onShapePointerDown(shape: ShapeItem, event: PointerEvent): void {
+    if (!this.canSelectObject()) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    (event.target as SVGElement).setPointerCapture?.(event.pointerId);
+    this.selectedTextId.set(null);
+    this.draggingTextId.set(null);
+    this.selectedShapeId.set(shape.id);
+    this.draggingShapeId.set(shape.id);
+    this.shapeDragStart = { shape, clientX: event.clientX, clientY: event.clientY };
+  }
+
+  onShapePointerMove(event: PointerEvent): void {
+    const id = this.draggingShapeId();
+    const start = this.shapeDragStart.shape;
+    if (id === null || start === null) {
+      return;
+    }
+    event.preventDefault();
+    const dx = event.clientX - this.shapeDragStart.clientX;
+    const dy = event.clientY - this.shapeDragStart.clientY;
+    const moved = moveShape(start, dx, dy, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
+    this.shapeItems.update((items) => items.map((shape) => (shape.id === id ? moved : shape)));
+  }
+
+  onShapePointerUp(event: PointerEvent): void {
+    const id = this.draggingShapeId();
+    const start = this.shapeDragStart.shape;
+    if (id === null || start === null) {
+      return;
+    }
+    (event.target as SVGElement).releasePointerCapture?.(event.pointerId);
+    this.draggingShapeId.set(null);
+    this.shapeDragStart = { shape: null, clientX: 0, clientY: 0 };
+    const moved = this.shapeItems().find((shape) => shape.id === id);
+    if (
+      moved &&
+      (moved.x1 !== start.x1 || moved.y1 !== start.y1 || moved.x2 !== start.x2 || moved.y2 !== start.y2)
+    ) {
+      this.broadcastShapeUpsert(moved);
+      this.scheduleStateSave();
+    }
   }
 
 
@@ -1317,8 +1636,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   confirmClear(): void {
     this.clearOpen.set(false);
+    this.cancelShapePreview();
     this.clearCanvas();
     this.boardStrokes = [];
+    this.shapeItems.set([]);
     this.clearSelection();
     const clientEventId = this.newEventId();
     this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId });
@@ -1333,6 +1654,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       next: (updated) => {
         this.session.set(updated);
         this.cancelText();
+        this.cancelShapePreview();
         this.clearSelection();
         this.busy.set(false);
         this.showBanner('Sesión pausada. El dibujo está bloqueado.', 'warning');
@@ -1355,6 +1677,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   askFinalize(): void {
     this.commitText();
+    this.cancelShapePreview();
     this.finalizeError.set(null);
     this.finalizeOpen.set(true);
   }
@@ -1454,8 +1777,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     if (event.eventType === 'CLEAR') {
       this.cancelText();
+      this.cancelShapePreview();
       this.clearCanvas();
       this.boardStrokes = [];
+      this.shapeItems.set([]);
       this.scheduleStateSave();
       return;
     }
@@ -1477,6 +1802,22 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           this.clearSelection();
         }
         this.textItems.update((items) => items.filter((i) => i.id !== id));
+        this.scheduleStateSave();
+      }
+      return;
+    }
+    if (event.eventType === 'SHAPE') {
+      this.upsertRemoteShape(event);
+      this.scheduleStateSave();
+      return;
+    }
+    if (event.eventType === 'SHAPE_DELETE') {
+      if (event.shapeId !== null) {
+        const id = event.shapeId;
+        if (this.selectedShapeId() === id) {
+          this.clearSelection();
+        }
+        this.shapeItems.update((items) => items.filter((shape) => shape.id !== id));
         this.scheduleStateSave();
       }
       return;
@@ -1506,6 +1847,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       case 'SESSION_PAUSED':
         this.session.set({ ...current, status: 'PAUSED' });
         this.cancelText();
+        this.cancelShapePreview();
         this.clearSelection();
         this.showBanner('La sesión fue pausada.', 'warning');
         break;
@@ -1515,6 +1857,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         break;
       case 'SESSION_CLOSED':
         this.cancelText();
+        this.cancelShapePreview();
         this.clearSelection();
         this.realtime.disconnect();
         this.reload();
@@ -1558,9 +1901,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     ctx.fillStyle = BOARD_BACKGROUND;
     ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
-    // Los textos son objetos sobre la pizarra: "Borrar todo" también los retira.
+    // Textos y formas son objetos sobre la pizarra: "Borrar todo" tambien los retira.
     this.clearSelection();
     this.textItems.set([]);
+    this.shapeItems.set([]);
   }
 
   private renderSegment(from: WhiteboardPoint, to: WhiteboardPoint, color: string, width: number): void {
@@ -1647,6 +1991,22 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     return this.tool() === 'ERASER' ? this.eraserSize() : this.strokeWidth();
   }
 
+  isShapeTool(tool: string): tool is ShapeTool {
+    return tool === 'RECTANGLE' || tool === 'CIRCLE' || tool === 'LINE' || tool === 'ARROW';
+  }
+
+  shapeBox(shape: ShapeItem): { x: number; y: number; width: number; height: number } {
+    return normalizedShapeBox(shape);
+  }
+
+  shapeArrowPoints(shape: ShapeItem): string {
+    return arrowHeadPoints(shape);
+  }
+
+  shapeHitWidth(shape: ShapeItem): number {
+    return Math.max(12, shape.strokeWidth + 8);
+  }
+
   private isEditableTarget(target: EventTarget | null): boolean {
     if (!(target instanceof HTMLElement)) {
       return false;
@@ -1687,6 +2047,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     cctx.drawImage(canvas, 0, 0);
+    for (const shape of this.shapeItems()) {
+      drawShapeItem(cctx, shape);
+    }
     for (const item of this.textItems()) {
       drawTextItem(cctx, item);
     }
@@ -1758,6 +2121,27 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.realtime.sendDraw({ eventType: 'TEXT_DELETE', tool: 'TEXT', textId, clientEventId });
   }
 
+  private broadcastShapeUpsert(shape: ShapeItem): void {
+    const clientEventId = this.newEventId();
+    this.realtime.sendDraw({
+      eventType: 'SHAPE',
+      tool: shape.type,
+      shapeId: shape.id,
+      color: shape.color,
+      strokeWidth: shape.strokeWidth,
+      points: [
+        { x: shape.x1, y: shape.y1 },
+        { x: shape.x2, y: shape.y2 },
+      ],
+      clientEventId,
+    });
+  }
+
+  private broadcastShapeDelete(shapeId: string): void {
+    const clientEventId = this.newEventId();
+    this.realtime.sendDraw({ eventType: 'SHAPE_DELETE', tool: 'RECTANGLE', shapeId, clientEventId });
+  }
+
   /** Inserta o actualiza en el lienzo del docente un texto recibido de un estudiante. */
   private upsertRemoteText(event: WhiteboardDrawEventResponse): void {
     const point = event.points?.[0];
@@ -1779,6 +2163,34 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       }
       const next = [...items];
       next[index] = item;
+      return next;
+    });
+  }
+
+  private upsertRemoteShape(event: WhiteboardDrawEventResponse): void {
+    const points = event.points ?? [];
+    const start = points[0];
+    const end = points[1];
+    if (event.shapeId === null || !start || !end || !this.isShapeTool(event.tool)) {
+      return;
+    }
+    const shape: ShapeItem = {
+      id: event.shapeId,
+      type: event.tool,
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      color: event.color ?? '#1d9e75',
+      strokeWidth: event.strokeWidth ?? 4,
+    };
+    this.shapeItems.update((items) => {
+      const index = items.findIndex((item) => item.id === shape.id);
+      if (index === -1) {
+        return [...items, shape];
+      }
+      const next = [...items];
+      next[index] = shape;
       return next;
     });
   }
@@ -1816,6 +2228,16 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         color: t.color,
         size: t.size,
         runs: t.runs,
+      })),
+      shapes: this.shapeItems().map((shape) => ({
+        id: shape.id,
+        type: shape.type,
+        x1: shape.x1,
+        y1: shape.y1,
+        x2: shape.x2,
+        y2: shape.y2,
+        color: shape.color,
+        strokeWidth: shape.strokeWidth,
       })),
     };
     let json: string;
@@ -1873,6 +2295,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     // estado guardado es previo a la carga, así que no se solapan; se vuelven a pintar tras limpiar.
     const pending = this.boardStrokes;
     const pendingTexts = this.textItems();
+    const pendingShapes = this.shapeItems();
     this.clearCanvas();
     this.boardStrokes = [...restored, ...pending];
     for (const stroke of this.boardStrokes) {
@@ -1900,6 +2323,27 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       }
     }
     this.textItems.set(mergedTexts);
+    const shapes = Array.isArray(snapshot.shapes) ? snapshot.shapes : [];
+    const restoredShapes = shapes.map((shape) => ({
+      id: shape.id,
+      type: shape.type,
+      x1: shape.x1,
+      y1: shape.y1,
+      x2: shape.x2,
+      y2: shape.y2,
+      color: shape.color,
+      strokeWidth: shape.strokeWidth,
+    }));
+    const mergedShapes = [...restoredShapes];
+    for (const pendingShape of pendingShapes) {
+      const index = mergedShapes.findIndex((shape) => shape.id === pendingShape.id);
+      if (index === -1) {
+        mergedShapes.push(pendingShape);
+      } else {
+        mergedShapes[index] = pendingShape;
+      }
+    }
+    this.shapeItems.set(mergedShapes);
   }
 
   private finishBoardStateLoad(): void {
