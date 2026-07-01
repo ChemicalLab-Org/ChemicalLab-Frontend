@@ -1621,7 +1621,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       ];
     }
     this.redrawCanvasFromStrokes();
-    this.broadcastBoardRecompose();
+    this.broadcastStrokeHistoryChange(action, direction, target, expected);
     return true;
   }
 
@@ -2225,17 +2225,39 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
   }
 
-  private broadcastBoardRecompose(): void {
-    this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId: this.newEventId('recompose') });
+  private broadcastStrokeHistoryChange(
+    action: WhiteboardUndoAction,
+    direction: 'undo' | 'redo',
+    target: WhiteboardStrokeRecord | null,
+    expected: WhiteboardStrokeRecord | null
+  ): void {
+    if (action.type === 'ERASE_STROKE' && direction === 'undo' && target === null) {
+      this.broadcastStrokeOverlaySequence();
+      return;
+    }
+    if (target !== null) {
+      this.broadcastStrokeRecord(target);
+      return;
+    }
+    if (expected?.eventType === 'DRAW') {
+      this.broadcastStrokeErase(expected);
+    }
+  }
+
+  private broadcastStrokeOverlaySequence(): void {
     for (const stroke of this.boardStrokes) {
       this.broadcastStrokeRecord(stroke);
     }
-    for (const shape of this.shapeItems()) {
-      this.broadcastShapeUpsert(shape);
-    }
-    for (const item of this.textItems()) {
-      this.broadcastTextUpsert(item);
-    }
+  }
+
+  private broadcastStrokeErase(stroke: WhiteboardStrokeRecord): void {
+    this.realtime.sendDraw({
+      eventType: 'ERASE',
+      tool: 'ERASER',
+      eraserSize: Math.max((stroke.strokeWidth ?? 4) + 6, 12),
+      points: stroke.points,
+      clientEventId: this.newEventId('undo-stroke'),
+    });
   }
 
   private broadcastStrokeRecord(stroke: WhiteboardStrokeRecord): void {
