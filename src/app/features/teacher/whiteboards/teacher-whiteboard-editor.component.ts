@@ -72,6 +72,9 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
 const VIEW_FIT_PADDING = 48;
+const PAN_VISIBLE_RATIO = 0.24;
+const PAN_VISIBLE_MIN = 96;
+const PAN_VISIBLE_MAX = 320;
 // Deshacer/rehacer queda desactivado temporalmente hasta estabilizar la sincronizacion colaborativa.
 const UNDO_REDO_ENABLED = false;
 
@@ -1097,6 +1100,11 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     requestAnimationFrame(() => this.setPan(this.panX(), this.panY()));
   }
 
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    requestAnimationFrame(() => this.setPan(this.panX(), this.panY()));
+  }
+
   zoomOut(): void {
     this.setZoom(this.zoomLevel() - ZOOM_STEP);
   }
@@ -1382,21 +1390,27 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     (event.target as HTMLCanvasElement).releasePointerCapture?.(event.pointerId);
   }
 
-  /** Limita el desplazamiento para que el lienzo no se salga por completo del visor. */
+  /** Limita el desplazamiento para que siempre quede una referencia visible del workspace. */
   private setPan(x: number, y: number): void {
     const wrap = this.wrapRef()?.nativeElement;
     const viewW = wrap?.clientWidth ?? WORKSPACE_WIDTH;
     const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
     const scaledW = WORKSPACE_WIDTH * this.zoomLevel();
     const scaledH = WORKSPACE_HEIGHT * this.zoomLevel();
-    const centeredX = (viewW - scaledW) / 2;
-    const centeredY = (viewH - scaledH) / 2;
-    const minX = scaledW <= viewW ? centeredX : viewW - scaledW;
-    const maxX = scaledW <= viewW ? centeredX : 0;
-    const minY = scaledH <= viewH ? centeredY : viewH - scaledH;
-    const maxY = scaledH <= viewH ? centeredY : 0;
-    this.panX.set(Math.max(minX, Math.min(maxX, x)));
-    this.panY.set(Math.max(minY, Math.min(maxY, y)));
+    this.panX.set(this.clampPanAxis(x, viewW, scaledW));
+    this.panY.set(this.clampPanAxis(y, viewH, scaledH));
+  }
+
+  private clampPanAxis(value: number, viewSize: number, scaledSize: number): number {
+    const visibleAnchor = this.panVisibleAnchor(viewSize, scaledSize);
+    const min = visibleAnchor - scaledSize;
+    const max = viewSize - visibleAnchor;
+    return Math.max(min, Math.min(max, value));
+  }
+
+  private panVisibleAnchor(viewSize: number, scaledSize: number): number {
+    const base = Math.max(1, Math.min(viewSize, scaledSize));
+    return Math.min(base, PAN_VISIBLE_MAX, Math.max(PAN_VISIBLE_MIN, base * PAN_VISIBLE_RATIO));
   }
 
   /** Centra la vista del workspace en el visor. */
