@@ -9,7 +9,6 @@
   overflow: hidden;
   background: var(--color-neutral-50);
 
-  // Pantalla completa: el editor ocupa toda la ventana, sin sidebar ni panel de participantes.
   &--fullscreen {
     position: fixed;
     inset: 0;
@@ -29,12 +28,7 @@
       flex-direction: column;
       flex: 1;
       min-height: 0;
-      // Evita que el ancho intrínseco del lienzo (resolución lógica de 3200px) estire el
-      // contenedor más allá del viewport y empuje los controles de la toolbar fuera de la pantalla.
       min-width: 0;
-      // El layout en cuadrícula usa align-items:start; en columna eso impide que el área del
-      // lienzo se estire a lo ancho y el visor tomaría su ancho intrínseco (perdiendo el borde
-      // derecho fuera de pantalla). Se fuerza el estiramiento para que el límite derecho se vea.
       align-items: stretch;
     }
 
@@ -51,7 +45,7 @@
     .board-viewport {
       flex: 1;
       height: auto;
-      min-height: 0; // permite que el visor se ajuste al alto disponible sin desbordar
+      min-height: 0;
       min-width: 0;
       width: 100%;
     }
@@ -63,6 +57,10 @@
   overflow-y: auto;
   padding: 1.5rem 2rem;
   background: var(--color-neutral-50);
+
+  @media (max-width: 760px) {
+    padding: var(--space-4);
+  }
 }
 
 .back-link {
@@ -85,6 +83,12 @@
   &:hover {
     text-decoration: underline;
   }
+
+  &:focus-visible {
+    outline: 3px solid rgba(29, 158, 117, 0.22);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
+  }
 }
 
 .status-dot {
@@ -100,7 +104,6 @@
   align-items: center;
 }
 
-// Encabezado del editor
 .editor-header {
   margin-bottom: var(--space-4);
 
@@ -157,7 +160,6 @@
   }
 }
 
-// Cuadrícula editor + participantes
 .editor-grid {
   display: grid;
   grid-template-columns: 1fr 300px;
@@ -181,7 +183,6 @@
   min-width: 0;
 }
 
-// Barra de herramientas
 .toolbar {
   display: flex;
   flex-direction: column;
@@ -190,10 +191,8 @@
   background: var(--color-neutral-0);
   border: 1.5px solid var(--color-neutral-200);
   border-radius: var(--radius-lg);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
 
-  // Cada fila agrupa controles. La fila superior (herramientas + acciones) es siempre igual; la
-  // de opciones tiene altura mínima constante, de modo que cambiar de herramienta no desplaza el
-  // lienzo ni los botones Pausar/Finalizar.
   &__row {
     display: flex;
     flex-wrap: wrap;
@@ -205,20 +204,55 @@
       min-height: 40px;
       padding-top: var(--space-3);
       border-top: 1px solid var(--color-neutral-200);
+      justify-content: space-between;
     }
   }
 
   &__group {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--space-2);
 
     &--right {
       margin-left: auto;
     }
 
+    &--tools {
+      padding: 4px;
+      border: 1px solid var(--color-neutral-200);
+      border-radius: var(--radius-lg);
+      background: var(--color-neutral-50);
+    }
+
     &--tight {
       gap: var(--space-1);
+    }
+  }
+
+  &__divider {
+    width: 1px;
+    height: 24px;
+    margin-inline: 2px;
+    background: var(--color-neutral-200);
+  }
+
+  @media (max-width: 880px) {
+    padding: var(--space-3);
+
+    &__row {
+      justify-content: flex-start;
+      gap: var(--space-3);
+    }
+
+    &__group--right {
+      margin-left: 0;
+    }
+  }
+
+  @media (max-width: 560px) {
+    &__group--tools {
+      width: 100%;
     }
   }
 }
@@ -257,8 +291,6 @@
     font-size: 20px;
   }
 
-  // Íconos SVG inline (p. ej. el borrador, que no existe en el set "Material Icons" clásico).
-  // Heredan el color del botón con currentColor, por lo que respetan el estado activo (blanco).
   .tool-icon {
     width: 20px;
     height: 20px;
@@ -282,6 +314,12 @@
   &:hover:not(:disabled) {
     border-color: var(--color-primary-300);
     color: var(--color-primary-700);
+    background: var(--color-primary-50);
+  }
+
+  &:focus-visible {
+    outline: 3px solid rgba(29, 158, 117, 0.22);
+    outline-offset: 2px;
   }
 
   &--active {
@@ -297,6 +335,7 @@
   &:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+    background: var(--color-neutral-100);
   }
 }
 
@@ -321,12 +360,11 @@
   }
 
   input[type='range'] {
-    width: 96px;
+    width: clamp(84px, 18vw, 126px);
     accent-color: var(--color-primary-600);
     cursor: pointer;
   }
 
-  // Selector compacto de tamaño de texto (estilo editor de texto), sin barra deslizante.
   &__select {
     width: auto;
     min-width: 64px;
@@ -351,13 +389,11 @@
   }
 }
 
-// Visor de la pizarra: ventana que recorta el área de trabajo (workspace), mayor que el visor.
 .board-viewport {
   position: relative;
   border: 1.5px solid var(--color-neutral-200);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  // Fondo neutro del "escritorio": solo se ve al desplazarse hasta el borde del workspace.
   background:
     linear-gradient(0deg, rgba(255, 255, 255, 0.38) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.38) 1px, transparent 1px),
@@ -367,8 +403,6 @@
   height: clamp(420px, 64vh, 760px);
 }
 
-// El lienzo se muestra a escala 1:1 con su resolución lógica (workspace), por lo que el visor
-// solo muestra una parte y el desplazamiento (pan) tiene sentido. Sin tamaño CSS para no escalar.
 .board-canvas {
   display: block;
   touch-action: none;
@@ -380,8 +414,6 @@
     0 16px 36px rgba(15, 23, 42, 0.12);
 }
 
-// Cursor circular del borrador: el diámetro coincide con el tamaño del borrador (px lógicos = px
-// en pantalla al estar a escala 1:1), para que se vea el área que se borrará.
 .shape-layer {
   position: absolute;
   left: 0;
@@ -447,8 +479,6 @@
 
 .eraser-cursor {
   position: absolute;
-  // box-sizing border-box: el diámetro exterior (incluido el borde) coincide con el tamaño del
-  // borrador, que es el ancho real con el que se borra.
   box-sizing: border-box;
   border-radius: 50%;
   border: 2px solid var(--color-neutral-700);
@@ -459,8 +489,6 @@
   z-index: 3;
 }
 
-// Texto colocado sobre la pizarra como objeto movible. Por defecto no intercepta el puntero (para
-// poder dibujar/borrar/desplazar por encima); solo es seleccionable con la herramienta Seleccionar.
 .text-item {
   position: absolute;
   z-index: 4;
@@ -499,8 +527,6 @@
   }
 }
 
-// Editor de texto flotante (contenteditable) mientras se escribe/formatea; al confirmar se guarda
-// como objeto movible con formato por runs.
 .text-input {
   position: absolute;
   z-index: 5;
@@ -525,7 +551,7 @@
 .canvas-overlay {
   position: absolute;
   inset: 0;
-  z-index: 6; // por encima de textos y cursor del borrador
+  z-index: 6;
   pointer-events: none;
   display: flex;
   flex-direction: column;
@@ -565,13 +591,13 @@
   }
 }
 
-// Panel de participantes
 .participants {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   position: sticky;
   top: 0;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
 
   &__header {
     display: flex;
@@ -584,6 +610,10 @@
     font-size: var(--text-sm);
     color: var(--color-neutral-500);
     line-height: 1.5;
+    padding: var(--space-4);
+    border: 1px dashed var(--color-neutral-300);
+    border-radius: var(--radius-md);
+    background: var(--color-neutral-50);
   }
 
   &__list {
@@ -612,6 +642,11 @@
     color: var(--color-primary-700);
   }
 
+  &:focus-visible {
+    outline: 3px solid rgba(29, 158, 117, 0.22);
+    outline-offset: 2px;
+  }
+
   .material-icons {
     font-size: 20px;
   }
@@ -636,6 +671,7 @@
   }
 
   &__text {
+    flex: 1;
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--color-neutral-800);
@@ -647,6 +683,23 @@
       color: var(--color-neutral-500);
     }
   }
+
+  &__badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: var(--radius-pill);
+    background: var(--color-danger-light);
+    color: var(--color-danger-text);
+    font-size: var(--text-xs);
+    font-weight: 700;
+    white-space: nowrap;
+
+    &--enabled {
+      background: var(--color-success-light);
+      color: var(--color-success-text);
+    }
+  }
 }
 
 .participant {
@@ -656,6 +709,7 @@
   padding: var(--space-3);
   border: 1.5px solid var(--color-neutral-200);
   border-radius: var(--radius-md);
+  background: var(--color-neutral-0);
 
   &__info {
     display: flex;
@@ -683,16 +737,24 @@
   }
 
   &__perm {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
     font-size: var(--text-xs);
-    font-weight: 600;
+    font-weight: 700;
 
     &--allowed {
+      background: var(--color-success-light);
       color: var(--color-success-text);
     }
     &--blocked {
+      background: var(--color-danger-light);
       color: var(--color-danger-text);
     }
     &--global {
+      background: var(--color-neutral-100);
       color: var(--color-neutral-500);
     }
   }
@@ -702,7 +764,6 @@
   }
 }
 
-// Modo cerrado / historial
 .closed-grid {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -742,14 +803,16 @@
     margin-top: var(--space-3);
     width: 100%;
     height: auto;
+    max-height: 70vh;
+    object-fit: contain;
     border: 1.5px solid var(--color-neutral-200);
     border-radius: var(--radius-md);
     background: #fff;
     display: block;
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
   }
 }
 
-// Modales de confirmación
 .modal-overlay {
   position: fixed;
   inset: 0;

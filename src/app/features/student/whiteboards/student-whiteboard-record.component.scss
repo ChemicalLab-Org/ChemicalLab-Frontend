@@ -14,6 +14,10 @@
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem 2rem;
+
+  @media (max-width: 760px) {
+    padding: var(--space-4);
+  }
 }
 
 .status-dot {
@@ -44,6 +48,12 @@
   &:hover {
     text-decoration: underline;
   }
+
+  &:focus-visible {
+    outline: 3px solid rgba(29, 158, 117, 0.22);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
+  }
 }
 
 .record-header {
@@ -64,7 +74,7 @@
 
 .record-grid {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: var(--space-5);
   align-items: start;
 
@@ -102,21 +112,30 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
+    flex-wrap: wrap;
   }
 
   &__frame {
     margin-top: var(--space-3);
     border: 1.5px solid var(--color-neutral-200);
     border-radius: var(--radius-md);
-    background: #fff;
+    background:
+      linear-gradient(45deg, rgba(163, 163, 155, 0.08) 25%, transparent 25%),
+      linear-gradient(-45deg, rgba(163, 163, 155, 0.08) 25%, transparent 25%),
+      #fff;
+    background-size: 18px 18px;
     overflow: auto;
     max-height: 70vh;
+    padding: var(--space-3);
   }
 
   &__img {
     width: 100%;
     height: auto;
+    object-fit: contain;
     display: block;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
   }
 
   &__empty {
@@ -182,6 +201,7 @@
 
 .error-state__actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: var(--space-3);
 }

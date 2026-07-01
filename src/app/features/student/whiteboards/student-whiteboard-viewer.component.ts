@@ -235,263 +235,293 @@ const UNDO_STACK_LIMIT = 80;
             <div class="board-area">
               <!-- Barra de herramientas del estudiante (solo cuando puede interactuar) -->
               <div class="toolbar">
-                <div class="toolbar__group">
-                  @if (canDraw()) {
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'PEN'"
-                      title="Plumón"
-                      (click)="selectTool('PEN')"
-                    >
-                      <span class="material-icons">edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'ERASER'"
-                      title="Borrador"
-                      (click)="selectTool('ERASER')"
-                    >
-                      <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path
-                          fill="currentColor"
-                          d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53c-1.56 1.56-4.09 1.56-5.66 0l-3.53-3.53c-.78-.79-.78-2.05 0-2.84L13.41 3.56c.79-.78 2.05-.78 2.83 0M4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95Z"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'TEXT'"
-                      title="Texto"
-                      (click)="selectTool('TEXT')"
-                    >
-                      <span class="material-icons">title</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'RECTANGLE'"
-                      title="Rectangulo"
-                      (click)="selectTool('RECTANGLE')"
-                    >
-                      <span class="material-icons">crop_square</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'CIRCLE'"
-                      title="Circulo"
-                      (click)="selectTool('CIRCLE')"
-                    >
-                      <span class="material-icons">radio_button_unchecked</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'LINE'"
-                      title="Linea"
-                      (click)="selectTool('LINE')"
-                    >
-                      <span class="material-icons">horizontal_rule</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'ARROW'"
-                      title="Flecha"
-                      (click)="selectTool('ARROW')"
-                    >
-                      <span class="material-icons">arrow_forward</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [class.tool-btn--active]="tool() === 'SELECT'"
-                      title="Seleccionar"
-                      (click)="selectTool('SELECT')"
-                    >
-                      <span class="material-icons">near_me</span>
-                    </button>
-                  }
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    [class.tool-btn--active]="tool() === 'MOVE'"
-                    title="Mover pizarra"
-                    (click)="selectTool('MOVE')"
-                  >
-                    <span class="material-icons">pan_tool</span>
-                  </button>
-                </div>
-
-                <div class="toolbar__group toolbar__group--right">
-                  <div class="zoom-control" aria-label="Zoom de pizarra">
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [disabled]="!canZoomOut()"
-                      title="Alejar"
-                      (click)="zoomOut()"
-                    >
-                      <span class="material-icons">remove</span>
-                    </button>
-                    <span class="zoom-control__value">{{ zoomPercent() }}%</span>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [disabled]="!canZoomIn()"
-                      title="Acercar"
-                      (click)="zoomIn()"
-                    >
-                      <span class="material-icons">add</span>
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    title="Ajustar a pantalla"
-                    (click)="fitView()"
-                  >
-                    <span class="material-icons">aspect_ratio</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    title="Centrar vista"
-                    (click)="centerView()"
-                  >
-                    <span class="material-icons">center_focus_strong</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    title="Resetear vista"
-                    (click)="resetView()"
-                  >
-                    <span class="material-icons">refresh</span>
-                  </button>
-                  @if (undoRedoEnabled) {
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [disabled]="!canUndo()"
-                      title="Deshacer (Ctrl+Z)"
-                      (click)="undoWhiteboardAction()"
-                    >
-                      <span class="material-icons">undo</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="tool-btn"
-                      [disabled]="!canRedo()"
-                      title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
-                      (click)="redoWhiteboardAction()"
-                    >
-                      <span class="material-icons">redo</span>
-                    </button>
-                  }
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    [class.tool-btn--active]="fullscreen()"
-                    [title]="fullscreen() ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'"
-                    (click)="toggleFullscreen()"
-                  >
-                    <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
-                  </button>
-                </div>
-
-                @if (canDraw() && tool() !== 'MOVE' && tool() !== 'SELECT') {
-                  <div class="toolbar__group">
-                    <label class="tool-field" title="Color">
-                      <span class="material-icons">palette</span>
-                      <input
-                        type="color"
-                        [value]="color()"
-                        (mousedown)="keepEditorFocus()"
-                        (input)="onColor($event)"
-                      />
-                    </label>
-
-                    @if (tool() === 'PEN' || isShapeTool(tool())) {
-                      <label class="tool-field tool-field--range" title="Grosor del trazo">
-                        <span class="material-icons">line_weight</span>
-                        <input
-                          type="range"
-                          min="1"
-                          max="24"
-                          [value]="strokeWidth()"
-                          (input)="onStrokeWidth($event)"
-                        />
-                        <span class="tool-field__value">{{ strokeWidth() }}</span>
-                      </label>
-                    } @else if (tool() === 'ERASER') {
-                      <label class="tool-field tool-field--range" title="Tamaño del borrador">
-                        <span class="material-icons">format_size</span>
-                        <input
-                          type="range"
-                          min="8"
-                          max="80"
-                          [value]="eraserSize()"
-                          (input)="onEraserSize($event)"
-                        />
-                        <span class="tool-field__value">{{ eraserSize() }}</span>
-                      </label>
-                    } @else if (tool() === 'TEXT') {
-                      <label class="tool-field" title="Tamaño del texto">
-                        <span class="material-icons">format_size</span>
-                        <select
-                          class="select tool-field__select"
-                          [value]="textSize()"
-                          (mousedown)="keepEditorFocus()"
-                          (change)="onTextSize($event)"
-                        >
-                          @for (size of textSizes; track size) {
-                            <option [value]="size">{{ size }}</option>
-                          }
-                        </select>
-                      </label>
-
-                      <div class="toolbar__group toolbar__group--tight">
-                        <button
-                          type="button"
-                          class="tool-btn tool-btn--sm"
-                          [class.tool-btn--active]="textBold()"
-                          [disabled]="textDraft() === null"
-                          title="Negrita (selecciona texto para aplicarlo a una parte)"
-                          (mousedown)="$event.preventDefault()"
-                          (click)="applyFormat('bold')"
-                        >
-                          <span class="material-icons">format_bold</span>
-                        </button>
-                        <button
-                          type="button"
-                          class="tool-btn tool-btn--sm"
-                          [class.tool-btn--active]="textItalic()"
-                          [disabled]="textDraft() === null"
-                          title="Cursiva (selecciona texto para aplicarlo a una parte)"
-                          (mousedown)="$event.preventDefault()"
-                          (click)="applyFormat('italic')"
-                        >
-                          <span class="material-icons">format_italic</span>
-                        </button>
-                        <button
-                          type="button"
-                          class="tool-btn tool-btn--sm"
-                          [class.tool-btn--active]="textUnderline()"
-                          [disabled]="textDraft() === null"
-                          title="Subrayado (selecciona texto para aplicarlo a una parte)"
-                          (mousedown)="$event.preventDefault()"
-                          (click)="applyFormat('underline')"
-                        >
-                          <span class="material-icons">format_underlined</span>
-                        </button>
-                      </div>
+                <div class="toolbar__row">
+                  <div class="toolbar__group toolbar__group--tools" role="group" aria-label="Herramientas de pizarra">
+                    @if (canDraw()) {
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'PEN'"
+                        title="Plumón"
+                        aria-label="Plumón"
+                        (click)="selectTool('PEN')"
+                      >
+                        <span class="material-icons">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'ERASER'"
+                        title="Borrador"
+                        aria-label="Borrador"
+                        (click)="selectTool('ERASER')"
+                      >
+                        <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path
+                            fill="currentColor"
+                            d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53c-1.56 1.56-4.09 1.56-5.66 0l-3.53-3.53c-.78-.79-.78-2.05 0-2.84L13.41 3.56c.79-.78 2.05-.78 2.83 0M4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95Z"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'TEXT'"
+                        title="Texto"
+                        aria-label="Texto"
+                        (click)="selectTool('TEXT')"
+                      >
+                        <span class="material-icons">title</span>
+                      </button>
+                      <span class="toolbar__divider" aria-hidden="true"></span>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'RECTANGLE'"
+                        title="Rectángulo"
+                        aria-label="Rectángulo"
+                        (click)="selectTool('RECTANGLE')"
+                      >
+                        <span class="material-icons">crop_square</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'CIRCLE'"
+                        title="Círculo"
+                        aria-label="Círculo"
+                        (click)="selectTool('CIRCLE')"
+                      >
+                        <span class="material-icons">radio_button_unchecked</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'LINE'"
+                        title="Línea"
+                        aria-label="Línea"
+                        (click)="selectTool('LINE')"
+                      >
+                        <span class="material-icons">horizontal_rule</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'ARROW'"
+                        title="Flecha"
+                        aria-label="Flecha"
+                        (click)="selectTool('ARROW')"
+                      >
+                        <span class="material-icons">arrow_forward</span>
+                      </button>
+                      <span class="toolbar__divider" aria-hidden="true"></span>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [class.tool-btn--active]="tool() === 'SELECT'"
+                        title="Seleccionar"
+                        aria-label="Seleccionar"
+                        (click)="selectTool('SELECT')"
+                      >
+                        <span class="material-icons">near_me</span>
+                      </button>
                     }
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [class.tool-btn--active]="tool() === 'MOVE'"
+                      title="Mover pizarra"
+                      aria-label="Mover vista"
+                      (click)="selectTool('MOVE')"
+                    >
+                      <span class="material-icons">pan_tool</span>
+                    </button>
                   </div>
-                }
+
+                  <div class="toolbar__group toolbar__group--right" role="group" aria-label="Navegación de pizarra">
+                    <div class="zoom-control" aria-label="Zoom de pizarra">
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [disabled]="!canZoomOut()"
+                        title="Zoom menos"
+                        aria-label="Zoom menos"
+                        (click)="zoomOut()"
+                      >
+                        <span class="material-icons">remove</span>
+                      </button>
+                      <span class="zoom-control__value">{{ zoomPercent() }}%</span>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [disabled]="!canZoomIn()"
+                        title="Zoom más"
+                        aria-label="Zoom más"
+                        (click)="zoomIn()"
+                      >
+                        <span class="material-icons">add</span>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      title="Ajustar a pantalla"
+                      aria-label="Ajustar a pantalla"
+                      (click)="fitView()"
+                    >
+                      <span class="material-icons">aspect_ratio</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      title="Centrar vista"
+                      aria-label="Centrar vista"
+                      (click)="centerView()"
+                    >
+                      <span class="material-icons">center_focus_strong</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      title="Resetear vista"
+                      aria-label="Resetear vista"
+                      (click)="resetView()"
+                    >
+                      <span class="material-icons">refresh</span>
+                    </button>
+                    @if (undoRedoEnabled) {
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [disabled]="!canUndo()"
+                        title="Deshacer (Ctrl+Z)"
+                        aria-label="Deshacer"
+                        (click)="undoWhiteboardAction()"
+                      >
+                        <span class="material-icons">undo</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        [disabled]="!canRedo()"
+                        title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
+                        aria-label="Rehacer"
+                        (click)="redoWhiteboardAction()"
+                      >
+                        <span class="material-icons">redo</span>
+                      </button>
+                    }
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [class.tool-btn--active]="fullscreen()"
+                      [title]="fullscreen() ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'"
+                      [attr.aria-label]="fullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa'"
+                      (click)="toggleFullscreen()"
+                    >
+                      <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="toolbar__row toolbar__row--options">
+                  @if (canDraw() && tool() !== 'MOVE' && tool() !== 'SELECT') {
+                    <div class="toolbar__group">
+                      <label class="tool-field" title="Color">
+                        <span class="material-icons">palette</span>
+                        <input
+                          type="color"
+                          [value]="color()"
+                          (mousedown)="keepEditorFocus()"
+                          (input)="onColor($event)"
+                        />
+                      </label>
+
+                      @if (tool() === 'PEN' || isShapeTool(tool())) {
+                        <label class="tool-field tool-field--range" title="Grosor del trazo">
+                          <span class="material-icons">line_weight</span>
+                          <input
+                            type="range"
+                            min="1"
+                            max="24"
+                            [value]="strokeWidth()"
+                            (input)="onStrokeWidth($event)"
+                          />
+                          <span class="tool-field__value">{{ strokeWidth() }}</span>
+                        </label>
+                      } @else if (tool() === 'ERASER') {
+                        <label class="tool-field tool-field--range" title="Tamaño del borrador">
+                          <span class="material-icons">format_size</span>
+                          <input
+                            type="range"
+                            min="8"
+                            max="80"
+                            [value]="eraserSize()"
+                            (input)="onEraserSize($event)"
+                          />
+                          <span class="tool-field__value">{{ eraserSize() }}</span>
+                        </label>
+                      } @else if (tool() === 'TEXT') {
+                        <label class="tool-field" title="Tamaño del texto">
+                          <span class="material-icons">format_size</span>
+                          <select
+                            class="select tool-field__select"
+                            [value]="textSize()"
+                            (mousedown)="keepEditorFocus()"
+                            (change)="onTextSize($event)"
+                          >
+                            @for (size of textSizes; track size) {
+                              <option [value]="size">{{ size }}</option>
+                            }
+                          </select>
+                        </label>
+
+                        <div class="toolbar__group toolbar__group--tight">
+                          <button
+                            type="button"
+                            class="tool-btn tool-btn--sm"
+                            [class.tool-btn--active]="textBold()"
+                            [disabled]="textDraft() === null"
+                            title="Negrita (selecciona texto para aplicarlo a una parte)"
+                            aria-label="Negrita"
+                            (mousedown)="$event.preventDefault()"
+                            (click)="applyFormat('bold')"
+                          >
+                            <span class="material-icons">format_bold</span>
+                          </button>
+                          <button
+                            type="button"
+                            class="tool-btn tool-btn--sm"
+                            [class.tool-btn--active]="textItalic()"
+                            [disabled]="textDraft() === null"
+                            title="Cursiva (selecciona texto para aplicarlo a una parte)"
+                            aria-label="Cursiva"
+                            (mousedown)="$event.preventDefault()"
+                            (click)="applyFormat('italic')"
+                          >
+                            <span class="material-icons">format_italic</span>
+                          </button>
+                          <button
+                            type="button"
+                            class="tool-btn tool-btn--sm"
+                            [class.tool-btn--active]="textUnderline()"
+                            [disabled]="textDraft() === null"
+                            title="Subrayado (selecciona texto para aplicarlo a una parte)"
+                            aria-label="Subrayado"
+                            (mousedown)="$event.preventDefault()"
+                            (click)="applyFormat('underline')"
+                          >
+                            <span class="material-icons">format_underlined</span>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <span class="toolbar__hint">
+                      {{ canDraw() ? 'Usa seleccionar o mover para revisar la pizarra.' : 'Modo visualización.' }}
+                    </span>
+                  }
+                </div>
               </div>
 
               <div #canvasWrap class="board-viewport">
@@ -2682,7 +2712,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       return 'Sesión pausada. No puedes dibujar hasta que el docente la reanude.';
     }
     if (this.canDraw()) {
-      return 'Puedes interactuar: dibuja en la pizarra con el plumón o el borrador.';
+      return 'Puedes interactuar con las herramientas habilitadas de la pizarra.';
     }
     return 'El docente no ha habilitado tu interacción. Puedes visualizar la pizarra.';
   }

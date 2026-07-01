@@ -98,7 +98,7 @@ import { ApiError, WhiteboardStudentSessionResponse } from '../../../shared/mode
                 <div class="record-snapshot__head">
                   <h2 class="card-title">Captura final</h2>
                   @if (snapshotUrl(); as url) {
-                    <button type="button" class="btn btn-secondary btn-sm" (click)="download(url, s.name)">
+                    <button type="button" class="btn btn-secondary btn-sm" title="Descargar captura final" (click)="download(url, s.name)">
                       <span class="material-icons">download</span> Descargar
                     </button>
                   }

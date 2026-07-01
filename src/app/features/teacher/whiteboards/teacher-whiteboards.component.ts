@@ -79,7 +79,12 @@ import {
         } @else {
           <section class="section-grid">
             @for (s of sessions(); track s.id) {
-              <article class="card session-card">
+              <article
+                class="card session-card"
+                [class.session-card--active]="s.status === 'ACTIVE'"
+                [class.session-card--paused]="s.status === 'PAUSED'"
+                [class.session-card--closed]="s.status === 'CLOSED'"
+              >
                 <div class="session-card__top">
                   <h3 class="session-card__name">{{ s.name }}</h3>
                   <span class="badge" [class]="statusBadgeClass(s.status)">
@@ -115,12 +120,12 @@ import {
 
                 <div class="session-card__actions">
                   @if (s.status === 'CLOSED') {
-                    <button type="button" class="btn btn-secondary btn-sm" (click)="openSession(s)">
+                    <button type="button" class="btn btn-secondary btn-sm" title="Ver registro de la sesión" (click)="openSession(s)">
                       <span class="material-icons">history</span>
                       Ver registro
                     </button>
                   } @else {
-                    <button type="button" class="btn btn-primary btn-sm" (click)="openSession(s)">
+                    <button type="button" class="btn btn-primary btn-sm" title="Entrar a la sesión" (click)="openSession(s)">
                       <span class="material-icons">login</span>
                       Entrar
                     </button>
@@ -129,6 +134,7 @@ import {
                         type="button"
                         class="btn btn-secondary btn-sm"
                         [disabled]="actionBusyId() === s.id"
+                        title="Pausar sesión"
                         (click)="pause(s)"
                       >
                         <span class="material-icons">pause</span>
@@ -139,6 +145,7 @@ import {
                         type="button"
                         class="btn btn-secondary btn-sm"
                         [disabled]="actionBusyId() === s.id"
+                        title="Reanudar sesión"
                         (click)="resume(s)"
                       >
                         <span class="material-icons">play_arrow</span>

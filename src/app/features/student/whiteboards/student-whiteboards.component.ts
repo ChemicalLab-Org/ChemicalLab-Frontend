@@ -109,7 +109,11 @@ type WhiteboardTab = 'live' | 'history';
           } @else {
             <section class="section-grid">
               @for (s of liveSessions(); track s.id) {
-                <article class="card session-card">
+                <article
+                  class="card session-card"
+                  [class.session-card--active]="s.status === 'ACTIVE'"
+                  [class.session-card--paused]="s.status === 'PAUSED'"
+                >
                   <div class="session-card__top">
                     <h3 class="session-card__name">{{ s.name }}</h3>
                     <span class="badge" [class]="statusBadgeClass(s.status)">
@@ -153,7 +157,7 @@ type WhiteboardTab = 'live' | 'history';
                   </dl>
 
                   <div class="session-card__actions">
-                    <button type="button" class="btn btn-primary btn-sm" (click)="openLive(s)">
+                    <button type="button" class="btn btn-primary btn-sm" title="Entrar a la pizarra" (click)="openLive(s)">
                       <span class="material-icons">login</span>
                       {{ s.joined ? 'Continuar' : 'Unirse' }}
                     </button>
@@ -187,7 +191,7 @@ type WhiteboardTab = 'live' | 'history';
           } @else {
             <section class="section-grid">
               @for (h of historyItems(); track h.id) {
-                <article class="card session-card">
+                <article class="card session-card session-card--closed">
                   <div class="session-card__top">
                     <h3 class="session-card__name">{{ h.name }}</h3>
                     <span class="badge badge-neutral">
@@ -224,7 +228,7 @@ type WhiteboardTab = 'live' | 'history';
                   </dl>
 
                   <div class="session-card__actions">
-                    <button type="button" class="btn btn-secondary btn-sm" (click)="openHistory(h)">
+                    <button type="button" class="btn btn-secondary btn-sm" title="Ver registro y captura final" (click)="openHistory(h)">
                       <span class="material-icons">history</span>
                       Ver registro
                     </button>

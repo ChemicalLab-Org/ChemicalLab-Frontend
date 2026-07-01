@@ -15,6 +15,10 @@
   overflow-y: auto;
   padding: 2rem 2.5rem;
   background: var(--color-neutral-50);
+
+  @media (max-width: 760px) {
+    padding: var(--space-4);
+  }
 }
 
 .page-alert {
@@ -35,12 +39,49 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  position: relative;
+  overflow: hidden;
+  min-height: 236px;
+  transition:
+    border-color var(--transition-base),
+    box-shadow var(--transition-base),
+    transform var(--transition-fast);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: var(--color-neutral-300);
+  }
+
+  &:hover {
+    border-color: var(--color-primary-200);
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+  }
+
+  &--active::before {
+    background: var(--color-success);
+  }
+
+  &--paused::before {
+    background: var(--color-warning);
+  }
+
+  &--closed::before {
+    background: var(--color-neutral-400);
+  }
 
   &__top {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--space-3);
+
+    .badge {
+      flex-shrink: 0;
+    }
   }
 
   &__name {
@@ -96,6 +137,10 @@
     gap: var(--space-2);
     margin-top: auto;
     padding-top: var(--space-2);
+
+    .btn {
+      min-height: 32px;
+    }
   }
 }
 
@@ -103,6 +148,9 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-50);
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-neutral-700);
@@ -111,6 +159,12 @@
     font-size: 18px;
     color: var(--color-primary-600);
   }
+}
+
+.empty-state {
+  background: var(--color-neutral-0);
+  border: 1.5px dashed var(--color-neutral-200);
+  border-radius: var(--radius-lg);
 }
 
 // Modal (mismo patrón que el resto de pantallas docentes)
