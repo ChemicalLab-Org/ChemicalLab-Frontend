@@ -2140,11 +2140,14 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     if (event.eventType === 'CLEAR') {
       const isRecompose = event.clientEventId?.startsWith('recompose-') === true;
-      this.cancelText();
-      this.cancelShapePreview();
-      this.clearCanvas();
+      if (isRecompose) {
+        this.clearStrokeCanvas();
+      } else {
+        this.cancelText();
+        this.cancelShapePreview();
+        this.clearCanvas();
+      }
       this.boardStrokes = [];
-      this.shapeItems.set([]);
       if (!isRecompose) {
         this.clearUndoHistory();
       }
@@ -2267,12 +2270,20 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (ctx === null) {
       return;
     }
-    ctx.fillStyle = BOARD_BACKGROUND;
-    ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
+    this.clearStrokeCanvas();
     // Textos y formas son objetos sobre la pizarra: "Borrar todo" tambien los retira.
     this.clearSelection();
     this.textItems.set([]);
     this.shapeItems.set([]);
+  }
+
+  private clearStrokeCanvas(): void {
+    const ctx = this.ensureCanvas();
+    if (ctx === null) {
+      return;
+    }
+    ctx.fillStyle = BOARD_BACKGROUND;
+    ctx.fillRect(0, 0, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
   }
 
   private renderSegment(from: WhiteboardPoint, to: WhiteboardPoint, color: string, width: number): void {
@@ -2329,12 +2340,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId: this.newEventId('recompose') });
     for (const stroke of this.boardStrokes) {
       this.broadcastStrokeRecord(stroke);
-    }
-    for (const shape of this.shapeItems()) {
-      this.broadcastShapeUpsert(shape);
-    }
-    for (const item of this.textItems()) {
-      this.broadcastTextUpsert(item);
     }
   }
 

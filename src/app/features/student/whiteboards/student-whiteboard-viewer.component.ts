@@ -2007,14 +2007,15 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     if (event.eventType === 'CLEAR') {
       const isRecompose = event.clientEventId?.startsWith('recompose-') === true;
-      this.cancelText();
-      this.cancelShapePreview();
-      this.clearCanvas();
-      this.clearSelection();
-      this.boardStrokes = [];
-      this.textItems.set([]);
-      this.shapeItems.set([]);
       if (!isRecompose) {
+        this.cancelText();
+        this.cancelShapePreview();
+      }
+      this.clearCanvas();
+      this.boardStrokes = [];
+      if (!isRecompose) {
+        this.textItems.set([]);
+        this.shapeItems.set([]);
         this.clearUndoHistory();
       }
       return;
