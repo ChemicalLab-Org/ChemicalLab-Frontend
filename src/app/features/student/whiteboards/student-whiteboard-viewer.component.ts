@@ -2168,19 +2168,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       }
       return;
     }
-    const points = (event.points ?? []) as WhiteboardPoint[];
-    const isErase = event.eventType === 'ERASE';
-    const color = isErase ? BOARD_BACKGROUND : event.color ?? '#000000';
-    const width = isErase ? event.eraserSize ?? 24 : event.strokeWidth ?? 4;
-    this.renderStroke(points, color, width);
-    this.boardStrokes.push({
-      id: event.clientEventId ?? undefined,
-      eventType: isErase ? 'ERASE' : 'DRAW',
-      color: isErase ? null : event.color ?? '#000000',
-      strokeWidth: isErase ? null : event.strokeWidth ?? 4,
-      eraserSize: isErase ? event.eraserSize ?? 24 : null,
-      points,
-    });
+    this.applyRemoteStrokeEvent(event);
   }
 
   /** Inserta o actualiza un objeto de texto a partir de un evento TEXT del docente. */
@@ -2359,6 +2347,40 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       const width = isErase ? stroke.eraserSize ?? 24 : stroke.strokeWidth ?? 4;
       this.renderStroke(stroke.points, color, width);
     }
+  }
+
+  private applyRemoteStrokeEvent(event: WhiteboardDrawEventResponse): void {
+    const stroke = this.strokeRecordFromEvent(event);
+    this.boardStrokes = this.upsertStrokeRecord(this.boardStrokes, stroke);
+    this.redrawCanvasFromStrokes();
+  }
+
+  private strokeRecordFromEvent(event: WhiteboardDrawEventResponse): WhiteboardStrokeRecord {
+    const isErase = event.eventType === 'ERASE';
+    return {
+      id: event.clientEventId ?? undefined,
+      eventType: isErase ? 'ERASE' : 'DRAW',
+      color: isErase ? null : event.color ?? '#000000',
+      strokeWidth: isErase ? null : event.strokeWidth ?? 4,
+      eraserSize: isErase ? event.eraserSize ?? 24 : null,
+      points: ((event.points ?? []) as WhiteboardPoint[]).map((point) => ({ ...point })),
+    };
+  }
+
+  private upsertStrokeRecord(
+    strokes: WhiteboardStrokeRecord[],
+    stroke: WhiteboardStrokeRecord
+  ): WhiteboardStrokeRecord[] {
+    if (stroke.id === undefined) {
+      return [...strokes, this.cloneStrokeRecord(stroke)];
+    }
+    const index = strokes.findIndex((current) => current.id === stroke.id);
+    if (index === -1) {
+      return [...strokes, this.cloneStrokeRecord(stroke)];
+    }
+    const next = [...strokes];
+    next[index] = this.cloneStrokeRecord(stroke);
+    return next;
   }
 
   private broadcastBoardRecompose(): void {
