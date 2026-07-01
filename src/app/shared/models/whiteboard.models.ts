@@ -20,10 +20,28 @@ export type WhiteboardInteractionOverride = 'FOLLOW_GLOBAL' | 'ALLOWED' | 'BLOCK
  * Tipo de evento de dibujo transportado por WebSocket (enum WhiteboardDrawEventType).
  * TEXT/TEXT_DELETE transportan objetos de texto en vivo del docente o de estudiantes con permiso.
  */
-export type WhiteboardDrawEventType = 'DRAW' | 'ERASE' | 'CLEAR' | 'TEXT' | 'TEXT_DELETE';
+export type WhiteboardDrawEventType =
+  | 'DRAW'
+  | 'ERASE'
+  | 'CLEAR'
+  | 'TEXT'
+  | 'TEXT_DELETE'
+  | 'SHAPE'
+  | 'SHAPE_DELETE';
 
 /** Herramienta usada en un evento de dibujo (enum WhiteboardDrawTool). */
-export type WhiteboardDrawTool = 'PEN' | 'ERASER' | 'CLEAR' | 'TEXT';
+export type WhiteboardDrawTool =
+  | 'PEN'
+  | 'ERASER'
+  | 'CLEAR'
+  | 'TEXT'
+  | 'RECTANGLE'
+  | 'CIRCLE'
+  | 'LINE'
+  | 'ARROW';
+
+/** Tipo de forma estructurada transportada y guardada en la pizarra. */
+export type WhiteboardShapeType = 'RECTANGLE' | 'CIRCLE' | 'LINE' | 'ARROW';
 
 /** Evento de control difundido al canal de la sesión (enum WhiteboardControlEventType). */
 export type WhiteboardControlEventType =
@@ -170,6 +188,8 @@ export interface WhiteboardDrawEventRequest {
   readonly fontSize?: number | null;
   /** Solo en TEXT: fragmentos con formato del bloque. La posición viaja como único punto en points. */
   readonly runs?: readonly WhiteboardTextRun[];
+  /** Solo en eventos de forma (SHAPE/SHAPE_DELETE): identificador estable del objeto. */
+  readonly shapeId?: string;
 }
 
 /** Evento de dibujo difundido a los suscriptores de /topic/whiteboards/{sessionId}. */
@@ -191,6 +211,8 @@ export interface WhiteboardDrawEventResponse {
   readonly fontSize: number | null;
   /** Solo en TEXT: fragmentos con formato del bloque. */
   readonly runs: readonly WhiteboardTextRun[] | null;
+  /** Solo en eventos de forma: identificador estable del objeto. */
+  readonly shapeId: string | null;
 }
 
 /** Evento de control difundido al canal cuando el docente actúa por REST. */
@@ -245,6 +267,18 @@ export interface WhiteboardTextRecord {
   readonly runs: readonly WhiteboardTextRun[];
 }
 
+/** Forma estructurada serializada dentro del estado del lienzo. */
+export interface WhiteboardShapeRecord {
+  readonly id: string;
+  readonly type: WhiteboardShapeType;
+  readonly x1: number;
+  readonly y1: number;
+  readonly x2: number;
+  readonly y2: number;
+  readonly color: string;
+  readonly strokeWidth: number;
+}
+
 /**
  * Instantánea serializada del lienzo en vivo (lo que viaja en {@link WhiteboardBoardStateResponse#stateJson}).
  * La interpreta el frontend; el backend la trata como texto opaco. Incluye trazos y textos para que
@@ -254,6 +288,7 @@ export interface WhiteboardBoardStateSnapshot {
   readonly v: 1;
   readonly strokes: readonly WhiteboardStrokeRecord[];
   readonly texts: readonly WhiteboardTextRecord[];
+  readonly shapes?: readonly WhiteboardShapeRecord[];
 }
 
 const CONTROL_EVENT_TYPES: ReadonlySet<string> = new Set<WhiteboardControlEventType>([

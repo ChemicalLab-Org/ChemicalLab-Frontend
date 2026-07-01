@@ -356,6 +356,71 @@
 
 // Cursor circular del borrador: el diámetro coincide con el tamaño del borrador (px lógicos = px
 // en pantalla al estar a escala 1:1), para que se vea el área que se borrará.
+.shape-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3200px;
+  height: 2000px;
+  z-index: 2;
+  overflow: visible;
+  pointer-events: none;
+  transform-origin: top left;
+  touch-action: none;
+}
+
+.shape-item {
+  pointer-events: none;
+
+  &--interactive {
+    pointer-events: visiblePainted;
+  }
+
+  rect,
+  ellipse,
+  line {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+  }
+
+  line,
+  polygon,
+  rect,
+  ellipse {
+    cursor: pointer;
+  }
+
+  &--selected {
+    rect,
+    ellipse,
+    line:not(.shape-hit) {
+      stroke: var(--color-primary-700);
+      stroke-dasharray: 8 5;
+    }
+  }
+
+  &--dragging {
+    opacity: 0.85;
+  }
+}
+
+.shape-hit {
+  stroke: transparent;
+  fill: none;
+}
+
+.shape-preview {
+  pointer-events: none;
+
+  rect,
+  ellipse,
+  line {
+    fill: none;
+    stroke-dasharray: 10 7;
+    vector-effect: non-scaling-stroke;
+  }
+}
+
 .eraser-cursor {
   position: absolute;
   // box-sizing border-box: el diámetro exterior (incluido el borde) coincide con el tamaño del
