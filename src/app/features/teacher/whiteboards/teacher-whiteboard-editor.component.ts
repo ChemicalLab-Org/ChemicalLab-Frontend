@@ -108,6 +108,7 @@ interface WhiteboardUndoAction {
   readonly before: UndoableObject | null;
   readonly after: UndoableObject | null;
   readonly strokeIndex?: number;
+  readonly gestureId?: string;
   readonly timestamp: number;
 }
 
@@ -784,6 +785,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
   private currentStroke: WhiteboardPoint[] = [];
+  private currentEraserGestureId: string | null = null;
   private shapeStart: WhiteboardPoint | null = null;
   /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
   private readonly ownEventIds = new Set<string>();
@@ -1108,6 +1110,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.drawing = true;
     const start = this.toCanvasPoint(event);
     this.currentStroke = [start];
+    this.currentEraserGestureId = this.tool() === 'ERASER' ? this.localHistoryId() : null;
     this.renderStroke(this.currentStroke, this.activeColor(), this.activeWidth());
     if (this.tool() === 'ERASER') {
       this.eraseTextsAt(start);
@@ -1173,6 +1176,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         objectType: 'TEXT',
         before: this.cloneTextItem(item),
         after: null,
+        gestureId: this.currentEraserGestureId ?? undefined,
       });
       this.broadcastTextDelete(item.id);
     }
@@ -1198,6 +1202,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         objectType: 'SHAPE',
         before: this.cloneShapeItem(shape),
         after: null,
+        gestureId: this.currentEraserGestureId ?? undefined,
       });
       this.broadcastShapeDelete(shape.id);
     }
@@ -1237,6 +1242,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     const points = this.currentStroke;
     this.currentStroke = [];
     this.publishStroke(points);
+    this.currentEraserGestureId = null;
   }
 
   onPointerLeave(event: PointerEvent): void {
@@ -1762,14 +1768,16 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return false;
     }
     const stack = this.undoStack();
-    const action = stack[stack.length - 1];
-    this.undoStack.set(stack.slice(0, -1));
-    if (!this.applyHistoryAction(action, 'undo')) {
-      this.discardObjectHistory(action);
+    const actions = this.takeGestureActions(stack);
+    this.undoStack.set(stack.slice(0, stack.length - actions.length));
+    if (!this.applyHistoryActions(actions, 'undo')) {
+      for (const action of actions) {
+        this.discardObjectHistory(action);
+      }
       this.showBanner('No se pudo deshacer: el objeto cambio en otra sesion.', 'warning');
       return true;
     }
-    this.redoStack.update((items) => [...items, action]);
+    this.redoStack.update((items) => [...items, ...actions]);
     return true;
   }
 
@@ -1778,14 +1786,38 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return false;
     }
     const stack = this.redoStack();
-    const action = stack[stack.length - 1];
-    this.redoStack.set(stack.slice(0, -1));
-    if (!this.applyHistoryAction(action, 'redo')) {
-      this.discardObjectHistory(action);
+    const actions = this.takeGestureActions(stack);
+    this.redoStack.set(stack.slice(0, stack.length - actions.length));
+    if (!this.applyHistoryActions(actions, 'redo')) {
+      for (const action of actions) {
+        this.discardObjectHistory(action);
+      }
       this.showBanner('No se pudo rehacer: el objeto cambio en otra sesion.', 'warning');
       return true;
     }
-    this.undoStack.update((items) => [...items, action]);
+    this.undoStack.update((items) => [...items, ...actions]);
+    return true;
+  }
+
+  private takeGestureActions(stack: WhiteboardUndoAction[]): WhiteboardUndoAction[] {
+    const last = stack[stack.length - 1];
+    if (last?.gestureId === undefined) {
+      return last ? [last] : [];
+    }
+    let start = stack.length - 1;
+    while (start > 0 && stack[start - 1].gestureId === last.gestureId) {
+      start--;
+    }
+    return stack.slice(start);
+  }
+
+  private applyHistoryActions(actions: WhiteboardUndoAction[], direction: 'undo' | 'redo'): boolean {
+    const ordered = direction === 'undo' ? [...actions].reverse() : actions;
+    for (const action of ordered) {
+      if (!this.applyHistoryAction(action, direction)) {
+        return false;
+      }
+    }
     return true;
   }
 
@@ -2365,9 +2397,54 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  private eraserTouchesDrawStroke(points: readonly WhiteboardPoint[], eraserSize: number): boolean {
+    const radius = Math.max(eraserSize / 2 + 3, 8);
+    return this.boardStrokes.some(
+      (stroke) =>
+        stroke.eventType === 'DRAW' &&
+        points.some((point) => this.strokeRecordContainsPoint(stroke, point, radius))
+    );
+  }
+
+  private strokeRecordContainsPoint(
+    stroke: WhiteboardStrokeRecord,
+    point: WhiteboardPoint,
+    radius: number
+  ): boolean {
+    const strokePoints = stroke.points;
+    if (strokePoints.length === 0) {
+      return false;
+    }
+    const tolerance = radius + (stroke.strokeWidth ?? 4) / 2;
+    if (strokePoints.length === 1) {
+      return Math.hypot(point.x - strokePoints[0].x, point.y - strokePoints[0].y) <= tolerance;
+    }
+    for (let i = 1; i < strokePoints.length; i++) {
+      if (this.distanceToSegment(point, strokePoints[i - 1], strokePoints[i]) <= tolerance) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private distanceToSegment(point: WhiteboardPoint, from: WhiteboardPoint, to: WhiteboardPoint): number {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    if (dx === 0 && dy === 0) {
+      return Math.hypot(point.x - from.x, point.y - from.y);
+    }
+    const t = Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / (dx * dx + dy * dy)));
+    return Math.hypot(point.x - (from.x + t * dx), point.y - (from.y + t * dy));
+  }
+
   private publishStroke(points: WhiteboardPoint[]): void {
     const clientEventId = this.newEventId();
     const isErase = this.tool() === 'ERASER';
+    const shouldKeepStroke = !isErase || this.eraserTouchesDrawStroke(points, this.eraserSize());
+    if (isErase && !shouldKeepStroke) {
+      this.currentEraserGestureId = null;
+      return;
+    }
     const event: WhiteboardDrawEventRequest = isErase
       ? { eventType: 'ERASE', tool: 'ERASER', eraserSize: this.eraserSize(), points, clientEventId }
       : {
@@ -2396,6 +2473,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       before: null,
       after: this.cloneStrokeRecord(strokeRecord),
       strokeIndex: this.boardStrokes.length - 1,
+      gestureId: this.currentEraserGestureId ?? undefined,
     });
     this.scheduleStateSave();
   }
