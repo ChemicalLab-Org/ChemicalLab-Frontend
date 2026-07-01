@@ -830,6 +830,20 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Delete' && event.key !== 'Backspace') {
+      return;
+    }
+    if (this.textDraft() !== null || this.isEditableTarget(event.target)) {
+      return;
+    }
+    if (this.deleteSelectedText()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
   // ─── Puntero: dibujo, texto y desplazamiento ──────────────────────────────────
 
   onPointerDown(event: PointerEvent): void {
@@ -1056,7 +1070,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (editingId !== null) {
       saved = { id: editingId, wx: draft.wx, wy: draft.wy, ...base };
       this.textItems.update((items) =>
-        items.map((i) => (i.id === editingId ? { ...i, ...base } : i))
+        items.map((i) => (i.id === editingId ? saved : i))
       );
     } else {
       saved = { id: localTextId(), wx: draft.wx, wy: draft.wy, ...base };
@@ -1263,6 +1277,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.draggingTextId.set(null);
   }
 
+  private deleteSelectedText(): boolean {
+    const id = this.selectedTextId();
+    if (id === null || !this.canDraw()) {
+      return false;
+    }
+    const exists = this.textItems().some((item) => item.id === id);
+    if (!exists) {
+      this.clearSelection();
+      return false;
+    }
+    this.textItems.update((items) => items.filter((item) => item.id !== id));
+    this.clearSelection();
+    this.broadcastTextDelete(id);
+    this.scheduleStateSave();
+    return true;
+  }
+
   private clampTextPosition(item: TextItem, wx: number, wy: number): { wx: number; wy: number } {
     const ctx = this.ensureCanvas();
     const width = ctx === null ? 0 : measureTextWidth(ctx, item);
@@ -1301,6 +1332,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.whiteboardService.pauseSession(this.sessionId).subscribe({
       next: (updated) => {
         this.session.set(updated);
+        this.cancelText();
         this.clearSelection();
         this.busy.set(false);
         this.showBanner('Sesión pausada. El dibujo está bloqueado.', 'warning');
@@ -1421,6 +1453,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     if (event.eventType === 'CLEAR') {
+      this.cancelText();
       this.clearCanvas();
       this.boardStrokes = [];
       this.scheduleStateSave();
@@ -1437,6 +1470,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (event.eventType === 'TEXT_DELETE') {
       if (event.textId !== null) {
         const id = event.textId;
+        if (this.editingTextId() === id) {
+          this.cancelText();
+        }
         if (this.selectedTextId() === id) {
           this.clearSelection();
         }
@@ -1469,6 +1505,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     switch (event.eventType) {
       case 'SESSION_PAUSED':
         this.session.set({ ...current, status: 'PAUSED' });
+        this.cancelText();
         this.clearSelection();
         this.showBanner('La sesión fue pausada.', 'warning');
         break;
@@ -1477,6 +1514,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         this.showBanner('La sesión fue reanudada.', 'success');
         break;
       case 'SESSION_CLOSED':
+        this.cancelText();
         this.clearSelection();
         this.realtime.disconnect();
         this.reload();
@@ -1607,6 +1645,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   private activeWidth(): number {
     return this.tool() === 'ERASER' ? this.eraserSize() : this.strokeWidth();
+  }
+
+  private isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
   }
 
   private newEventId(): string {

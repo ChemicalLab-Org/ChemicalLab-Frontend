@@ -833,7 +833,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     let saved: DisplayTextItem;
     if (editingId !== null) {
       saved = { id: editingId, wx: draft.wx, wy: draft.wy, ...base };
-      this.textItems.update((items) => items.map((i) => (i.id === editingId ? { ...i, ...base } : i)));
+      this.textItems.update((items) => items.map((i) => (i.id === editingId ? saved : i)));
     } else {
       saved = { id: localTextId(), wx: draft.wx, wy: draft.wy, ...base };
       this.textItems.update((items) => [...items, saved]);
@@ -1030,6 +1030,22 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.draggingTextId.set(null);
   }
 
+  private deleteSelectedText(): boolean {
+    const id = this.selectedTextId();
+    if (id === null || !this.canDraw()) {
+      return false;
+    }
+    const exists = this.textItems().some((item) => item.id === id);
+    if (!exists) {
+      this.clearSelection();
+      return false;
+    }
+    this.textItems.update((items) => items.filter((item) => item.id !== id));
+    this.clearSelection();
+    this.broadcastTextDelete(id);
+    return true;
+  }
+
   private clampTextPosition(
     item: DisplayTextItem,
     wx: number,
@@ -1085,6 +1101,20 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   // ─── Puntero: dibujo y desplazamiento ────────────────────────────────────────
+
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Delete' && event.key !== 'Backspace') {
+      return;
+    }
+    if (this.textDraft() !== null || this.isEditableTarget(event.target)) {
+      return;
+    }
+    if (this.deleteSelectedText()) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
 
   onPointerDown(event: PointerEvent): void {
     if (this.tool() === 'MOVE' || !this.canDraw()) {
@@ -1251,6 +1281,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       return;
     }
     if (event.eventType === 'CLEAR') {
+      this.cancelText();
       this.clearCanvas();
       this.clearSelection();
       this.textItems.set([]);
@@ -1264,6 +1295,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     if (event.eventType === 'TEXT_DELETE') {
       if (event.textId !== null) {
         const id = event.textId;
+        if (this.editingTextId() === id) {
+          this.cancelText();
+        }
         if (this.selectedTextId() === id) {
           this.clearSelection();
         }
@@ -1324,6 +1358,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
         this.refreshDetail();
         break;
       case 'SESSION_CLOSED':
+        this.cancelText();
         this.clearSelection();
         this.realtime.disconnect();
         this.showBanner('La sesión fue finalizada por el docente.', 'warning');
@@ -1441,6 +1476,13 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   private activeWidth(): number {
     return this.tool() === 'ERASER' ? this.eraserSize() : this.strokeWidth();
+  }
+
+  private isEditableTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
   }
 
   private newEventId(): string {
