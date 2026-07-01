@@ -65,6 +65,8 @@ const BOARD_BACKGROUND = '#ffffff';
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
+// Deshacer/rehacer queda desactivado temporalmente hasta estabilizar la sincronizacion colaborativa.
+const UNDO_REDO_ENABLED = false;
 
 const PEN_CURSOR =
   'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMyAxNy4yNVYyMWgzLjc1TDE3LjgxIDkuOTRsLTMuNzUtMy43NUwzIDE3LjI1eiIgZmlsbD0iIzFhMWExNiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0yMC43MSA3LjA0YTEgMSAwIDAgMCAwLTEuNDFsLTIuMzQtMi4zNGExIDEgMCAwIDAtMS40MSAwbC0xLjgzIDEuODMgMy43NSAzLjc1IDEuODMtMS44M3oiIGZpbGw9IiMxZDllNzUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=") 3 25, crosshair';
@@ -342,24 +344,26 @@ const UNDO_STACK_LIMIT = 80;
                       <span class="material-icons">add</span>
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    [disabled]="!canUndo()"
-                    title="Deshacer (Ctrl+Z)"
-                    (click)="undoWhiteboardAction()"
-                  >
-                    <span class="material-icons">undo</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="tool-btn"
-                    [disabled]="!canRedo()"
-                    title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
-                    (click)="redoWhiteboardAction()"
-                  >
-                    <span class="material-icons">redo</span>
-                  </button>
+                  @if (undoRedoEnabled) {
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [disabled]="!canUndo()"
+                      title="Deshacer (Ctrl+Z)"
+                      (click)="undoWhiteboardAction()"
+                    >
+                      <span class="material-icons">undo</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="tool-btn"
+                      [disabled]="!canRedo()"
+                      title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
+                      (click)="redoWhiteboardAction()"
+                    >
+                      <span class="material-icons">redo</span>
+                    </button>
+                  }
                   <button
                     type="button"
                     class="tool-btn"
@@ -667,6 +671,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   readonly userRole = 'Estudiante';
   readonly workspaceWidth = WORKSPACE_WIDTH;
   readonly workspaceHeight = WORKSPACE_HEIGHT;
+  readonly undoRedoEnabled = UNDO_REDO_ENABLED;
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('boardCanvas');
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
@@ -774,8 +779,12 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   /** La reedición de texto existente permanece ligada a la herramienta Texto. */
   readonly canEditText = computed<boolean>(() => this.tool() === 'TEXT' && this.canDraw());
-  readonly canUndo = computed<boolean>(() => this.canDraw() && this.textDraft() === null && this.undoStack().length > 0);
-  readonly canRedo = computed<boolean>(() => this.canDraw() && this.textDraft() === null && this.redoStack().length > 0);
+  readonly canUndo = computed<boolean>(
+    () => this.undoRedoEnabled && this.canDraw() && this.textDraft() === null && this.undoStack().length > 0
+  );
+  readonly canRedo = computed<boolean>(
+    () => this.undoRedoEnabled && this.canDraw() && this.textDraft() === null && this.redoStack().length > 0
+  );
 
   readonly canvasCursor = computed<string>(() => {
     if (this.tool() === 'MOVE') {
@@ -1518,7 +1527,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   undoWhiteboardAction(): boolean {
-    if (!this.canUndo()) {
+    if (!this.undoRedoEnabled || !this.canUndo()) {
       return false;
     }
     const stack = this.undoStack();
@@ -1537,7 +1546,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   redoWhiteboardAction(): boolean {
-    if (!this.canRedo()) {
+    if (!this.undoRedoEnabled || !this.canRedo()) {
       return false;
     }
     const stack = this.redoStack();
@@ -1862,6 +1871,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     const wantsUndo = modifier && key === 'z' && !event.shiftKey;
     const wantsRedo = modifier && (key === 'y' || (key === 'z' && event.shiftKey));
     if (wantsUndo || wantsRedo) {
+      if (!this.undoRedoEnabled) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       const applied = wantsUndo ? this.undoWhiteboardAction() : this.redoWhiteboardAction();
       if (applied) {
         event.preventDefault();
