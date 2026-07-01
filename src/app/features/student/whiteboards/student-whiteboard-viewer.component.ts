@@ -659,6 +659,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private readonly boardStateReady = signal<boolean>(false);
   private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
   private boardStrokes: WhiteboardStrokeRecord[] = [];
+  private canInteractBeforePause: boolean | null = null;
 
   // Desplazamiento (pan) del lienzo dentro del visor.
   private panning = false;
@@ -937,10 +938,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   /** Re-consulta el detalle para recalcular el permiso efectivo tras un cambio de interacción. */
-  private refreshDetail(): void {
+  private refreshDetail(statusOverride: WhiteboardSessionStatus | null = null): void {
     this.whiteboardService.getSessionDetail(this.sessionId).subscribe({
       next: (detail) => {
-        this.session.set(detail);
+        this.session.set(this.mergeSessionDetail(detail, statusOverride));
         // Si perdió el permiso o se pausó, vuelve a «Mover» para no dejar una herramienta inválida.
         if (!this.canDraw() && this.tool() !== 'MOVE') {
           this.cancelText();
@@ -956,6 +957,19 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   // ─── Herramientas ───────────────────────────────────────────────────────────
+
+  private mergeSessionDetail(
+    detail: WhiteboardStudentSessionResponse,
+    statusOverride: WhiteboardSessionStatus | null
+  ): WhiteboardStudentSessionResponse {
+    if (statusOverride !== 'ACTIVE') {
+      return detail;
+    }
+    const fallbackCanInteract =
+      this.canInteractBeforePause ?? this.session()?.canInteract ?? detail.canInteract;
+    const canInteract = detail.status === 'PAUSED' ? fallbackCanInteract : detail.canInteract;
+    return { ...detail, status: 'ACTIVE', canInteract };
+  }
 
   selectTool(tool: StudentTool): void {
     if (tool !== 'MOVE' && !this.canDraw()) {
@@ -2112,6 +2126,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     switch (event.eventType) {
       case 'SESSION_PAUSED':
+        this.canInteractBeforePause = current.canInteract;
         this.session.set({ ...current, status: 'PAUSED', canInteract: false });
         this.clearSelection();
         if (this.tool() !== 'MOVE') {
@@ -2122,9 +2137,13 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
         this.showBanner('La sesión está pausada por el docente.', 'warning');
         break;
       case 'SESSION_RESUMED':
-        this.session.set({ ...current, status: 'ACTIVE' });
+        this.session.set({
+          ...current,
+          status: 'ACTIVE',
+          canInteract: this.canInteractBeforePause ?? current.canInteract,
+        });
         this.showBanner('La sesión fue reanudada.', 'success');
-        this.refreshDetail();
+        this.refreshDetail('ACTIVE');
         break;
       case 'SESSION_CLOSED':
         this.cancelText();
