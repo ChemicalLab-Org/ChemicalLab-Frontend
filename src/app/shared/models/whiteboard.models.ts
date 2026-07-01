@@ -250,6 +250,8 @@ export interface WhiteboardBoardStateResponse {
  * Pendiente: para seleccionar/mover trazos se requiere convertirlos a objetos agrupados con id estable.
  */
 export interface WhiteboardStrokeRecord {
+  /** Identificador estable local del trazo cuando el frontend puede conservarlo. */
+  readonly id?: string;
   readonly eventType: 'DRAW' | 'ERASE';
   readonly color: string | null;
   readonly strokeWidth: number | null;
