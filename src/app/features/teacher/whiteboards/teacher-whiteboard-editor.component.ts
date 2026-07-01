@@ -68,6 +68,9 @@ const WORKSPACE_HEIGHT = 2000;
 const BOARD_BACKGROUND = '#ffffff';
 /** Ancho máximo de la captura final (se reescala para mantener un peso razonable). */
 const SNAPSHOT_MAX_WIDTH = 2400;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
 
 /**
  * Cursor del plumón: un lápiz dibujado en SVG (hotspot en la punta, abajo-izquierda) en vez del
@@ -80,8 +83,6 @@ type ShapeTool = WhiteboardShapeType;
 type DrawTool = 'PEN' | 'ERASER' | 'TEXT' | 'SELECT' | 'MOVE' | ShapeTool;
 
 interface TextDraft {
-  readonly screenX: number;
-  readonly screenY: number;
   readonly wx: number;
   readonly wy: number;
 }
@@ -318,6 +319,27 @@ const UNDO_STACK_LIMIT = 80;
                     </div>
 
                     <div class="toolbar__group toolbar__group--right">
+                      <div class="zoom-control" aria-label="Zoom de pizarra">
+                        <button
+                          type="button"
+                          class="tool-btn"
+                          [disabled]="!canZoomOut()"
+                          title="Alejar"
+                          (click)="zoomOut()"
+                        >
+                          <span class="material-icons">remove</span>
+                        </button>
+                        <span class="zoom-control__value">{{ zoomPercent() }}%</span>
+                        <button
+                          type="button"
+                          class="tool-btn"
+                          [disabled]="!canZoomIn()"
+                          title="Acercar"
+                          (click)="zoomIn()"
+                        >
+                          <span class="material-icons">add</span>
+                        </button>
+                      </div>
                       <button
                         type="button"
                         class="tool-btn"
@@ -588,8 +610,8 @@ const UNDO_STACK_LIMIT = 80;
                       class="eraser-cursor"
                       [style.left.px]="cursorPos()!.x"
                       [style.top.px]="cursorPos()!.y"
-                      [style.width.px]="eraserSize()"
-                      [style.height.px]="eraserSize()"
+                      [style.width.px]="eraserSize() * zoomLevel()"
+                      [style.height.px]="eraserSize() * zoomLevel()"
                     ></div>
                   }
 
@@ -605,10 +627,10 @@ const UNDO_STACK_LIMIT = 80;
                         [class.text-item--selected]="selectedTextId() === item.id"
                         [class.text-item--dragging]="draggingTextId() === item.id"
                         [class.text-item--text-mode]="canEditText()"
-                        [style.left.px]="panX() + item.wx"
-                        [style.top.px]="panY() + item.wy"
+                        [style.left.px]="toScreenX(item.wx)"
+                        [style.top.px]="toScreenY(item.wy)"
                         [style.color]="item.color"
-                        [style.font-size.px]="item.size"
+                        [style.font-size.px]="item.size * zoomLevel()"
                         (pointerdown)="onTextItemPointerDown(item, $event)"
                         (pointermove)="onTextItemPointerMove($event)"
                         (pointerup)="onTextItemPointerUp($event)"
@@ -631,10 +653,10 @@ const UNDO_STACK_LIMIT = 80;
                       class="text-input"
                       contenteditable="true"
                       data-placeholder="Escribe y pulsa Enter…"
-                      [style.left.px]="draft.screenX"
-                      [style.top.px]="draft.screenY"
+                      [style.left.px]="toScreenX(draft.wx)"
+                      [style.top.px]="toScreenY(draft.wy)"
                       [style.color]="color()"
-                      [style.font-size.px]="textSize()"
+                      [style.font-size.px]="textSize() * zoomLevel()"
                       (keydown.enter)="onEditorEnter($event)"
                       (keydown.escape)="onTextEscape($event)"
                       (keyup)="refreshFormatStates()"
@@ -807,6 +829,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private panStart = { x: 0, y: 0, px: 0, py: 0 };
   readonly panX = signal<number>(0);
   readonly panY = signal<number>(0);
+  readonly zoomLevel = signal<number>(1);
+  readonly zoomPercent = computed<number>(() => Math.round(this.zoomLevel() * 100));
+  readonly canZoomOut = computed<boolean>(() => this.zoomLevel() > ZOOM_MIN);
+  readonly canZoomIn = computed<boolean>(() => this.zoomLevel() < ZOOM_MAX);
 
   // Cursor circular del borrador.
   readonly cursorPos = signal<{ x: number; y: number } | null>(null);
@@ -882,9 +908,9 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       this.boardStateReady()
   );
 
-  /** Transform del lienzo según el desplazamiento actual (herramienta "Mover"). */
+  /** Transform visual local: pan + zoom sin alterar coordenadas reales del workspace. */
   readonly boardTransform = computed<string>(
-    () => `translate(${this.panX()}px, ${this.panY()}px)`
+    () => `translate(${this.panX()}px, ${this.panY()}px) scale(${this.zoomLevel()})`
   );
 
   /** Muestra el cursor circular del borrador (vista previa del área que se borrará). */
@@ -1035,6 +1061,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.fullscreen.set(!this.fullscreen());
     // Al cambiar el tamaño del visor, re-encaja el desplazamiento para no perder la pizarra.
     requestAnimationFrame(() => this.setPan(this.panX(), this.panY()));
+  }
+
+  zoomOut(): void {
+    this.setZoom(this.zoomLevel() - ZOOM_STEP);
+  }
+
+  zoomIn(): void {
+    this.setZoom(this.zoomLevel() + ZOOM_STEP);
+  }
+
+  private setZoom(value: number): void {
+    const next = Math.round(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value)) * 100) / 100;
+    if (next === this.zoomLevel()) {
+      return;
+    }
+    this.zoomLevel.set(next);
+    this.setPan(this.panX(), this.panY());
   }
 
   @HostListener('document:keydown.escape')
@@ -1275,8 +1318,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     const wrap = this.wrapRef()?.nativeElement;
     const viewW = wrap?.clientWidth ?? WORKSPACE_WIDTH;
     const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
-    const minX = Math.min(0, viewW - WORKSPACE_WIDTH);
-    const minY = Math.min(0, viewH - WORKSPACE_HEIGHT);
+    const scaledW = WORKSPACE_WIDTH * this.zoomLevel();
+    const scaledH = WORKSPACE_HEIGHT * this.zoomLevel();
+    const minX = Math.min(0, viewW - scaledW);
+    const minY = Math.min(0, viewH - scaledH);
     this.panX.set(Math.max(minX, Math.min(0, x)));
     this.panY.set(Math.max(minY, Math.min(0, y)));
   }
@@ -1286,7 +1331,18 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     const wrap = this.wrapRef()?.nativeElement;
     const viewW = wrap?.clientWidth ?? WORKSPACE_WIDTH;
     const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
-    this.setPan((viewW - WORKSPACE_WIDTH) / 2, (viewH - WORKSPACE_HEIGHT) / 2);
+    this.setPan(
+      (viewW - WORKSPACE_WIDTH * this.zoomLevel()) / 2,
+      (viewH - WORKSPACE_HEIGHT * this.zoomLevel()) / 2
+    );
+  }
+
+  toScreenX(wx: number): number {
+    return this.panX() + wx * this.zoomLevel();
+  }
+
+  toScreenY(wy: number): number {
+    return this.panY() + wy * this.zoomLevel();
   }
 
   private updateCursorPos(event: PointerEvent): void {
@@ -1306,17 +1362,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     // Si ya había un texto en edición, confírmalo antes de abrir otro.
     this.commitText();
-    const wrap = this.wrapRef()?.nativeElement;
-    if (!wrap) {
-      return;
-    }
-    const rect = wrap.getBoundingClientRect();
     const wp = this.toCanvasPoint(event);
     this.editingTextId.set(null);
     this.resetFormatStates();
     this.textDraft.set({
-      screenX: event.clientX - rect.left,
-      screenY: event.clientY - rect.top,
       wx: wp.x,
       wy: wp.y,
     });
@@ -1532,10 +1581,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     event.preventDefault();
-    // El lienzo se muestra a escala 1:1, por lo que el desplazamiento en pantalla equivale al
-    // desplazamiento en coordenadas del workspace.
-    const dx = event.clientX - this.textDragStart.clientX;
-    const dy = event.clientY - this.textDragStart.clientY;
+    const dx = (event.clientX - this.textDragStart.clientX) / this.zoomLevel();
+    const dy = (event.clientY - this.textDragStart.clientY) / this.zoomLevel();
     const item = this.textItems().find((i) => i.id === id);
     if (!item) {
       return;
@@ -1586,8 +1633,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.resetFormatStates();
     this.editingTextId.set(item.id);
     this.textDraft.set({
-      screenX: this.panX() + item.wx,
-      screenY: this.panY() + item.wy,
       wx: item.wx,
       wy: item.wy,
     });
@@ -1728,8 +1773,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     event.preventDefault();
-    const dx = event.clientX - this.shapeDragStart.clientX;
-    const dy = event.clientY - this.shapeDragStart.clientY;
+    const dx = (event.clientX - this.shapeDragStart.clientX) / this.zoomLevel();
+    const dy = (event.clientY - this.shapeDragStart.clientY) / this.zoomLevel();
     const moved = moveShape(start, dx, dy, WORKSPACE_WIDTH, WORKSPACE_HEIGHT);
     this.shapeItems.update((items) => items.map((shape) => (shape.id === id ? moved : shape)));
   }
