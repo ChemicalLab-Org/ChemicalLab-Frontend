@@ -1523,15 +1523,16 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     const stack = this.undoStack();
     const actions = this.takeGestureActions(stack);
+    const redoActions = this.prepareHistoryActions(actions, 'undo');
     this.undoStack.set(stack.slice(0, stack.length - actions.length));
-    if (!this.applyHistoryActions(actions, 'undo')) {
-      for (const action of actions) {
+    if (!this.applyHistoryActions(redoActions, 'undo')) {
+      for (const action of redoActions) {
         this.discardObjectHistory(action);
       }
       this.showBanner('No se pudo deshacer: el objeto cambio en otra sesion.', 'warning');
       return true;
     }
-    this.redoStack.update((items) => [...items, ...actions]);
+    this.redoStack.update((items) => [...items, ...redoActions]);
     return true;
   }
 
@@ -1541,15 +1542,16 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     const stack = this.redoStack();
     const actions = this.takeGestureActions(stack);
+    const undoActions = this.prepareHistoryActions(actions, 'redo');
     this.redoStack.set(stack.slice(0, stack.length - actions.length));
-    if (!this.applyHistoryActions(actions, 'redo')) {
-      for (const action of actions) {
+    if (!this.applyHistoryActions(undoActions, 'redo')) {
+      for (const action of undoActions) {
         this.discardObjectHistory(action);
       }
       this.showBanner('No se pudo rehacer: el objeto cambio en otra sesion.', 'warning');
       return true;
     }
-    this.undoStack.update((items) => [...items, ...actions]);
+    this.undoStack.update((items) => [...items, ...undoActions]);
     return true;
   }
 
@@ -1573,6 +1575,16 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       }
     }
     return true;
+  }
+
+  private prepareHistoryActions(
+    actions: WhiteboardUndoAction[],
+    direction: 'undo' | 'redo'
+  ): WhiteboardUndoAction[] {
+    if (direction !== 'undo') {
+      return actions;
+    }
+    return actions.map((action) => this.captureCurrentCreateState(action));
   }
 
   private recordUndoAction(
@@ -1603,6 +1615,33 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     this.applyUndoObjectState(action, target);
     return true;
+  }
+
+  private captureCurrentCreateState(action: WhiteboardUndoAction): WhiteboardUndoAction {
+    if ((action.type !== 'CREATE_OBJECT' && action.type !== 'CREATE_STROKE') || action.before !== null) {
+      return action;
+    }
+    const current = this.findUndoObject(action);
+    if (current === null) {
+      return action;
+    }
+    return {
+      ...action,
+      after: this.cloneUndoObjectForAction(action, current),
+    };
+  }
+
+  private cloneUndoObjectForAction(
+    action: WhiteboardUndoAction,
+    object: UndoableObject
+  ): UndoableObject {
+    if (action.objectType === 'TEXT') {
+      return this.cloneTextItem(object as DisplayTextItem);
+    }
+    if (action.objectType === 'SHAPE') {
+      return this.cloneShapeItem(object as DisplayShapeItem);
+    }
+    return this.cloneStrokeRecord(object as WhiteboardStrokeRecord);
   }
 
   private applyUndoObjectState(action: WhiteboardUndoAction, object: UndoableObject | null): void {
@@ -1678,7 +1717,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       ];
     }
     this.redrawCanvasFromStrokes();
-    this.broadcastStrokeHistoryChange(action, direction, target, expected);
+    this.broadcastBoardRecompose();
     return true;
   }
 
@@ -2322,39 +2361,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
   }
 
-  private broadcastStrokeHistoryChange(
-    action: WhiteboardUndoAction,
-    direction: 'undo' | 'redo',
-    target: WhiteboardStrokeRecord | null,
-    expected: WhiteboardStrokeRecord | null
-  ): void {
-    if (action.type === 'ERASE_STROKE' && direction === 'undo' && target === null) {
-      this.broadcastStrokeOverlaySequence();
-      return;
-    }
-    if (target !== null) {
-      this.broadcastStrokeRecord(target);
-      return;
-    }
-    if (expected?.eventType === 'DRAW') {
-      this.broadcastStrokeErase(expected);
-    }
-  }
-
-  private broadcastStrokeOverlaySequence(): void {
+  private broadcastBoardRecompose(): void {
+    this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId: this.newEventId('recompose') });
     for (const stroke of this.boardStrokes) {
       this.broadcastStrokeRecord(stroke);
     }
-  }
-
-  private broadcastStrokeErase(stroke: WhiteboardStrokeRecord): void {
-    this.realtime.sendDraw({
-      eventType: 'ERASE',
-      tool: 'ERASER',
-      eraserSize: Math.max((stroke.strokeWidth ?? 4) + 6, 12),
-      points: stroke.points,
-      clientEventId: this.newEventId('undo-stroke'),
-    });
   }
 
   private broadcastStrokeRecord(stroke: WhiteboardStrokeRecord): void {
