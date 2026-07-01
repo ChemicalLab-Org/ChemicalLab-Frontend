@@ -71,6 +71,7 @@ const SNAPSHOT_MAX_WIDTH = 2400;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
+const VIEW_FIT_PADDING = 48;
 // Deshacer/rehacer queda desactivado temporalmente hasta estabilizar la sincronizacion colaborativa.
 const UNDO_REDO_ENABLED = false;
 
@@ -342,6 +343,30 @@ const UNDO_STACK_LIMIT = 80;
                           <span class="material-icons">add</span>
                         </button>
                       </div>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        title="Ajustar a pantalla"
+                        (click)="fitView()"
+                      >
+                        <span class="material-icons">aspect_ratio</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        title="Centrar vista"
+                        (click)="centerView()"
+                      >
+                        <span class="material-icons">center_focus_strong</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="tool-btn"
+                        title="Resetear vista"
+                        (click)="resetView()"
+                      >
+                        <span class="material-icons">refresh</span>
+                      </button>
                       @if (undoRedoEnabled) {
                         <button
                           type="button"
@@ -1089,6 +1114,36 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.setPan(this.panX(), this.panY());
   }
 
+  fitView(): void {
+    const wrap = this.wrapRef()?.nativeElement;
+    const viewW = wrap?.clientWidth ?? WORKSPACE_WIDTH;
+    const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
+    const fitZoom = Math.min(
+      Math.max(1, viewW - VIEW_FIT_PADDING) / WORKSPACE_WIDTH,
+      Math.max(1, viewH - VIEW_FIT_PADDING) / WORKSPACE_HEIGHT
+    );
+    this.cancelTransientNavigationState();
+    this.zoomLevel.set(Math.round(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fitZoom)) * 100) / 100);
+    this.centerPan();
+  }
+
+  centerView(): void {
+    this.cancelTransientNavigationState();
+    this.centerPan();
+  }
+
+  resetView(): void {
+    this.cancelTransientNavigationState();
+    this.zoomLevel.set(1);
+    this.centerPan();
+  }
+
+  private cancelTransientNavigationState(): void {
+    this.panning = false;
+    this.cursorPos.set(null);
+    this.cancelShapePreview();
+  }
+
   @HostListener('document:keydown.escape')
   onEscape(): void {
     if (this.shapePreview() !== null) {
@@ -1334,10 +1389,14 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     const viewH = wrap?.clientHeight ?? WORKSPACE_HEIGHT;
     const scaledW = WORKSPACE_WIDTH * this.zoomLevel();
     const scaledH = WORKSPACE_HEIGHT * this.zoomLevel();
-    const minX = Math.min(0, viewW - scaledW);
-    const minY = Math.min(0, viewH - scaledH);
-    this.panX.set(Math.max(minX, Math.min(0, x)));
-    this.panY.set(Math.max(minY, Math.min(0, y)));
+    const centeredX = (viewW - scaledW) / 2;
+    const centeredY = (viewH - scaledH) / 2;
+    const minX = scaledW <= viewW ? centeredX : viewW - scaledW;
+    const maxX = scaledW <= viewW ? centeredX : 0;
+    const minY = scaledH <= viewH ? centeredY : viewH - scaledH;
+    const maxY = scaledH <= viewH ? centeredY : 0;
+    this.panX.set(Math.max(minX, Math.min(maxX, x)));
+    this.panY.set(Math.max(minY, Math.min(maxY, y)));
   }
 
   /** Centra la vista del workspace en el visor. */
