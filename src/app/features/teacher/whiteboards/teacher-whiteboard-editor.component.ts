@@ -224,13 +224,14 @@ const UNDO_STACK_LIMIT = 80;
                      cambiar de herramienta. -->
                 <div class="toolbar">
                   <div class="toolbar__row">
-                    <div class="toolbar__group">
+                    <div class="toolbar__group toolbar__group--tools" role="group" aria-label="Herramientas de pizarra">
                       <button
                         type="button"
                         class="tool-btn"
                         [class.tool-btn--active]="tool() === 'PEN'"
                         [disabled]="!canDraw()"
                         title="Plumón"
+                        aria-label="Plumón"
                         (click)="selectTool('PEN')"
                       >
                         <span class="material-icons">edit</span>
@@ -241,6 +242,7 @@ const UNDO_STACK_LIMIT = 80;
                         [class.tool-btn--active]="tool() === 'ERASER'"
                         [disabled]="!canDraw()"
                         title="Borrador"
+                        aria-label="Borrador"
                         (click)="selectTool('ERASER')"
                       >
                         <!-- Borrador en SVG inline: el set "Material Icons" clásico (el único cargado
@@ -259,16 +261,19 @@ const UNDO_STACK_LIMIT = 80;
                         [class.tool-btn--active]="tool() === 'TEXT'"
                         [disabled]="!canDraw()"
                         title="Texto"
+                        aria-label="Texto"
                         (click)="selectTool('TEXT')"
                       >
                         <span class="material-icons">title</span>
                       </button>
+                      <span class="toolbar__divider" aria-hidden="true"></span>
                       <button
                         type="button"
                         class="tool-btn"
                         [class.tool-btn--active]="tool() === 'RECTANGLE'"
                         [disabled]="!canDraw()"
-                        title="Rectangulo"
+                        title="Rectángulo"
+                        aria-label="Rectángulo"
                         (click)="selectTool('RECTANGLE')"
                       >
                         <span class="material-icons">crop_square</span>
@@ -278,7 +283,8 @@ const UNDO_STACK_LIMIT = 80;
                         class="tool-btn"
                         [class.tool-btn--active]="tool() === 'CIRCLE'"
                         [disabled]="!canDraw()"
-                        title="Circulo"
+                        title="Círculo"
+                        aria-label="Círculo"
                         (click)="selectTool('CIRCLE')"
                       >
                         <span class="material-icons">radio_button_unchecked</span>
@@ -288,7 +294,8 @@ const UNDO_STACK_LIMIT = 80;
                         class="tool-btn"
                         [class.tool-btn--active]="tool() === 'LINE'"
                         [disabled]="!canDraw()"
-                        title="Linea"
+                        title="Línea"
+                        aria-label="Línea"
                         (click)="selectTool('LINE')"
                       >
                         <span class="material-icons">horizontal_rule</span>
@@ -299,16 +306,19 @@ const UNDO_STACK_LIMIT = 80;
                         [class.tool-btn--active]="tool() === 'ARROW'"
                         [disabled]="!canDraw()"
                         title="Flecha"
+                        aria-label="Flecha"
                         (click)="selectTool('ARROW')"
                       >
                         <span class="material-icons">arrow_forward</span>
                       </button>
+                      <span class="toolbar__divider" aria-hidden="true"></span>
                       <button
                         type="button"
                         class="tool-btn"
                         [class.tool-btn--active]="tool() === 'SELECT'"
                         [disabled]="!canDraw()"
                         title="Seleccionar"
+                        aria-label="Seleccionar"
                         (click)="selectTool('SELECT')"
                       >
                         <span class="material-icons">near_me</span>
@@ -318,19 +328,21 @@ const UNDO_STACK_LIMIT = 80;
                         class="tool-btn"
                         [class.tool-btn--active]="tool() === 'MOVE'"
                         title="Mover pizarra"
+                        aria-label="Mover vista"
                         (click)="selectTool('MOVE')"
                       >
                         <span class="material-icons">pan_tool</span>
                       </button>
                     </div>
 
-                    <div class="toolbar__group toolbar__group--right">
+                    <div class="toolbar__group toolbar__group--right" role="group" aria-label="Navegación y sesión">
                       <div class="zoom-control" aria-label="Zoom de pizarra">
                         <button
                           type="button"
                           class="tool-btn"
                           [disabled]="!canZoomOut()"
-                          title="Alejar"
+                          title="Zoom menos"
+                          aria-label="Zoom menos"
                           (click)="zoomOut()"
                         >
                           <span class="material-icons">remove</span>
@@ -340,7 +352,8 @@ const UNDO_STACK_LIMIT = 80;
                           type="button"
                           class="tool-btn"
                           [disabled]="!canZoomIn()"
-                          title="Acercar"
+                          title="Zoom más"
+                          aria-label="Zoom más"
                           (click)="zoomIn()"
                         >
                           <span class="material-icons">add</span>
@@ -350,6 +363,7 @@ const UNDO_STACK_LIMIT = 80;
                         type="button"
                         class="tool-btn"
                         title="Ajustar a pantalla"
+                        aria-label="Ajustar a pantalla"
                         (click)="fitView()"
                       >
                         <span class="material-icons">aspect_ratio</span>
@@ -358,6 +372,7 @@ const UNDO_STACK_LIMIT = 80;
                         type="button"
                         class="tool-btn"
                         title="Centrar vista"
+                        aria-label="Centrar vista"
                         (click)="centerView()"
                       >
                         <span class="material-icons">center_focus_strong</span>
@@ -366,6 +381,7 @@ const UNDO_STACK_LIMIT = 80;
                         type="button"
                         class="tool-btn"
                         title="Resetear vista"
+                        aria-label="Resetear vista"
                         (click)="resetView()"
                       >
                         <span class="material-icons">refresh</span>
@@ -376,6 +392,7 @@ const UNDO_STACK_LIMIT = 80;
                           class="tool-btn"
                           [disabled]="!canUndo()"
                           title="Deshacer (Ctrl+Z)"
+                          aria-label="Deshacer"
                           (click)="undoWhiteboardAction()"
                         >
                           <span class="material-icons">undo</span>
@@ -385,6 +402,7 @@ const UNDO_STACK_LIMIT = 80;
                           class="tool-btn"
                           [disabled]="!canRedo()"
                           title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
+                          aria-label="Rehacer"
                           (click)="redoWhiteboardAction()"
                         >
                           <span class="material-icons">redo</span>
@@ -395,20 +413,22 @@ const UNDO_STACK_LIMIT = 80;
                         class="tool-btn"
                         [class.tool-btn--active]="fullscreen()"
                         [title]="fullscreen() ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa'"
+                        [attr.aria-label]="fullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa'"
                         (click)="toggleFullscreen()"
                       >
                         <span class="material-icons">{{ fullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</span>
                       </button>
+                      <span class="toolbar__divider toolbar__divider--session" aria-hidden="true"></span>
                       @if (s.status === 'ACTIVE') {
-                        <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" (click)="pause()">
+                        <button type="button" class="btn btn-secondary btn-sm" [disabled]="busy()" title="Pausar sesión" (click)="pause()">
                           <span class="material-icons">pause</span> Pausar
                         </button>
                       } @else if (s.status === 'PAUSED') {
-                        <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" (click)="resume()">
+                        <button type="button" class="btn btn-primary btn-sm" [disabled]="busy()" title="Reanudar sesión" (click)="resume()">
                           <span class="material-icons">play_arrow</span> Reanudar
                         </button>
                       }
-                      <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" (click)="askFinalize()">
+                      <button type="button" class="btn btn-danger btn-sm" [disabled]="busy()" title="Finalizar sesión" (click)="askFinalize()">
                         <span class="material-icons">stop_circle</span> Finalizar
                       </button>
                     </div>
@@ -478,6 +498,7 @@ const UNDO_STACK_LIMIT = 80;
                             [class.tool-btn--active]="textBold()"
                             [disabled]="textDraft() === null"
                             title="Negrita (selecciona texto para aplicarlo a una parte)"
+                            aria-label="Negrita"
                             (mousedown)="$event.preventDefault()"
                             (click)="applyFormat('bold')"
                           >
@@ -489,6 +510,7 @@ const UNDO_STACK_LIMIT = 80;
                             [class.tool-btn--active]="textItalic()"
                             [disabled]="textDraft() === null"
                             title="Cursiva (selecciona texto para aplicarlo a una parte)"
+                            aria-label="Cursiva"
                             (mousedown)="$event.preventDefault()"
                             (click)="applyFormat('italic')"
                           >
@@ -500,6 +522,7 @@ const UNDO_STACK_LIMIT = 80;
                             [class.tool-btn--active]="textUnderline()"
                             [disabled]="textDraft() === null"
                             title="Subrayado (selecciona texto para aplicarlo a una parte)"
+                            aria-label="Subrayado"
                             (mousedown)="$event.preventDefault()"
                             (click)="applyFormat('underline')"
                           >
@@ -514,6 +537,7 @@ const UNDO_STACK_LIMIT = 80;
                       class="btn btn-secondary btn-sm"
                       [disabled]="!canDraw()"
                       title="Borrar toda la pizarra"
+                      aria-label="Borrar toda la pizarra"
                       (click)="askClear()"
                     >
                       <span class="material-icons">delete_sweep</span>
@@ -715,7 +739,7 @@ const UNDO_STACK_LIMIT = 80;
                 <aside class="participants card">
                   <div class="participants__header">
                     <h2 class="card-title">Participantes</h2>
-                    <button type="button" class="icon-btn" title="Actualizar" (click)="refreshParticipants()">
+                    <button type="button" class="icon-btn" title="Actualizar participantes" aria-label="Actualizar participantes" (click)="refreshParticipants()">
                       <span class="material-icons">refresh</span>
                     </button>
                   </div>
@@ -730,6 +754,9 @@ const UNDO_STACK_LIMIT = 80;
                     <span class="global-toggle__text">
                       Interacción de todos los alumnos
                       <small>{{ s.interactionEnabled ? 'Habilitada' : 'Deshabilitada' }}</small>
+                    </span>
+                    <span class="global-toggle__badge" [class.global-toggle__badge--enabled]="s.interactionEnabled">
+                      {{ s.interactionEnabled ? 'Permitido' : 'Bloqueado' }}
                     </span>
                   </label>
 
@@ -3121,11 +3148,11 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   connLabel(): string {
     switch (this.connectionState()) {
       case 'connected':
-        return 'En vivo';
+        return 'Conectado';
       case 'connecting':
-        return 'Conectando…';
+        return 'Reconectando';
       case 'disconnected':
-        return 'Sin conexión';
+        return 'Desconectado';
     }
   }
 
