@@ -358,7 +358,11 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   // Fondo neutro del "escritorio": solo se ve al desplazarse hasta el borde del workspace.
-  background: var(--color-neutral-200);
+  background:
+    linear-gradient(0deg, rgba(255, 255, 255, 0.38) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.38) 1px, transparent 1px),
+    var(--color-neutral-200);
+  background-size: 32px 32px;
   box-shadow: var(--shadow-sm);
   height: clamp(420px, 64vh, 760px);
 }
@@ -370,6 +374,10 @@
   touch-action: none;
   transform-origin: top left;
   background: var(--color-neutral-0);
+  outline: 2px solid rgba(29, 158, 117, 0.42);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.08),
+    0 16px 36px rgba(15, 23, 42, 0.12);
 }
 
 // Cursor circular del borrador: el diámetro coincide con el tamaño del borrador (px lógicos = px
@@ -518,6 +526,7 @@
   position: absolute;
   inset: 0;
   z-index: 6; // por encima de textos y cursor del borrador
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: center;
