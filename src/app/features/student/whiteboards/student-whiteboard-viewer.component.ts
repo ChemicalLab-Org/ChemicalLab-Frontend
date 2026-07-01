@@ -85,6 +85,22 @@ interface TextDraft {
 /** Objeto de texto sobre la pizarra (propio del alumno o recibido del docente/otros). */
 type DisplayTextItem = WhiteboardTextObject;
 type DisplayShapeItem = WhiteboardShapeObject;
+type UndoableObjectType = 'TEXT' | 'SHAPE';
+type UndoableObject = DisplayTextItem | DisplayShapeItem;
+type WhiteboardUndoActionType = 'CREATE_OBJECT' | 'UPDATE_OBJECT' | 'MOVE_OBJECT' | 'DELETE_OBJECT';
+
+interface WhiteboardUndoAction {
+  readonly id: string;
+  readonly actorId: number | string;
+  readonly type: WhiteboardUndoActionType;
+  readonly objectId: string;
+  readonly objectType: UndoableObjectType;
+  readonly before: UndoableObject | null;
+  readonly after: UndoableObject | null;
+  readonly timestamp: number;
+}
+
+const UNDO_STACK_LIMIT = 80;
 
 /**
  * Visor en vivo de la pizarra para el estudiante.
@@ -295,6 +311,24 @@ type DisplayShapeItem = WhiteboardShapeObject;
                 </div>
 
                 <div class="toolbar__group toolbar__group--right">
+                  <button
+                    type="button"
+                    class="tool-btn"
+                    [disabled]="!canUndo()"
+                    title="Deshacer (Ctrl+Z)"
+                    (click)="undoWhiteboardAction()"
+                  >
+                    <span class="material-icons">undo</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="tool-btn"
+                    [disabled]="!canRedo()"
+                    title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)"
+                    (click)="redoWhiteboardAction()"
+                  >
+                    <span class="material-icons">redo</span>
+                  </button>
                   <button
                     type="button"
                     class="tool-btn"
@@ -652,6 +686,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   readonly textUnderline = signal<boolean>(false);
 
   readonly fullscreen = signal<boolean>(false);
+  private readonly undoStack = signal<WhiteboardUndoAction[]>([]);
+  private readonly redoStack = signal<WhiteboardUndoAction[]>([]);
 
   readonly session = signal<WhiteboardStudentSessionResponse | null>(null);
   readonly loading = signal<boolean>(true);
@@ -700,6 +736,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   /** La reedición de texto existente permanece ligada a la herramienta Texto. */
   readonly canEditText = computed<boolean>(() => this.tool() === 'TEXT' && this.canDraw());
+  readonly canUndo = computed<boolean>(() => this.canDraw() && this.textDraft() === null && this.undoStack().length > 0);
+  readonly canRedo = computed<boolean>(() => this.canDraw() && this.textDraft() === null && this.redoStack().length > 0);
 
   readonly canvasCursor = computed<string>(() => {
     if (this.tool() === 'MOVE') {
@@ -987,6 +1025,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     const editor = this.textEditorRef()?.nativeElement ?? null;
     const editingId = this.editingTextId();
+    const beforeEdit = editingId !== null ? this.textItems().find((item) => item.id === editingId) ?? null : null;
     const runs = editor ? parseRuns(editor) : [];
     const plain = runs.map((r) => r.text).join('').trim();
 
@@ -998,8 +1037,15 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
     if (plain === '') {
       // Edición que se dejó vacía: se elimina el texto existente (y se avisa a los demás).
-      if (editingId !== null) {
+      if (editingId !== null && beforeEdit !== null) {
         this.textItems.update((items) => items.filter((i) => i.id !== editingId));
+        this.recordUndoAction({
+          type: 'DELETE_OBJECT',
+          objectId: editingId,
+          objectType: 'TEXT',
+          before: this.cloneTextItem(beforeEdit),
+          after: null,
+        });
         this.broadcastTextDelete(editingId);
       }
       return;
@@ -1013,9 +1059,25 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     if (editingId !== null) {
       saved = { id: editingId, wx: draft.wx, wy: draft.wy, ...base };
       this.textItems.update((items) => items.map((i) => (i.id === editingId ? saved : i)));
+      if (beforeEdit !== null && !this.sameObject(beforeEdit, saved)) {
+        this.recordUndoAction({
+          type: 'UPDATE_OBJECT',
+          objectId: saved.id,
+          objectType: 'TEXT',
+          before: this.cloneTextItem(beforeEdit),
+          after: this.cloneTextItem(saved),
+        });
+      }
     } else {
       saved = { id: localTextId(), wx: draft.wx, wy: draft.wy, ...base };
       this.textItems.update((items) => [...items, saved]);
+      this.recordUndoAction({
+        type: 'CREATE_OBJECT',
+        objectId: saved.id,
+        objectType: 'TEXT',
+        before: null,
+        after: this.cloneTextItem(saved),
+      });
     }
     this.broadcastTextUpsert(saved);
   }
@@ -1165,6 +1227,13 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     // Difunde la nueva posición para que el docente y los demás la vean (manteniendo el formato).
     const moved = this.textItems().find((i) => i.id === id);
     if (moved && (moved.wx !== this.textDragStart.wx || moved.wy !== this.textDragStart.wy)) {
+      this.recordUndoAction({
+        type: 'MOVE_OBJECT',
+        objectId: moved.id,
+        objectType: 'TEXT',
+        before: this.cloneTextItem({ ...moved, wx: this.textDragStart.wx, wy: this.textDragStart.wy }),
+        after: this.cloneTextItem(moved),
+      });
       this.broadcastTextUpsert(moved);
     }
   }
@@ -1224,13 +1293,20 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     if (id === null || !this.canDraw()) {
       return false;
     }
-    const exists = this.textItems().some((item) => item.id === id);
-    if (!exists) {
+    const item = this.textItems().find((current) => current.id === id) ?? null;
+    if (item === null) {
       this.clearSelection();
       return false;
     }
     this.textItems.update((items) => items.filter((item) => item.id !== id));
     this.clearSelection();
+    this.recordUndoAction({
+      type: 'DELETE_OBJECT',
+      objectId: id,
+      objectType: 'TEXT',
+      before: this.cloneTextItem(item),
+      after: null,
+    });
     this.broadcastTextDelete(id);
     return true;
   }
@@ -1240,13 +1316,20 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     if (id === null || !this.canDraw()) {
       return false;
     }
-    const exists = this.shapeItems().some((shape) => shape.id === id);
-    if (!exists) {
+    const shape = this.shapeItems().find((current) => current.id === id) ?? null;
+    if (shape === null) {
       this.clearSelection();
       return false;
     }
     this.shapeItems.update((items) => items.filter((shape) => shape.id !== id));
     this.clearSelection();
+    this.recordUndoAction({
+      type: 'DELETE_OBJECT',
+      objectId: id,
+      objectType: 'SHAPE',
+      before: this.cloneShapeItem(shape),
+      after: null,
+    });
     this.broadcastShapeDelete(id);
     return true;
   }
@@ -1358,6 +1441,13 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       moved &&
       (moved.x1 !== start.x1 || moved.y1 !== start.y1 || moved.x2 !== start.x2 || moved.y2 !== start.y2)
     ) {
+      this.recordUndoAction({
+        type: 'MOVE_OBJECT',
+        objectId: moved.id,
+        objectType: 'SHAPE',
+        before: this.cloneShapeItem(start),
+        after: this.cloneShapeItem(moved),
+      });
       this.broadcastShapeUpsert(moved);
     }
   }
@@ -1381,6 +1471,169 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private broadcastShapeDelete(shapeId: string): void {
     const clientEventId = this.newEventId();
     this.realtime.sendDraw({ eventType: 'SHAPE_DELETE', tool: 'RECTANGLE', shapeId, clientEventId });
+  }
+
+  undoWhiteboardAction(): boolean {
+    if (!this.canUndo()) {
+      return false;
+    }
+    const stack = this.undoStack();
+    const action = stack[stack.length - 1];
+    this.undoStack.set(stack.slice(0, -1));
+    if (!this.applyHistoryAction(action, 'undo')) {
+      this.discardObjectHistory(action);
+      this.showBanner('No se pudo deshacer: el objeto cambio en otra sesion.', 'warning');
+      return true;
+    }
+    this.redoStack.update((items) => [...items, action]);
+    return true;
+  }
+
+  redoWhiteboardAction(): boolean {
+    if (!this.canRedo()) {
+      return false;
+    }
+    const stack = this.redoStack();
+    const action = stack[stack.length - 1];
+    this.redoStack.set(stack.slice(0, -1));
+    if (!this.applyHistoryAction(action, 'redo')) {
+      this.discardObjectHistory(action);
+      this.showBanner('No se pudo rehacer: el objeto cambio en otra sesion.', 'warning');
+      return true;
+    }
+    this.undoStack.update((items) => [...items, action]);
+    return true;
+  }
+
+  private recordUndoAction(
+    action: Omit<WhiteboardUndoAction, 'id' | 'actorId' | 'timestamp'>
+  ): void {
+    if (!this.canDraw()) {
+      return;
+    }
+    const fullAction: WhiteboardUndoAction = {
+      ...action,
+      id: this.localHistoryId(),
+      actorId: this.currentUser()?.userId ?? this.userName(),
+      timestamp: Date.now(),
+    };
+    this.undoStack.update((items) => [...items, fullAction].slice(-UNDO_STACK_LIMIT));
+    this.redoStack.set([]);
+  }
+
+  private applyHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): boolean {
+    const expected = direction === 'undo' ? action.after : action.before;
+    const target = direction === 'undo' ? action.before : action.after;
+    const current = this.findUndoObject(action);
+    if (!this.sameNullableObject(current, expected)) {
+      return false;
+    }
+    this.applyUndoObjectState(action, target);
+    return true;
+  }
+
+  private applyUndoObjectState(action: WhiteboardUndoAction, object: UndoableObject | null): void {
+    if (action.objectType === 'TEXT') {
+      if (object === null) {
+        if (this.editingTextId() === action.objectId) {
+          this.cancelText();
+        }
+        this.textItems.update((items) => items.filter((item) => item.id !== action.objectId));
+        if (this.selectedTextId() === action.objectId) {
+          this.clearSelection();
+        }
+        this.broadcastTextDelete(action.objectId);
+      } else {
+        const item = this.cloneTextItem(object as DisplayTextItem);
+        this.textItems.update((items) => this.upsertTextItem(items, item));
+        this.broadcastTextUpsert(item);
+      }
+    } else if (object === null) {
+      this.shapeItems.update((items) => items.filter((shape) => shape.id !== action.objectId));
+      if (this.selectedShapeId() === action.objectId) {
+        this.clearSelection();
+      }
+      this.broadcastShapeDelete(action.objectId);
+    } else {
+      const shape = this.cloneShapeItem(object as DisplayShapeItem);
+      this.shapeItems.update((items) => this.upsertShapeItem(items, shape));
+      this.broadcastShapeUpsert(shape);
+    }
+  }
+
+  private findUndoObject(action: WhiteboardUndoAction): UndoableObject | null {
+    if (action.objectType === 'TEXT') {
+      const item = this.textItems().find((current) => current.id === action.objectId) ?? null;
+      return item === null ? null : this.cloneTextItem(item);
+    }
+    const shape = this.shapeItems().find((current) => current.id === action.objectId) ?? null;
+    return shape === null ? null : this.cloneShapeItem(shape);
+  }
+
+  private discardObjectHistory(action: WhiteboardUndoAction): void {
+    this.undoStack.update((items) =>
+      items.filter((item) => item.objectType !== action.objectType || item.objectId !== action.objectId)
+    );
+    this.redoStack.update((items) =>
+      items.filter((item) => item.objectType !== action.objectType || item.objectId !== action.objectId)
+    );
+  }
+
+  private clearUndoHistory(): void {
+    this.undoStack.set([]);
+    this.redoStack.set([]);
+  }
+
+  private upsertTextItem(items: DisplayTextItem[], item: DisplayTextItem): DisplayTextItem[] {
+    const index = items.findIndex((current) => current.id === item.id);
+    if (index === -1) {
+      return [...items, item];
+    }
+    const next = [...items];
+    next[index] = item;
+    return next;
+  }
+
+  private upsertShapeItem(items: DisplayShapeItem[], shape: DisplayShapeItem): DisplayShapeItem[] {
+    const index = items.findIndex((current) => current.id === shape.id);
+    if (index === -1) {
+      return [...items, shape];
+    }
+    const next = [...items];
+    next[index] = shape;
+    return next;
+  }
+
+  private sameNullableObject(a: UndoableObject | null, b: UndoableObject | null): boolean {
+    if (a === null || b === null) {
+      return a === b;
+    }
+    return this.sameObject(a, b);
+  }
+
+  private sameObject(a: UndoableObject, b: UndoableObject): boolean {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+
+  private cloneTextItem(item: DisplayTextItem): DisplayTextItem {
+    return {
+      id: item.id,
+      wx: item.wx,
+      wy: item.wy,
+      color: item.color,
+      size: item.size,
+      runs: item.runs.map((run) => ({ ...run })),
+    };
+  }
+
+  private cloneShapeItem(shape: DisplayShapeItem): DisplayShapeItem {
+    return { ...shape };
+  }
+
+  private localHistoryId(): string {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `undo-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
   /**
@@ -1408,10 +1661,22 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown', ['$event'])
   onDocumentKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'Delete' && event.key !== 'Backspace') {
+    if (this.textDraft() !== null || this.isEditableTarget(event.target)) {
       return;
     }
-    if (this.textDraft() !== null || this.isEditableTarget(event.target)) {
+    const key = event.key.toLowerCase();
+    const modifier = event.ctrlKey || event.metaKey;
+    const wantsUndo = modifier && key === 'z' && !event.shiftKey;
+    const wantsRedo = modifier && (key === 'y' || (key === 'z' && event.shiftKey));
+    if (wantsUndo || wantsRedo) {
+      const applied = wantsUndo ? this.undoWhiteboardAction() : this.redoWhiteboardAction();
+      if (applied) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+    if (event.key !== 'Delete' && event.key !== 'Backspace') {
       return;
     }
     if (this.deleteSelectedObject()) {
@@ -1506,8 +1771,15 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     const hitIds = new Set(hit.map((i) => i.id));
     this.textItems.update((list) => list.filter((i) => !hitIds.has(i.id)));
-    for (const id of hitIds) {
-      this.broadcastTextDelete(id);
+    for (const item of hit) {
+      this.recordUndoAction({
+        type: 'DELETE_OBJECT',
+        objectId: item.id,
+        objectType: 'TEXT',
+        before: this.cloneTextItem(item),
+        after: null,
+      });
+      this.broadcastTextDelete(item.id);
     }
   }
 
@@ -1526,8 +1798,15 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     const hitIds = new Set(hit.map((shape) => shape.id));
     this.shapeItems.update((items) => items.filter((shape) => !hitIds.has(shape.id)));
-    for (const id of hitIds) {
-      this.broadcastShapeDelete(id);
+    for (const shape of hit) {
+      this.recordUndoAction({
+        type: 'DELETE_OBJECT',
+        objectId: shape.id,
+        objectType: 'SHAPE',
+        before: this.cloneShapeItem(shape),
+        after: null,
+      });
+      this.broadcastShapeDelete(shape.id);
     }
   }
 
@@ -1546,6 +1825,13 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       (event.target as HTMLCanvasElement).releasePointerCapture?.(event.pointerId);
       if (preview !== null && !isShapeTooSmall(preview) && this.canDraw()) {
         this.shapeItems.update((items) => [...items, preview]);
+        this.recordUndoAction({
+          type: 'CREATE_OBJECT',
+          objectId: preview.id,
+          objectType: 'SHAPE',
+          before: null,
+          after: this.cloneShapeItem(preview),
+        });
         this.broadcastShapeUpsert(preview);
       }
       return;
@@ -1632,6 +1918,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       this.clearSelection();
       this.textItems.set([]);
       this.shapeItems.set([]);
+      this.clearUndoHistory();
       return;
     }
     // Texto en vivo del docente: crear/actualizar o eliminar el objeto de texto correspondiente.
