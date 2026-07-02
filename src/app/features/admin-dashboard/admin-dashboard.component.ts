@@ -167,6 +167,15 @@ export class AdminDashboardComponent {
       route: '/admin/logs',
     },
     {
+      id: 'usage-metrics',
+      title: 'Métricas de uso',
+      description: 'Consulta el uso de los módulos principales.',
+      icon: 'insights',
+      tone: 'violet',
+      cta: 'Ver métricas',
+      route: '/admin/usage-metrics',
+    },
+    {
       id: 'system',
       title: 'Estado del sistema',
       description: 'Monitorea el estado del backend y la base de datos.',

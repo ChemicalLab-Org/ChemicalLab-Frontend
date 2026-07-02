@@ -203,8 +203,13 @@ export class LoginComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
 
   ngOnInit(): void {
-    if (this.authService.isAuthenticated()) {
+    if (this.authService.hasValidSession()) {
       void this.router.navigate(['/dashboard']);
+      return;
+    }
+
+    if (this.authService.isAuthenticated()) {
+      this.authService.logout();
     }
   }
 
