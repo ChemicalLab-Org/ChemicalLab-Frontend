@@ -101,6 +101,12 @@ export class SidebarComponent {
     if (route === '/') {
       return current === '/' || current === '';
     }
+    if (route === '/evaluations') {
+      return (
+        current === '/evaluations' ||
+        (current.startsWith('/evaluations/') && !current.startsWith('/evaluations/results'))
+      );
+    }
     return current === route || current.startsWith(route + '/');
   }
 

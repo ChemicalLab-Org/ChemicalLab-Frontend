@@ -4,6 +4,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
 import { AuthResponse } from '../../shared/models';
+import { buildInitials, firstNameAndLastName } from '../../shared/utils/display-format.util';
 
 interface DashboardCard {
   readonly id: string;
@@ -34,7 +35,7 @@ interface DashboardCard {
       <main class="main">
         <header class="main__header">
           <div>
-            <h1 class="main__title">Hola, {{ firstName() }} <span class="main__wave">👋</span></h1>
+            <h1 class="main__title">Hola, {{ displayName() }} <span class="main__wave">👋</span></h1>
             <p class="main__subtitle">¿Qué quieres explorar hoy?</p>
           </div>
           <div class="role-chip">
@@ -90,18 +91,10 @@ export class StudentDashboardComponent {
 
   readonly userName = computed<string>(() => {
     const user = this.storedUser();
-    return user?.username ?? 'Estudiante';
+    return firstNameAndLastName(user, user?.username ?? 'Estudiante');
   });
 
-  readonly firstName = computed<string>(() => {
-    const name = this.userName();
-    const trimmed = name.trim();
-    if (trimmed.length === 0) {
-      return 'Estudiante';
-    }
-    const space = trimmed.indexOf(' ');
-    return space === -1 ? trimmed : trimmed.substring(0, space);
-  });
+  readonly displayName = computed<string>(() => firstNameAndLastName(this.storedUser(), 'Estudiante'));
 
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
@@ -183,13 +176,3 @@ export class StudentDashboardComponent {
   }
 }
 
-function buildInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter((p) => p.length > 0);
-  if (parts.length === 0) {
-    return '??';
-  }
-  if (parts.length === 1) {
-    return parts[0].substring(0, 2).toUpperCase();
-  }
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}

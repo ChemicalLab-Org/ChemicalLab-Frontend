@@ -12,6 +12,7 @@ import {
   StudentAttemptResultDetailResponse,
   StudentResultSummaryResponse,
 } from '../../../shared/models';
+import { formatNumberWithoutTrailingZero } from '../../../shared/utils/display-format.util';
 
 type View = 'list' | 'detail';
 
@@ -155,7 +156,7 @@ const APPROVAL_PERCENTAGE = 60;
                 <div class="score-panel__facts">
                   <div class="fact">
                     <span class="fact__label">Puntaje</span>
-                    <span class="fact__value">{{ d.score ?? 0 }} / {{ d.maxScore ?? 0 }}</span>
+                    <span class="fact__value">{{ formatScore(d.score) }} / {{ formatScore(d.maxScore) }}</span>
                   </div>
                   <div class="fact">
                     <span class="fact__label">Porcentaje</span>
@@ -190,7 +191,7 @@ const APPROVAL_PERCENTAGE = 60;
                       <span class="answer__num">{{ i + 1 }}</span>
                       <span class="answer__text">{{ a.questionText }}</span>
                       @if (a.reviewed) {
-                        <span class="answer__points">{{ a.pointsAwarded ?? 0 }} / {{ a.points }}</span>
+                        <span class="answer__points">{{ formatScore(a.pointsAwarded) }} / {{ formatScore(a.points) }}</span>
                       } @else {
                         <span class="badge badge-warning">Pendiente de revisión</span>
                       }
@@ -213,7 +214,7 @@ const APPROVAL_PERCENTAGE = 60;
                     <div class="answer__head">
                       <span class="answer__num">{{ i + 1 }}</span>
                       <span class="answer__text">{{ a.questionText }}</span>
-                      <span class="answer__points">{{ a.pointsAwarded ?? 0 }} / {{ a.points }}</span>
+                      <span class="answer__points">{{ formatScore(a.pointsAwarded) }} / {{ formatScore(a.points) }}</span>
                     </div>
                     <div class="answer__row">
                       <span class="answer__label">Tu respuesta:</span>
@@ -351,7 +352,11 @@ export class StudentResultsComponent implements OnInit {
 
   /** Nota en escala 0–20 con un decimal; '—' si no hay valor. */
   formatGrade(value: number | null): string {
-    return value === null || value === undefined ? '—' : value.toFixed(1);
+    return formatNumberWithoutTrailingZero(value);
+  }
+
+  formatScore(value: number | null): string {
+    return formatNumberWithoutTrailingZero(value);
   }
 
   /** Indica si el detalle tiene preguntas de un tipo dado. */

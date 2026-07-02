@@ -423,11 +423,11 @@ interface RoleOption {
                     [class.input-error]="isInvalid('grade')">
                     <option value="" disabled>Selecciona…</option>
                     @for (g of gradeOptions; track g) {
-                      <option [value]="g">{{ g }}</option>
+                      <option [value]="g">{{ g }}° de secundaria</option>
                     }
                   </select>
                   @if (isInvalid('grade')) {
-                    <span class="form-error">Selecciona un grado del 1 al 6.</span>
+                    <span class="form-error">Selecciona un grado del 1 al 5.</span>
                   }
                 </div>
                 <div class="form-group">
@@ -610,8 +610,8 @@ export class AdminUsersComponent {
     { id: 'ADMINISTRADOR', label: 'Administrador' },
   ];
 
-  /** Grados válidos para estudiantes (1 a 6), alineados con la validación del backend. */
-  readonly gradeOptions: readonly string[] = ['1', '2', '3', '4', '5', '6'];
+  /** Grados válidos para estudiantes (1 a 5), alineados con la validación del backend. */
+  readonly gradeOptions: readonly string[] = ['1', '2', '3', '4', '5'];
 
   // Datos
   readonly users = signal<AdminUser[]>([]);
@@ -1019,8 +1019,8 @@ export class AdminUsersComponent {
     } else {
       required['names'] = [Validators.required, Validators.maxLength(100)];
       required['lastNames'] = [Validators.required, Validators.maxLength(100)];
-      // Grado: entero del 1 al 6. Sección: exactamente una letra (A-Z).
-      required['grade'] = [Validators.required, Validators.pattern(/^[1-6]$/)];
+      // Grado: entero del 1 al 5. Sección: exactamente una letra (A-Z).
+      required['grade'] = [Validators.required, Validators.pattern(/^[1-5]$/)];
       required['section'] = [Validators.required, Validators.pattern(/^[A-Za-z]$/)];
       required['teacherUserId'] = [Validators.required];
     }

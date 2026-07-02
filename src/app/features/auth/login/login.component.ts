@@ -115,7 +115,6 @@ import { AuthResponse } from '../../../shared/models';
             <div class="field">
               <div class="field__row">
                 <label class="field__label" for="password">Contraseña</label>
-                <a class="field__link" href="#">¿Olvidaste tu contraseña?</a>
               </div>
               <div class="field__control">
                 <span class="field__icon" aria-hidden="true">

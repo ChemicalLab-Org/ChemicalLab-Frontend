@@ -17,12 +17,20 @@ import {
   TeacherReviewAnswerResponse,
   TeacherStudentResultResponse,
 } from '../../../shared/models';
+import { formatNumberWithoutTrailingZero } from '../../../shared/utils/display-format.util';
 
 type ApprovalFilter = 'all' | 'approved' | 'failed';
 type SortKey = 'score' | 'date';
 
 /** Umbral de aprobación (%) usado solo para etiquetar y filtrar filas en la UI. */
 const APPROVAL_PERCENTAGE = 60;
+
+interface SectionFilterOption {
+  readonly key: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly label: string;
+}
 
 /**
  * Vista de resultados de una evaluación para el docente.
@@ -123,11 +131,13 @@ const APPROVAL_PERCENTAGE = 60;
                 />
               </div>
 
-              @if (sections().length > 1) {
+              @if (sections().length > 0) {
                 <select class="input toolbar__select" (change)="onSection($event)">
                   <option value="">Todas las secciones</option>
-                  @for (s of sections(); track s) {
-                    <option [value]="s" [selected]="sectionFilter() === s">Sección {{ s }}</option>
+                  @for (section of sections(); track section.key) {
+                    <option [value]="section.key" [selected]="sectionFilter() === section.key">
+                      {{ section.label }}
+                    </option>
                   }
                 </select>
               }
@@ -184,7 +194,7 @@ const APPROVAL_PERCENTAGE = 60;
                         </td>
                         <td>{{ r.grade }} "{{ r.section }}"</td>
                         <td>N.° {{ r.attemptNumber }}</td>
-                        <td class="text-mono">{{ r.score ?? 0 }} / {{ r.maxScore ?? d.maxScore }}</td>
+                        <td class="text-mono">{{ formatScore(r.score) }} / {{ formatScore(r.maxScore ?? d.maxScore) }}</td>
                         <td>
                           <span class="badge" [class]="pctBadge(r.percentage)">
                             {{ formatPct(r.percentage) }}
@@ -282,7 +292,7 @@ const APPROVAL_PERCENTAGE = 60;
                 </div>
                 <div class="detail-head__score">
                   <span class="badge" [class]="pctBadge(dt.percentage)">{{ formatPct(dt.percentage) }}</span>
-                  <span class="detail-head__points">{{ dt.score ?? 0 }} / {{ dt.maxScore ?? 0 }}</span>
+                  <span class="detail-head__points">{{ formatScore(dt.score) }} / {{ formatScore(dt.maxScore) }}</span>
                 </div>
               </div>
 
@@ -351,7 +361,7 @@ const APPROVAL_PERCENTAGE = 60;
                         <span class="answer__num">{{ i + 1 }}</span>
                         <span class="answer__text">{{ a.questionText }}</span>
                         @if (a.reviewed) {
-                          <span class="answer__points">{{ a.pointsAwarded ?? 0 }} / {{ a.points }}</span>
+                          <span class="answer__points">{{ formatScore(a.pointsAwarded) }} / {{ formatScore(a.points) }}</span>
                         } @else {
                           <span class="badge badge-warning">Pendiente</span>
                         }
@@ -374,7 +384,7 @@ const APPROVAL_PERCENTAGE = 60;
                       <div class="answer__head">
                         <span class="answer__num">{{ i + 1 }}</span>
                         <span class="answer__text">{{ a.questionText }}</span>
-                        <span class="answer__points">{{ a.pointsAwarded ?? 0 }} / {{ a.points }}</span>
+                        <span class="answer__points">{{ formatScore(a.pointsAwarded) }} / {{ formatScore(a.points) }}</span>
                       </div>
                       <div class="answer__row">
                         <span class="answer__label">Respuesta del estudiante:</span>
@@ -445,7 +455,7 @@ const APPROVAL_PERCENTAGE = 60;
                   <span class="badge" [class]="rv.gradeClosed ? 'badge-success' : statusBadge(rv.status)">
                     {{ rv.gradeClosed ? 'Calificación cerrada' : statusLabel(rv.status) }}
                   </span>
-                  <span class="detail-head__points">{{ rv.score ?? 0 }} / {{ rv.maxScore ?? 0 }} pts</span>
+                  <span class="detail-head__points">{{ formatScore(rv.score) }} / {{ formatScore(rv.maxScore) }} pts</span>
                 </div>
               </div>
 
@@ -502,7 +512,7 @@ const APPROVAL_PERCENTAGE = 60;
 
                     @if (a.answerId !== null) {
                       @if (rv.gradeClosed) {
-                        <p class="answer__points">Puntaje asignado: {{ a.awardedScore ?? 0 }} / {{ a.maxPoints }}</p>
+                        <p class="answer__points">Puntaje asignado: {{ formatScore(a.awardedScore) }} / {{ formatScore(a.maxPoints) }}</p>
                       } @else {
                         <div class="grade-row">
                           <label class="form-label">
@@ -731,10 +741,22 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   readonly userName = computed<string>(() => this.auth.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
-  readonly sections = computed<string[]>(() => {
-    const set = new Set<string>();
-    for (const r of this.data()?.results ?? []) set.add(r.section);
-    return [...set].sort();
+  readonly sections = computed<SectionFilterOption[]>(() => {
+    const sections = new Map<string, SectionFilterOption>();
+    for (const r of this.data()?.results ?? []) {
+      const key = sectionKey(r);
+      sections.set(key, {
+        key,
+        grade: r.grade,
+        section: r.section,
+        label: `${r.grade}° ${r.section}`,
+      });
+    }
+    return [...sections.values()].sort(
+      (a, b) =>
+        Number(a.grade) - Number(b.grade) ||
+        a.section.localeCompare(b.section, 'es')
+    );
   });
 
   readonly visibleRows = computed<TeacherStudentResultResponse[]>(() => {
@@ -744,7 +766,7 @@ export class TeacherEvaluationResultsComponent implements OnInit {
     const approval = this.approvalFilter();
 
     const filtered = rows.filter((r) => {
-      if (section && r.section !== section) return false;
+      if (section && sectionKey(r) !== section) return false;
       if (approval === 'approved' && !this.isApproved(r.percentage)) return false;
       if (approval === 'failed' && this.isApproved(r.percentage)) return false;
       if (!q) return true;
@@ -1110,7 +1132,7 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   }
 
   formatScore(value: number | null): string {
-    return value === null || value === undefined ? '—' : String(value);
+    return formatNumberWithoutTrailingZero(value);
   }
 
   formatPct(value: number | null): string {
@@ -1119,13 +1141,13 @@ export class TeacherEvaluationResultsComponent implements OnInit {
 
   /** Nota en escala 0–20 con un decimal; '—' si no hay valor. */
   formatGrade(value: number | null): string {
-    return value === null || value === undefined ? '—' : value.toFixed(1);
+    return formatNumberWithoutTrailingZero(value);
   }
 
   /** Monto de ajuste con su signo explícito (p. ej. +1.0, -0.5). */
   formatSigned(value: number | null): string {
     if (value === null || value === undefined) return '—';
-    return `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
+    return `${value > 0 ? '+' : ''}${formatNumberWithoutTrailingZero(value)}`;
   }
 
   formatDate(value: string): string {
@@ -1210,6 +1232,10 @@ export class TeacherEvaluationResultsComponent implements OnInit {
     }
     return null;
   }
+}
+
+function sectionKey(row: { grade: string; section: string }): string {
+  return `${row.grade}|${row.section}`;
 }
 
 function buildInitials(name: string): string {
