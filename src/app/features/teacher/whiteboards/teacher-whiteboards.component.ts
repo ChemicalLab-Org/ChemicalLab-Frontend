@@ -262,7 +262,7 @@ export class TeacherWhiteboardsComponent {
 
   readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
   readonly userRole = 'Docente';
-  readonly gradeOptions = ['1', '2', '3', '4', '5', '6'];
+  readonly gradeOptions = ['1', '2', '3', '4', '5'];
 
   readonly sessions = signal<WhiteboardSessionResponse[]>([]);
   readonly loading = signal<boolean>(false);

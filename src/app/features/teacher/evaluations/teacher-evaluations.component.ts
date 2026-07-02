@@ -40,6 +40,13 @@ interface EvaluationLike {
   readonly status: EvaluationStatus;
 }
 
+interface SectionOption {
+  readonly key: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly label: string;
+}
+
 @Component({
   selector: 'app-teacher-evaluations',
   standalone: true,
@@ -717,21 +724,18 @@ interface EvaluationLike {
           </header>
 
           <form [formGroup]="assignForm" (ngSubmit)="submitAssign()" class="modal__body">
-            <p class="modal__text">Selecciona el grado y la sección que rendirán esta evaluación.</p>
+            <p class="modal__text">Selecciona una de tus secciones con estudiantes registrados.</p>
             <div class="form-grid">
-              <div class="form-group">
-                <label class="form-label" for="grade">Grado</label>
-                <select id="grade" class="select" formControlName="grade">
-                  @for (g of gradeOptions(); track g) {
-                    <option [value]="g">{{ g }}° de secundaria</option>
-                  }
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="section">Sección</label>
-                <select id="section" class="select" formControlName="section">
-                  @for (s of sectionOptions(); track s) {
-                    <option [value]="s">Sección {{ s }}</option>
+              <div class="form-group form-group--full">
+                <label class="form-label" for="sectionKey">Sección</label>
+                <select
+                  id="sectionKey"
+                  class="select"
+                  formControlName="sectionKey"
+                  [disabled]="sectionOptions().length === 0"
+                >
+                  @for (option of sectionOptions(); track option.key) {
+                    <option [value]="option.key">{{ option.label }}</option>
                   }
                 </select>
               </div>
@@ -744,6 +748,13 @@ interface EvaluationLike {
                 <input id="dueAt" class="input" type="datetime-local" formControlName="dueAt" />
               </div>
             </div>
+
+            @if (sectionOptions().length === 0) {
+              <div class="alert alert-info modal__note">
+                <span class="material-icons">info</span>
+                Aún no tienes secciones con estudiantes registrados.
+              </div>
+            }
 
             @if (assignTargetAssignments().length > 0) {
               <div class="assignment-list assignment-list--compact">
@@ -767,7 +778,7 @@ interface EvaluationLike {
               <button type="button" class="btn btn-secondary" (click)="closeAssign()" [disabled]="assigning()">
                 Cancelar
               </button>
-              <button type="submit" class="btn btn-primary" [disabled]="assigning()">
+              <button type="submit" class="btn btn-primary" [disabled]="assigning() || sectionOptions().length === 0">
                 {{ assigning() ? 'Asignando…' : 'Asignar' }}
               </button>
             </div>
@@ -887,9 +898,6 @@ export class TeacherEvaluationsComponent {
     { value: 'ARCHIVED', label: 'Archivadas' },
   ];
 
-  private readonly defaultGrades = ['1', '2', '3', '4', '5'];
-  private readonly defaultSections = ['A', 'B', 'C', 'D'];
-
   // Estado de datos
   readonly evaluations = signal<EvaluationResponse[]>([]);
   readonly loading = signal<boolean>(false);
@@ -942,18 +950,9 @@ export class TeacherEvaluationsComponent {
   readonly actionLoading = signal<boolean>(false);
   readonly actionError = signal<string | null>(null);
 
-  // Opciones de grado/sección derivadas de los estudiantes del docente
-  private readonly studentGrades = signal<string[]>([]);
-  private readonly studentSections = signal<string[]>([]);
-
-  readonly gradeOptions = computed<string[]>(() => {
-    const fromStudents = this.studentGrades();
-    return fromStudents.length > 0 ? fromStudents : this.defaultGrades;
-  });
-  readonly sectionOptions = computed<string[]>(() => {
-    const fromStudents = this.studentSections();
-    return fromStudents.length > 0 ? fromStudents : this.defaultSections;
-  });
+  // Opciones de sección derivadas de las combinaciones reales de estudiantes del docente.
+  private readonly studentSectionOptions = signal<SectionOption[]>([]);
+  readonly sectionOptions = computed<SectionOption[]>(() => this.studentSectionOptions());
 
   readonly form: FormGroup = this.fb.group({
     title: ['', [Validators.required, Validators.maxLength(150)]],
@@ -980,8 +979,7 @@ export class TeacherEvaluationsComponent {
   });
 
   readonly assignForm: FormGroup = this.fb.group({
-    grade: ['1', [Validators.required]],
-    section: ['A', [Validators.required]],
+    sectionKey: ['', [Validators.required]],
     startAt: [''],
     dueAt: [''],
   });
@@ -1047,12 +1045,10 @@ export class TeacherEvaluationsComponent {
     }
     this.userManagementService.listStudentsByTeacher(teacherId).subscribe({
       next: (students) => {
-        this.studentGrades.set([...new Set(students.map((s) => s.grade))].sort());
-        this.studentSections.set([...new Set(students.map((s) => s.section))].sort());
+        this.studentSectionOptions.set(buildSectionOptions(students));
       },
       error: () => {
-        this.studentGrades.set([]);
-        this.studentSections.set([]);
+        this.studentSectionOptions.set([]);
       },
     });
   }
@@ -1454,9 +1450,9 @@ export class TeacherEvaluationsComponent {
       return;
     }
     this.assignError.set(null);
+    const sections = this.sectionOptions();
     this.assignForm.reset({
-      grade: this.gradeOptions()[0] ?? '1',
-      section: this.sectionOptions()[0] ?? 'A',
+      sectionKey: sections[0]?.key ?? '',
       startAt: '',
       dueAt: '',
     });
@@ -1491,6 +1487,11 @@ export class TeacherEvaluationsComponent {
     }
 
     const raw = this.assignForm.getRawValue();
+    const selectedSection = this.sectionOptions().find((option) => option.key === raw.sectionKey);
+    if (selectedSection === undefined) {
+      this.assignError.set('Aún no tienes secciones con estudiantes registrados.');
+      return;
+    }
     const startAt = emptyToNull(raw.startAt);
     const dueAt = emptyToNull(raw.dueAt);
 
@@ -1502,8 +1503,8 @@ export class TeacherEvaluationsComponent {
     this.assigning.set(true);
     this.assignError.set(null);
     const request: AssignEvaluationRequest = {
-      grade: raw.grade,
-      section: raw.section,
+      grade: selectedSection.grade,
+      section: selectedSection.section,
       startAt,
       dueAt,
     };
@@ -1777,6 +1778,24 @@ function toPositiveOrNull(value: number | string | null | undefined): number | n
   }
   const num = Number(value);
   return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+function buildSectionOptions(students: readonly { grade: string; section: string }[]): SectionOption[] {
+  const sections = new Map<string, SectionOption>();
+  for (const student of students) {
+    const grade = student.grade.trim();
+    const section = student.section.trim().toUpperCase();
+    if (grade.length === 0 || section.length === 0) {
+      continue;
+    }
+    const key = `${grade}|${section}`;
+    sections.set(key, { key, grade, section, label: `${grade}° ${section}` });
+  }
+  return [...sections.values()].sort(
+    (a, b) =>
+      Number(a.grade) - Number(b.grade) ||
+      a.section.localeCompare(b.section, 'es')
+  );
 }
 
 function buildInitials(name: string): string {

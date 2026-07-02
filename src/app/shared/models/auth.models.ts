@@ -14,6 +14,8 @@ export interface AuthResponse {
   readonly userId: number;
   readonly username: string;
   readonly email: string | null;
+  readonly names: string | null;
+  readonly lastNames: string | null;
   readonly role: UserRole;
   readonly active: boolean;
   readonly temporaryPassword: boolean;
