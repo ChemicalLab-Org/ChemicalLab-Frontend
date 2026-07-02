@@ -77,6 +77,17 @@ export class AuthService {
     this.examSession.end();
   }
 
+  hasValidSession(): boolean {
+    const user = this._currentUser();
+    const token = localStorage.getItem('auth_token') ?? user?.token ?? null;
+
+    if (user === null || token === null || token.trim() === '') {
+      return false;
+    }
+
+    return !this.isJwtExpired(token);
+  }
+
   private loadUserFromStorage(): void {
     const raw = localStorage.getItem('auth_user');
     if (raw !== null) {
@@ -89,4 +100,40 @@ export class AuthService {
       }
     }
   }
+
+  private isJwtExpired(token: string): boolean {
+    const payload = this.decodeJwtPayload(token);
+    if (payload === null || typeof payload.exp !== 'number') {
+      return true;
+    }
+
+    return payload.exp * 1000 <= Date.now();
+  }
+
+  private decodeJwtPayload(token: string): JwtPayload | null {
+    const [, payload] = token.split('.');
+    if (!payload) {
+      return null;
+    }
+
+    try {
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(
+        normalized.length + ((4 - (normalized.length % 4)) % 4),
+        '='
+      );
+      const parsed: unknown = JSON.parse(atob(padded));
+      return isJwtPayload(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+interface JwtPayload {
+  readonly exp?: number;
+}
+
+function isJwtPayload(value: unknown): value is JwtPayload {
+  return typeof value === 'object' && value !== null;
 }

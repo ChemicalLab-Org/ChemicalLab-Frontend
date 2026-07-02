@@ -93,6 +93,10 @@ export class SidebarComponent {
   }
 
   isActive(route: string): boolean {
+    if (route === '') {
+      return false;
+    }
+
     const current = this.activeUrl();
     if (route === '/') {
       return current === '/' || current === '';
