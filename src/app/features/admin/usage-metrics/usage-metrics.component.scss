@@ -63,8 +63,11 @@
   gap: 14px;
   margin-bottom: 24px;
 
-  @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); }
-  @media (max-width: 520px) { grid-template-columns: 1fr; }
+  &--six { grid-template-columns: repeat(6, 1fr); }
+
+  @media (max-width: 1200px) { &--six { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); &--six { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { grid-template-columns: 1fr; &--six { grid-template-columns: 1fr; } }
 }
 
 .summary-card {
@@ -277,6 +280,127 @@
     color: var(--color-neutral-800);
     text-align: right;
   }
+}
+
+/* Secciones del panel (pizarra, evaluaciones, despliegue, Project Charter, recientes) */
+.panel-section {
+  margin-bottom: 28px;
+
+  &__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 6px;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--color-neutral-900);
+
+    .material-icons { font-size: 20px; color: var(--color-primary-500); }
+  }
+
+  &__hint {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--color-neutral-500);
+    max-width: 760px;
+  }
+}
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.mini-card {
+  background: white;
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: var(--radius-xl);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &__value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--color-neutral-900);
+    line-height: 1.2;
+  }
+
+  &__label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-neutral-500);
+  }
+}
+
+/* Despliegue interno */
+.deploy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.deploy-item {
+  background: white;
+  border: 1.5px solid var(--color-neutral-200);
+  border-radius: var(--radius-xl);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-neutral-500);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  &__value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-neutral-900);
+    word-break: break-word;
+
+    &--ok { color: var(--color-success-text, #15803d); }
+    &--warn { color: var(--color-warning-text, #a16207); }
+    &--down { color: var(--color-danger-text, #b91c1c); }
+  }
+
+  .mono { font-family: var(--font-mono); font-size: 13.5px; }
+}
+
+/* Indicadores del Project Charter */
+.charter-table {
+  .charter-objective {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-neutral-500);
+    white-space: nowrap;
+  }
+
+  .charter-indicator {
+    font-weight: 700;
+    color: var(--color-neutral-900);
+    min-width: 180px;
+  }
+}
+
+.status-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &--measured { background: var(--color-success-light, #dcfce7); color: var(--color-success-text, #15803d); }
+  &--partial { background: var(--color-info-light); color: var(--color-info-text); }
+  &--pending { background: var(--color-warning-light, #fef9c3); color: var(--color-warning-text, #a16207); }
+  &--unavailable { background: var(--color-neutral-100); color: var(--color-neutral-600); }
 }
 
 /* Eventos recientes */

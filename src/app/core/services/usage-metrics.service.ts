@@ -6,8 +6,10 @@ import {
   RecordUsageEventRequest,
   UsageCountResponse,
   UsageEventResponse,
+  UsageEventType,
   UsageMetricsSummaryResponse,
   UsageModule,
+  UsagePanelResponse,
   UserRole,
 } from '../../shared/models';
 
@@ -138,6 +140,14 @@ export class UsageMetricsService {
   // CONSULTA (solo ADMINISTRADOR)
   // =========================================================================
 
+  /**
+   * Indicadores agregados (histórico total) del panel administrativo: actividad general,
+   * pizarra, evaluaciones y trazabilidad. Solo conteos calculados sobre datos reales.
+   */
+  getPanel(): Observable<UsagePanelResponse> {
+    return this.http.get<UsagePanelResponse>(`${this.adminUrl}/panel`);
+  }
+
   getSummary(from?: string | null, to?: string | null): Observable<UsageMetricsSummaryResponse> {
     let params = new HttpParams();
     if (from) params = params.set('from', from);
@@ -145,10 +155,16 @@ export class UsageMetricsService {
     return this.http.get<UsageMetricsSummaryResponse>(`${this.adminUrl}/summary`, { params });
   }
 
-  getRecent(limit: number, module?: UsageModule | null, role?: UserRole | null): Observable<UsageEventResponse[]> {
+  getRecent(
+    limit: number,
+    module?: UsageModule | null,
+    role?: UserRole | null,
+    eventType?: UsageEventType | null,
+  ): Observable<UsageEventResponse[]> {
     let params = new HttpParams().set('limit', String(limit));
     if (module) params = params.set('module', module);
     if (role) params = params.set('role', role);
+    if (eventType) params = params.set('eventType', eventType);
     return this.http.get<UsageEventResponse[]>(`${this.adminUrl}/recent`, { params });
   }
 
