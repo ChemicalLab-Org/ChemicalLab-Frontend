@@ -2331,11 +2331,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
             this.busy.set(false);
             this.finalizeOpen.set(false);
             this.fullscreen.set(false);
-            this.realtime.disconnect();
+            // Deja el estado local coherente con el cierre (CLOSED es terminal) y limpia todo lo
+            // que pudiera quedar «activo»: herramientas, preview, selección y edición de texto.
             this.session.set(updated);
             this.participants.set([]);
-            this.showBanner('Sesión finalizada. Se guardó la captura final.', 'success');
-            this.loadSnapshot();
+            this.cancelText();
+            this.cancelShapePreview();
+            this.clearSelection();
+            // Cierra la conexión en vivo y su temporizador de espera para no dejar el WebSocket
+            // ni el estado de reconexión colgando tras finalizar.
+            this.clearConnectionWatch();
+            this.realtime.disconnect();
+            this.boardStateReady.set(false);
+            this.wsTimedOut.set(false);
+            // La sesión ya está finalizada en el backend: el docente vuelve al listado, donde la
+            // sesión aparece en el historial con su captura final. Así no queda dentro del editor
+            // con la barra de herramientas ni un estado visual «Activa/En vivo» contradictorio.
+            void this.router.navigate(['/teacher/whiteboards']);
           },
           error: (err: unknown) => {
             this.busy.set(false);

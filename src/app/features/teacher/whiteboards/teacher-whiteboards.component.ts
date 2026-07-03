@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { TeacherWhiteboardService } from '../../../core/services/teacher-whiteboard.service';
+import { UserManagementService } from '../../../core/services/user-management.service';
 import {
   SidebarComponent,
   SidebarNavItem,
@@ -15,6 +16,19 @@ import {
   WhiteboardSessionResponse,
   WhiteboardSessionStatus,
 } from '../../../shared/models';
+
+/**
+ * Sección real del docente (grado + sección) derivada de sus estudiantes registrados. La clave
+ * `key` («grado|sección») identifica la opción en el formulario; `label` es el texto visible («3° A»).
+ * Se reutiliza el mismo enfoque que la asignación de evaluaciones para no permitir crear sesiones en
+ * secciones donde el docente no tiene alumnos.
+ */
+interface SectionOption {
+  readonly key: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly label: string;
+}
 
 @Component({
   selector: 'app-teacher-whiteboards',
@@ -186,36 +200,27 @@ import {
               }
             </div>
 
-            <div class="form-grid">
-              <div class="form-group">
-                <label class="form-label" for="wb-grade">Grado</label>
-                <select
-                  id="wb-grade"
-                  class="select"
-                  formControlName="grade"
-                  [class.input-error]="isInvalid('grade')"
-                >
-                  @for (g of gradeOptions; track g) {
-                    <option [value]="g">{{ g }}° de secundaria</option>
-                  }
-                </select>
-              </div>
-
-              <div class="form-group">
-                <label class="form-label" for="wb-section">Sección</label>
-                <input
-                  id="wb-section"
-                  class="input"
-                  formControlName="section"
-                  maxlength="1"
-                  placeholder="A"
-                  (input)="normalizeSection()"
-                  [class.input-error]="isInvalid('section')"
-                />
-                @if (isInvalid('section')) {
-                  <span class="form-error">La sección debe ser una sola letra (A-Z).</span>
+            <div class="form-group form-group--full">
+              <label class="form-label" for="wb-section">Sección</label>
+              <select
+                id="wb-section"
+                class="select"
+                formControlName="sectionKey"
+                [attr.disabled]="sectionOptions().length === 0 ? '' : null"
+                [class.input-error]="isInvalid('sectionKey')"
+              >
+                @for (option of sectionOptions(); track option.key) {
+                  <option [value]="option.key">{{ option.label }}</option>
                 }
-              </div>
+              </select>
+              @if (sectionOptions().length === 0) {
+                <span class="form-hint">
+                  Aún no tienes secciones con estudiantes registrados. Registra estudiantes para poder
+                  crear una sesión.
+                </span>
+              } @else {
+                <span class="form-hint">Solo puedes crear sesiones para tus secciones con alumnos.</span>
+              }
             </div>
 
             <div class="form-group form-group--full">
@@ -244,7 +249,11 @@ import {
               <button type="button" class="btn btn-secondary" (click)="closeForm()" [disabled]="saving()">
                 Cancelar
               </button>
-              <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              <button
+                type="submit"
+                class="btn btn-primary"
+                [disabled]="saving() || sectionOptions().length === 0"
+              >
                 {{ saving() ? 'Creando…' : 'Crear y entrar' }}
               </button>
             </div>
@@ -257,12 +266,16 @@ import {
 export class TeacherWhiteboardsComponent {
   private readonly authService = inject(AuthService);
   private readonly whiteboardService = inject(TeacherWhiteboardService);
+  private readonly userManagementService = inject(UserManagementService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
   readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
   readonly userRole = 'Docente';
-  readonly gradeOptions = ['1', '2', '3', '4', '5'];
+
+  /** Secciones reales del docente (derivadas de sus estudiantes), fuente del selector de creación. */
+  private readonly studentSectionOptions = signal<SectionOption[]>([]);
+  readonly sectionOptions = computed<SectionOption[]>(() => this.studentSectionOptions());
 
   readonly sessions = signal<WhiteboardSessionResponse[]>([]);
   readonly loading = signal<boolean>(false);
@@ -276,8 +289,7 @@ export class TeacherWhiteboardsComponent {
 
   readonly form: FormGroup = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(150)]],
-    grade: ['1', [Validators.required]],
-    section: ['A', [Validators.required, Validators.pattern(/^[A-Za-z]$/)]],
+    sectionKey: ['', [Validators.required]],
     description: ['', [Validators.maxLength(1000)]],
   });
 
@@ -287,6 +299,19 @@ export class TeacherWhiteboardsComponent {
 
   constructor() {
     this.loadSessions();
+    this.loadSectionOptions();
+  }
+
+  /** Carga las secciones reales del docente desde sus estudiantes registrados (dedup + orden). */
+  private loadSectionOptions(): void {
+    const teacherId = this.currentUser()?.userId ?? null;
+    if (teacherId === null) {
+      return;
+    }
+    this.userManagementService.listStudentsByTeacher(teacherId).subscribe({
+      next: (students) => this.studentSectionOptions.set(buildSectionOptions(students)),
+      error: () => this.studentSectionOptions.set([]),
+    });
   }
 
   loadSessions(): void {
@@ -326,7 +351,11 @@ export class TeacherWhiteboardsComponent {
 
   openCreate(): void {
     this.formError.set(null);
-    this.form.reset({ name: '', grade: '1', section: 'A', description: '' });
+    this.form.reset({
+      name: '',
+      sectionKey: this.sectionOptions()[0]?.key ?? '',
+      description: '',
+    });
     this.formOpen.set(true);
   }
 
@@ -335,29 +364,28 @@ export class TeacherWhiteboardsComponent {
     this.formError.set(null);
   }
 
-  normalizeSection(): void {
-    const control = this.form.controls['section'];
-    const value = (control.value ?? '').toString().toUpperCase();
-    if (value !== control.value) {
-      control.setValue(value, { emitEvent: false });
-    }
-  }
-
   submit(): void {
-    this.normalizeSection();
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
 
+    const raw = this.form.getRawValue();
+    // Solo se permite crear sesiones para una sección real del docente (con alumnos registrados).
+    const selected = this.sectionOptions().find((option) => option.key === raw.sectionKey);
+    if (!selected) {
+      this.formError.set('Selecciona una de tus secciones con estudiantes registrados.');
+      return;
+    }
+
     this.saving.set(true);
     this.formError.set(null);
-    const raw = this.form.getRawValue();
     const description = (raw.description ?? '').trim();
+    // El backend sigue recibiendo grade y section por separado, como espera el endpoint de creación.
     const request: WhiteboardSessionCreateRequest = {
       name: raw.name.trim(),
-      grade: raw.grade,
-      section: (raw.section ?? '').toString().toUpperCase(),
+      grade: selected.grade,
+      section: selected.section,
       ...(description !== '' ? { description } : {}),
     };
 
@@ -463,4 +491,28 @@ function buildInitials(name: string): string {
     return parts[0].substring(0, 2).toUpperCase();
   }
   return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+/**
+ * Deriva las secciones reales de una lista de estudiantes: deduplica por grado+sección, normaliza la
+ * sección a mayúscula y ordena por grado ascendente y sección alfabética. Mismo criterio que la
+ * asignación de evaluaciones, para no ofrecer secciones sin alumnos. Los grados provienen de
+ * estudiantes reales (el backend solo admite 1° a 5°), por lo que nunca aparece 6°.
+ */
+function buildSectionOptions(
+  students: readonly { grade: string; section: string }[]
+): SectionOption[] {
+  const sections = new Map<string, SectionOption>();
+  for (const student of students) {
+    const grade = student.grade.trim();
+    const section = student.section.trim().toUpperCase();
+    if (grade.length === 0 || section.length === 0) {
+      continue;
+    }
+    const key = `${grade}|${section}`;
+    sections.set(key, { key, grade, section, label: `${grade}° ${section}` });
+  }
+  return [...sections.values()].sort(
+    (a, b) => Number(a.grade) - Number(b.grade) || a.section.localeCompare(b.section, 'es')
+  );
 }
