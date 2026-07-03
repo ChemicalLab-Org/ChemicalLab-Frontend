@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Client, IMessage } from '@stomp/stompjs';
 import { Subject } from 'rxjs';
+import SockJS from 'sockjs-client';
 import { environment } from '../../../environments/environment';
 import {
   WhiteboardControlEventResponse,
@@ -16,9 +17,9 @@ export type WhiteboardConnectionState = 'disconnected' | 'connecting' | 'connect
 /**
  * Conexión WebSocket/STOMP de la pizarra en vivo.
  *
- * Se conecta al endpoint del backend ({@link environment.wsUrl}, derivado del transporte
- * WebSocket de SockJS) enviando el JWT en la cabecera Authorization del frame CONNECT, tal
- * como exige WhiteboardStompAuthChannelInterceptor. Tras conectar:
+ * Se conecta al endpoint SockJS del backend ({@link environment.wsUrl}) enviando el JWT en la
+ * cabecera Authorization del frame CONNECT, tal como exige WhiteboardStompAuthChannelInterceptor.
+ * Tras conectar:
  *
  * - se suscribe a /topic/whiteboards/{sessionId}, donde el backend difunde tanto eventos de
  *   dibujo como de control; se separan por su eventType;
@@ -64,7 +65,7 @@ export class TeacherWhiteboardRealtimeService {
     this.connectionState.set('connecting');
 
     const client = new Client({
-      brokerURL: environment.wsUrl,
+      webSocketFactory: () => new SockJS(environment.wsUrl),
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 4000,
       heartbeatIncoming: 10000,
