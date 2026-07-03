@@ -69,8 +69,14 @@ const VIEW_FIT_PADDING = 48;
 const PAN_VISIBLE_RATIO = 0.24;
 const PAN_VISIBLE_MIN = 96;
 const PAN_VISIBLE_MAX = 320;
-// Deshacer/rehacer queda desactivado temporalmente hasta estabilizar la sincronizacion colaborativa.
-const UNDO_REDO_ENABLED = false;
+/**
+ * Deshacer/rehacer colaborativo. El estudiante solo deshace/rehace sus propias acciones y solo
+ * con permiso efectivo de interacción en sesión ACTIVE; los eventos remotos nunca entran al
+ * historial. Cada undo/redo se difunde como un evento concreto (STROKE_DELETE, DRAW/ERASE con
+ * strokeId+strokeIndex, TEXT/SHAPE upsert o delete), aplicado por identidad e idempotente en
+ * todos los clientes. «Borrar todo» (solo docente) queda FUERA del historial.
+ */
+const UNDO_REDO_ENABLED = true;
 // Tiempo máximo de espera de la conexión en vivo antes de mostrar el estado de error con reintento.
 // Evita que el alumno quede atrapado indefinidamente en «conectando» si el WebSocket no llega.
 const WS_CONNECT_TIMEOUT_MS = 12000;
@@ -1679,7 +1685,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       for (const action of redoActions) {
         this.discardObjectHistory(action);
       }
-      this.showBanner('No se pudo deshacer: el objeto cambio en otra sesion.', 'warning');
+      this.showBanner('No se pudo deshacer: el objeto cambió por otra acción reciente.', 'warning');
       return true;
     }
     this.redoStack.update((items) => [...items, ...redoActions]);
@@ -1698,7 +1704,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       for (const action of undoActions) {
         this.discardObjectHistory(action);
       }
-      this.showBanner('No se pudo rehacer: el objeto cambio en otra sesion.', 'warning');
+      this.showBanner('No se pudo rehacer: el objeto cambió por otra acción reciente.', 'warning');
       return true;
     }
     this.undoStack.update((items) => [...items, ...undoActions]);
@@ -1717,12 +1723,20 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     return stack.slice(start);
   }
 
+  /**
+   * Aplica un grupo de acciones (un gesto) en dos fases: primero valida que TODAS puedan
+   * aplicarse sobre el estado actual y solo entonces las aplica. Así un conflicto con cambios
+   * de otro participante no deja el gesto aplicado a medias.
+   */
   private applyHistoryActions(actions: WhiteboardUndoAction[], direction: 'undo' | 'redo'): boolean {
     const ordered = direction === 'undo' ? [...actions].reverse() : actions;
     for (const action of ordered) {
-      if (!this.applyHistoryAction(action, direction)) {
+      if (!this.canApplyHistoryAction(action, direction)) {
         return false;
       }
+    }
+    for (const action of ordered) {
+      this.performHistoryAction(action, direction);
     }
     return true;
   }
@@ -1753,31 +1767,50 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.redoStack.set([]);
   }
 
-  private applyHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): boolean {
+  /** Comprueba, sin mutar nada, si la acción puede aplicarse sobre el estado actual. */
+  private canApplyHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): boolean {
     if (action.objectType === 'STROKE') {
-      return this.applyStrokeHistoryAction(action, direction);
+      return this.canApplyStrokeHistoryAction(action, direction);
     }
     const expected = direction === 'undo' ? action.after : action.before;
-    const target = direction === 'undo' ? action.before : action.after;
     const current = this.findUndoObject(action);
-    if (!this.sameNullableObject(current, expected)) {
-      return false;
-    }
-    this.applyUndoObjectState(action, target);
-    return true;
+    return this.sameNullableObject(current, expected);
   }
 
-  private captureCurrentCreateState(action: WhiteboardUndoAction): WhiteboardUndoAction {
-    if ((action.type !== 'CREATE_OBJECT' && action.type !== 'CREATE_STROKE') || action.before !== null) {
-      return action;
+  /** Aplica la acción ya validada por {@link canApplyHistoryAction}. */
+  private performHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): void {
+    if (action.objectType === 'STROKE') {
+      this.performStrokeHistoryAction(action, direction);
+      return;
     }
-    const current = this.findUndoObject(action);
+    const target = direction === 'undo' ? action.before : action.after;
+    this.applyUndoObjectState(action, target);
+  }
+
+  /**
+   * Refresca la acción con el estado vigente ANTES de deshacerla, de modo que un rehacer
+   * posterior restaure la versión actual del objeto (que otro participante pudo haber
+   * modificado), no la versión original antigua. Para los trazos, además, se refresca el índice
+   * para restaurarlos en la posición que ocupaban al deshacer (conserva el orden de pintado).
+   */
+  private captureCurrentCreateState(action: WhiteboardUndoAction): WhiteboardUndoAction {
+    let refreshed = action;
+    if (action.objectType === 'STROKE') {
+      const index = this.findStrokeIndex(action.objectId);
+      if (index !== -1) {
+        refreshed = { ...refreshed, strokeIndex: index };
+      }
+    }
+    if ((refreshed.type !== 'CREATE_OBJECT' && refreshed.type !== 'CREATE_STROKE') || refreshed.before !== null) {
+      return refreshed;
+    }
+    const current = this.findUndoObject(refreshed);
     if (current === null) {
-      return action;
+      return refreshed;
     }
     return {
-      ...action,
-      after: this.cloneUndoObjectForAction(action, current),
+      ...refreshed,
+      after: this.cloneUndoObjectForAction(refreshed, current),
     };
   }
 
@@ -1836,7 +1869,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     return shape === null ? null : this.cloneShapeItem(shape);
   }
 
-  private applyStrokeHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): boolean {
+  /** Validación (sin mutar) del deshacer/rehacer de un trazo por identidad. */
+  private canApplyStrokeHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): boolean {
     const target = direction === 'undo' ? action.before : action.after;
     const expected = direction === 'undo' ? action.after : action.before;
     if (target !== null && !this.isStrokeRecord(target)) {
@@ -1847,28 +1881,42 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
     const currentIndex = this.findStrokeIndex(action.objectId);
     if (target === null) {
+      // Eliminar: el trazo debe existir y coincidir con lo esperado.
       if (expected === null || currentIndex === -1) {
         return false;
       }
-      const current = this.boardStrokes[currentIndex];
-      if (!this.sameObject(current, expected)) {
-        return false;
+      return this.sameObject(this.boardStrokes[currentIndex], expected);
+    }
+    // Restaurar: el trazo no debe existir todavía.
+    return expected === null && currentIndex === -1;
+  }
+
+  /**
+   * Aplica el deshacer/rehacer de un trazo y lo difunde como evento concreto: STROKE_DELETE al
+   * eliminarlo, o DRAW/ERASE con el MISMO strokeId y su posición al restaurarlo. Los clientes
+   * remotos aplican exactamente el mismo payload, por lo que todos terminan con el mismo estado
+   * sin recomponer la pizarra completa ni generar identificadores nuevos.
+   */
+  private performStrokeHistoryAction(action: WhiteboardUndoAction, direction: 'undo' | 'redo'): void {
+    const target = direction === 'undo' ? action.before : action.after;
+    if (target === null) {
+      const currentIndex = this.findStrokeIndex(action.objectId);
+      const removed = currentIndex === -1 ? null : this.boardStrokes[currentIndex];
+      this.boardStrokes = this.boardStrokes.filter((stroke) => stroke.id !== action.objectId);
+      if (removed !== null) {
+        this.broadcastStrokeDelete(removed);
       }
-      this.boardStrokes = this.boardStrokes.filter((_, index) => index !== currentIndex);
     } else {
-      if (expected !== null || currentIndex !== -1) {
-        return false;
-      }
+      const record = target as WhiteboardStrokeRecord;
       const insertAt = Math.max(0, Math.min(action.strokeIndex ?? this.boardStrokes.length, this.boardStrokes.length));
       this.boardStrokes = [
         ...this.boardStrokes.slice(0, insertAt),
-        this.cloneStrokeRecord(target),
+        this.cloneStrokeRecord(record),
         ...this.boardStrokes.slice(insertAt),
       ];
+      this.broadcastStrokeRestore(record, insertAt);
     }
     this.redrawCanvasFromStrokes();
-    this.broadcastBoardRecompose();
-    return true;
   }
 
   private findStrokeIndex(strokeId: string): number {
@@ -2322,18 +2370,18 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       return;
     }
     if (event.eventType === 'CLEAR') {
-      const isRecompose = event.clientEventId?.startsWith('recompose-') === true;
-      if (!isRecompose) {
-        this.cancelText();
-        this.cancelShapePreview();
-      }
+      // «Borrar todo» (solo docente) afecta a todos y queda fuera del historial: también lo limpia.
+      this.cancelText();
+      this.cancelShapePreview();
       this.clearCanvas();
       this.boardStrokes = [];
-      if (!isRecompose) {
-        this.textItems.set([]);
-        this.shapeItems.set([]);
-        this.clearUndoHistory();
-      }
+      this.textItems.set([]);
+      this.shapeItems.set([]);
+      this.clearUndoHistory();
+      return;
+    }
+    if (event.eventType === 'STROKE_DELETE') {
+      this.applyRemoteStrokeDelete(event);
       return;
     }
     // Texto en vivo del docente: crear/actualizar o eliminar el objeto de texto correspondiente.
@@ -2549,16 +2597,36 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Aplica un trazo remoto de forma idempotente y por identidad: si ya existe un trazo con el
+   * mismo id se reemplaza en su posición; si no existe se inserta en la posición indicada por
+   * el evento (restauración de un rehacer) o al final (trazo nuevo). Después se redibuja el
+   * lienzo desde el estado local real, sin pintar encima ni mezclar segmentos.
+   */
   private applyRemoteStrokeEvent(event: WhiteboardDrawEventResponse): void {
     const stroke = this.strokeRecordFromEvent(event);
-    this.boardStrokes = this.upsertStrokeRecord(this.boardStrokes, stroke);
+    this.boardStrokes = this.upsertStrokeRecord(this.boardStrokes, stroke, event.strokeIndex);
+    this.redrawCanvasFromStrokes();
+  }
+
+  /** Elimina un trazo remoto por su identificador estable (deshacer difundido por su autor). */
+  private applyRemoteStrokeDelete(event: WhiteboardDrawEventResponse): void {
+    if (event.strokeId === null) {
+      return;
+    }
+    const id = event.strokeId;
+    const index = this.findStrokeIndex(id);
+    if (index === -1) {
+      return; // idempotente: si el trazo ya no existe, no hay nada que hacer
+    }
+    this.boardStrokes = this.boardStrokes.filter((stroke) => stroke.id !== id);
     this.redrawCanvasFromStrokes();
   }
 
   private strokeRecordFromEvent(event: WhiteboardDrawEventResponse): WhiteboardStrokeRecord {
     const isErase = event.eventType === 'ERASE';
     return {
-      id: event.clientEventId ?? undefined,
+      id: event.strokeId ?? event.clientEventId ?? undefined,
       eventType: isErase ? 'ERASE' : 'DRAW',
       color: isErase ? null : event.color ?? '#000000',
       strokeWidth: isErase ? null : event.strokeWidth ?? 4,
@@ -2569,29 +2637,40 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   private upsertStrokeRecord(
     strokes: WhiteboardStrokeRecord[],
-    stroke: WhiteboardStrokeRecord
+    stroke: WhiteboardStrokeRecord,
+    insertIndex: number | null = null
   ): WhiteboardStrokeRecord[] {
+    const index = stroke.id === undefined ? -1 : strokes.findIndex((current) => current.id === stroke.id);
+    if (index !== -1) {
+      const next = [...strokes];
+      next[index] = this.cloneStrokeRecord(stroke);
+      return next;
+    }
+    // Trazo restaurado por un rehacer remoto: se inserta en su posición original para conservar
+    // el orden de pintado (p. ej. reaparecer DEBAJO de un borrado posterior de otro usuario).
+    if (insertIndex !== null && Number.isInteger(insertIndex)) {
+      const at = Math.max(0, Math.min(insertIndex, strokes.length));
+      return [...strokes.slice(0, at), this.cloneStrokeRecord(stroke), ...strokes.slice(at)];
+    }
+    return [...strokes, this.cloneStrokeRecord(stroke)];
+  }
+
+  /** Difunde la eliminación de un trazo propio (deshacer) como evento concreto por identidad. */
+  private broadcastStrokeDelete(stroke: WhiteboardStrokeRecord): void {
     if (stroke.id === undefined) {
-      return [...strokes, this.cloneStrokeRecord(stroke)];
+      return;
     }
-    const index = strokes.findIndex((current) => current.id === stroke.id);
-    if (index === -1) {
-      return [...strokes, this.cloneStrokeRecord(stroke)];
-    }
-    const next = [...strokes];
-    next[index] = this.cloneStrokeRecord(stroke);
-    return next;
+    this.realtime.sendDraw({
+      eventType: 'STROKE_DELETE',
+      tool: stroke.eventType === 'ERASE' ? 'ERASER' : 'PEN',
+      strokeId: stroke.id,
+      clientEventId: this.newEventId(),
+    });
   }
 
-  private broadcastBoardRecompose(): void {
-    this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId: this.newEventId('recompose') });
-    for (const stroke of this.boardStrokes) {
-      this.broadcastStrokeRecord(stroke);
-    }
-  }
-
-  private broadcastStrokeRecord(stroke: WhiteboardStrokeRecord): void {
-    const clientEventId = this.newEventId('recompose');
+  /** Difunde la restauración de un trazo propio (rehacer) con su id y posición originales. */
+  private broadcastStrokeRestore(stroke: WhiteboardStrokeRecord, insertIndex: number): void {
+    const clientEventId = this.newEventId();
     if (stroke.eventType === 'ERASE') {
       this.realtime.sendDraw({
         eventType: 'ERASE',
@@ -2599,6 +2678,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
         eraserSize: stroke.eraserSize ?? 24,
         points: stroke.points,
         clientEventId,
+        strokeId: stroke.id,
+        strokeIndex: insertIndex,
       });
       return;
     }
@@ -2609,6 +2690,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       strokeWidth: stroke.strokeWidth ?? 4,
       points: stroke.points,
       clientEventId,
+      strokeId: stroke.id,
+      strokeIndex: insertIndex,
     });
   }
 
@@ -2660,8 +2743,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       this.currentEraserGestureId = null;
       return;
     }
+    // El trazo viaja con su identificador estable (strokeId): todos los clientes lo registran
+    // con el MISMO id, lo que permite deshacer/rehacer por identidad sin recomponer la pizarra.
+    const strokeId = this.localStrokeId();
     const event: WhiteboardDrawEventRequest = isErase
-      ? { eventType: 'ERASE', tool: 'ERASER', eraserSize: this.eraserSize(), points, clientEventId }
+      ? { eventType: 'ERASE', tool: 'ERASER', eraserSize: this.eraserSize(), points, clientEventId, strokeId }
       : {
           eventType: 'DRAW',
           tool: 'PEN',
@@ -2669,10 +2755,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
           strokeWidth: this.strokeWidth(),
           points,
           clientEventId,
+          strokeId,
         };
     this.realtime.sendDraw(event);
     const strokeRecord: WhiteboardStrokeRecord = {
-      id: this.localStrokeId(),
+      id: strokeId,
       eventType: isErase ? 'ERASE' : 'DRAW',
       color: isErase ? null : this.color(),
       strokeWidth: isErase ? null : this.strokeWidth(),
@@ -2682,7 +2769,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.boardStrokes.push(strokeRecord);
     this.recordUndoAction({
       type: isErase ? 'ERASE_STROKE' : 'CREATE_STROKE',
-      objectId: strokeRecord.id ?? clientEventId,
+      objectId: strokeId,
       objectType: 'STROKE',
       before: null,
       after: this.cloneStrokeRecord(strokeRecord),
