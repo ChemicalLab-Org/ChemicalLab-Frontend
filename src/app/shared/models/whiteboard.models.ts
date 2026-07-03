@@ -27,7 +27,8 @@ export type WhiteboardDrawEventType =
   | 'TEXT'
   | 'TEXT_DELETE'
   | 'SHAPE'
-  | 'SHAPE_DELETE';
+  | 'SHAPE_DELETE'
+  | 'STROKE_DELETE';
 
 /** Herramienta usada en un evento de dibujo (enum WhiteboardDrawTool). */
 export type WhiteboardDrawTool =
@@ -190,6 +191,13 @@ export interface WhiteboardDrawEventRequest {
   readonly runs?: readonly WhiteboardTextRun[];
   /** Solo en eventos de forma (SHAPE/SHAPE_DELETE): identificador estable del objeto. */
   readonly shapeId?: string;
+  /**
+   * Identificador estable del trazo (DRAW/ERASE/STROKE_DELETE). Todos los clientes comparten
+   * este id, lo que permite que deshacer/rehacer se difunda como eventos concretos por identidad.
+   */
+  readonly strokeId?: string;
+  /** Posición del trazo dentro del lienzo al restaurarlo (rehacer). Si falta, se añade al final. */
+  readonly strokeIndex?: number | null;
 }
 
 /** Evento de dibujo difundido a los suscriptores de /topic/whiteboards/{sessionId}. */
@@ -213,6 +221,10 @@ export interface WhiteboardDrawEventResponse {
   readonly runs: readonly WhiteboardTextRun[] | null;
   /** Solo en eventos de forma: identificador estable del objeto. */
   readonly shapeId: string | null;
+  /** Identificador estable del trazo (DRAW/ERASE/STROKE_DELETE), si el emisor lo envió. */
+  readonly strokeId: string | null;
+  /** Posición del trazo al restaurarlo (rehacer), si el emisor la envió. */
+  readonly strokeIndex: number | null;
 }
 
 /** Evento de control difundido al canal cuando el docente actúa por REST. */
