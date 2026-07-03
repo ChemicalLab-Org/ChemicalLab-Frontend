@@ -1,6 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { Client, IMessage } from '@stomp/stompjs';
 import { Subject } from 'rxjs';
+import SockJS from 'sockjs-client';
 import { environment } from '../../../environments/environment';
 import {
   WhiteboardControlEventResponse,
@@ -18,9 +19,9 @@ export type WhiteboardConnectionState = 'disconnected' | 'connecting' | 'connect
  *
  * <p>Es análoga a la del docente (mismo transporte y mismos canales del backend), pero se mantiene
  * como servicio propio del estudiante para no acoplar la vista del alumno al editor docente ni
- * arriesgar romperlo. Se conecta al endpoint del backend ({@link environment.wsUrl}, el transporte
- * WebSocket del SockJS {@code /ws}) enviando el JWT en la cabecera Authorization del frame CONNECT,
- * tal como exige WhiteboardStompAuthChannelInterceptor. Tras conectar:</p>
+ * arriesgar romperlo. Se conecta al endpoint SockJS del backend ({@link environment.wsUrl})
+ * enviando el JWT en la cabecera Authorization del frame CONNECT, tal como exige
+ * WhiteboardStompAuthChannelInterceptor. Tras conectar:</p>
  *
  * <ul>
  *   <li>se suscribe a {@code /topic/whiteboards/{sessionId}}, donde el backend difunde tanto
@@ -71,7 +72,7 @@ export class StudentWhiteboardRealtimeService {
     this.connectionState.set('connecting');
 
     const client = new Client({
-      brokerURL: environment.wsUrl,
+      webSocketFactory: () => new SockJS(environment.wsUrl),
       connectHeaders: { Authorization: `Bearer ${token}` },
       reconnectDelay: 4000,
       heartbeatIncoming: 10000,

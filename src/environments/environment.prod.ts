@@ -16,9 +16,8 @@
 export const environment = {
   production: true,
   apiUrl: 'https://chemicallab-backend.onrender.com/api',
-  // Endpoint WebSocket/STOMP de la pizarra interactiva. Debe apuntar al mismo backend que
-  // apiUrl pero con el esquema ws:// (o wss:// sobre HTTPS) y la ruta del transporte
-  // WebSocket de SockJS (/ws/websocket). Ajustar junto con apiUrl según el escenario de
-  // despliegue (servidor institucional en LAN, reverse proxy o nube).
-  wsUrl: 'wss://chemicallab-backend.onrender.com/ws/websocket'
+  // Endpoint SockJS/STOMP de la pizarra interactiva. Debe apuntar al mismo backend que
+  // apiUrl y a la ruta SockJS del backend (/ws). Ajustar junto con apiUrl según el escenario
+  // de despliegue (servidor institucional en LAN, reverse proxy o nube).
+  wsUrl: 'https://chemicallab-backend.onrender.com/ws'
 };

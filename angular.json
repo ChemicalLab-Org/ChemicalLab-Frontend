@@ -30,7 +30,7 @@
               }
             ],
             "styles": ["src/styles.scss"],
-            "allowedCommonJsDependencies": ["@stomp/stompjs"]
+            "allowedCommonJsDependencies": ["@stomp/stompjs", "sockjs-client"]
           },
           "configurations": {
             "production": {
