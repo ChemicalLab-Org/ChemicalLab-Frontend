@@ -77,6 +77,9 @@ const PAN_VISIBLE_MIN = 96;
 const PAN_VISIBLE_MAX = 320;
 // Deshacer/rehacer queda desactivado temporalmente hasta estabilizar la sincronizacion colaborativa.
 const UNDO_REDO_ENABLED = false;
+// Tiempo máximo de espera de la conexión en vivo antes de mostrar el estado de error con reintento.
+// Evita que el docente quede atrapado indefinidamente en «conectando» si el WebSocket no llega.
+const WS_CONNECT_TIMEOUT_MS = 12000;
 
 /**
  * Cursor del plumón: un lápiz dibujado en SVG (hotspot en la punta, abajo-izquierda) en vez del
@@ -726,10 +729,28 @@ const UNDO_STACK_LIMIT = 80;
                       <span class="material-icons">pause_circle</span>
                       <p>Sesión pausada. Reanúdala para volver a dibujar.</p>
                     </div>
-                  } @else if (connectionState() !== 'connected') {
+                  } @else if (!boardStateReady()) {
+                    <!-- Conexión inicial: aún no hay estado que mostrar. Overlay breve mientras carga. -->
                     <div class="canvas-overlay canvas-overlay--soft">
                       <span class="material-icons">sync</span>
-                      <p>Conectando con la pizarra en vivo…</p>
+                      <p>Cargando la pizarra en vivo…</p>
+                    </div>
+                  } @else if (connectionState() !== 'connected') {
+                    <!-- El estado ya cargó por REST: NO se tapa el lienzo. Aviso flotante no bloqueante;
+                         si la conexión en vivo no llega a tiempo, se ofrece reintentar sin recargar. -->
+                    <div class="conn-toast" [class.conn-toast--error]="wsTimedOut()">
+                      <span class="material-icons">{{ wsTimedOut() ? 'wifi_off' : 'sync' }}</span>
+                      @if (wsTimedOut()) {
+                        <span class="conn-toast__text">
+                          No se pudo conectar con la pizarra en vivo. Tu dibujo puede no llegar a los
+                          estudiantes hasta reconectar.
+                        </span>
+                        <button type="button" class="btn btn-primary conn-toast__btn" (click)="reconnectRealtime()">
+                          Reintentar conexión
+                        </button>
+                      } @else {
+                        <span class="conn-toast__text">Conectando con la pizarra en vivo…</span>
+                      }
                     </div>
                   }
                 </div>
@@ -881,8 +902,15 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private boardStrokes: WhiteboardStrokeRecord[] = [];
   private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly STATE_SAVE_DEBOUNCE_MS = 1000;
-  private readonly boardStateReady = signal<boolean>(false);
+  readonly boardStateReady = signal<boolean>(false);
   private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
+  /** Temporizador de espera de la conexión en vivo; si expira sin conectar, se marca el fallo. */
+  private connectionTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * `true` cuando la conexión en vivo no se estableció dentro del tiempo de espera. El contenido
+   * cargado por REST se sigue mostrando; solo cambia el aviso a un estado de error con reintento.
+   */
+  readonly wsTimedOut = signal<boolean>(false);
 
   // Desplazamiento (pan) del lienzo dentro del visor.
   private panning = false;
@@ -1021,6 +1049,14 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         this.ensureCanvas();
       }
     });
+
+    // Cuando la conexión en vivo se establece, limpia el aviso de tiempo agotado y su temporizador.
+    effect(() => {
+      if (this.connectionState() === 'connected') {
+        this.wsTimedOut.set(false);
+        this.clearConnectionWatch();
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -1047,6 +1083,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearConnectionWatch();
     this.flushStateSave();
     this.realtime.disconnect();
     this.revokeSnapshotUrl();
@@ -1061,6 +1098,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         this.participants.set([...detail.participants]);
         this.loading.set(false);
         if (detail.session.status === 'CLOSED') {
+          this.clearConnectionWatch();
+          this.wsTimedOut.set(false);
           this.realtime.disconnect();
           this.boardStateReady.set(false);
           this.queuedRemoteDrawEvents = [];
@@ -1069,6 +1108,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           this.boardStateReady.set(false);
           this.queuedRemoteDrawEvents = [];
           this.realtime.connect(this.sessionId);
+          this.startConnectionWatch();
           // Tras renderizar el lienzo, centra la vista del workspace en el visor y restaura el
           // estado guardado (trazos + textos) para no perder la pizarra al recargar.
           requestAnimationFrame(() => {
@@ -2291,11 +2331,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
             this.busy.set(false);
             this.finalizeOpen.set(false);
             this.fullscreen.set(false);
-            this.realtime.disconnect();
+            // Deja el estado local coherente con el cierre (CLOSED es terminal) y limpia todo lo
+            // que pudiera quedar «activo»: herramientas, preview, selección y edición de texto.
             this.session.set(updated);
             this.participants.set([]);
-            this.showBanner('Sesión finalizada. Se guardó la captura final.', 'success');
-            this.loadSnapshot();
+            this.cancelText();
+            this.cancelShapePreview();
+            this.clearSelection();
+            // Cierra la conexión en vivo y su temporizador de espera para no dejar el WebSocket
+            // ni el estado de reconexión colgando tras finalizar.
+            this.clearConnectionWatch();
+            this.realtime.disconnect();
+            this.boardStateReady.set(false);
+            this.wsTimedOut.set(false);
+            // La sesión ya está finalizada en el backend: el docente vuelve al listado, donde la
+            // sesión aparece en el historial con su captura final. Así no queda dentro del editor
+            // con la barra de herramientas ni un estado visual «Activa/En vivo» contradictorio.
+            void this.router.navigate(['/teacher/whiteboards']);
           },
           error: (err: unknown) => {
             this.busy.set(false);
@@ -2991,6 +3043,52 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   /** Restaura el estado guardado del lienzo (trazos + textos) al entrar o recargar. */
+  /**
+   * Inicia el temporizador de espera de la conexión en vivo. Si al expirar el WebSocket aún no está
+   * conectado, se marca {@link wsTimedOut} para mostrar el estado de error con reintento (sin ocultar
+   * el contenido ya cargado por REST). El efecto del constructor lo cancela al conectar.
+   */
+  private startConnectionWatch(): void {
+    this.clearConnectionWatch();
+    this.wsTimedOut.set(false);
+    this.connectionTimer = setTimeout(() => {
+      this.connectionTimer = null;
+      if (this.connectionState() !== 'connected') {
+        this.wsTimedOut.set(true);
+      }
+    }, WS_CONNECT_TIMEOUT_MS);
+  }
+
+  private clearConnectionWatch(): void {
+    if (this.connectionTimer !== null) {
+      clearTimeout(this.connectionTimer);
+      this.connectionTimer = null;
+    }
+  }
+
+  /**
+   * Reintenta la conexión en vivo tras un fallo. Fuerza una reconexión limpia del WebSocket (por si
+   * el cliente quedó en un estado intermedio) y vuelve a cargar el estado actual del lienzo. No
+   * recarga la página ni pierde la sesión: el contenido visible se mantiene mientras reconecta.
+   */
+  reconnectRealtime(): void {
+    const s = this.session();
+    if (s === null || s.status === 'CLOSED') {
+      return;
+    }
+    // Persiste cualquier estado pendiente antes de recargarlo desde el backend, para no perder
+    // trazos/textos recientes al reconstruir el lienzo.
+    this.flushStateSave();
+    this.boardStateReady.set(false);
+    this.queuedRemoteDrawEvents = [];
+    this.realtime.reconnect(this.sessionId);
+    this.startConnectionWatch();
+    requestAnimationFrame(() => {
+      this.ensureCanvas();
+      this.loadBoardState();
+    });
+  }
+
   private loadBoardState(): void {
     this.whiteboardService.getBoardState(this.sessionId).subscribe({
       next: (state) => {

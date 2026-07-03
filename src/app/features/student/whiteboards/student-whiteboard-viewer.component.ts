@@ -71,6 +71,9 @@ const PAN_VISIBLE_MIN = 96;
 const PAN_VISIBLE_MAX = 320;
 // Deshacer/rehacer queda desactivado temporalmente hasta estabilizar la sincronizacion colaborativa.
 const UNDO_REDO_ENABLED = false;
+// Tiempo máximo de espera de la conexión en vivo antes de mostrar el estado de error con reintento.
+// Evita que el alumno quede atrapado indefinidamente en «conectando» si el WebSocket no llega.
+const WS_CONNECT_TIMEOUT_MS = 12000;
 
 const PEN_CURSOR =
   'url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMyAxNy4yNVYyMWgzLjc1TDE3LjgxIDkuOTRsLTMuNzUtMy43NUwzIDE3LjI1eiIgZmlsbD0iIzFhMWExNiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjEuMiIvPjxwYXRoIGQ9Ik0yMC43MSA3LjA0YTEgMSAwIDAgMCAwLTEuNDFsLTIuMzQtMi4zNGExIDEgMCAwIDAtMS40MSAwbC0xLjgzIDEuODMgMy43NSAzLjc1IDEuODMtMS44M3oiIGZpbGw9IiMxZDllNzUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=") 3 25, crosshair';
@@ -697,10 +700,28 @@ const UNDO_STACK_LIMIT = 80;
                     <span class="material-icons">pause_circle</span>
                     <p>La sesión está pausada por el docente.</p>
                   </div>
-                } @else if (connectionState() !== 'connected') {
+                } @else if (!boardStateReady()) {
+                  <!-- Conexión inicial: aún no hay estado que mostrar. Overlay breve mientras carga. -->
                   <div class="canvas-overlay canvas-overlay--soft">
                     <span class="material-icons">sync</span>
-                    <p>{{ connLabel() }} con la pizarra en vivo…</p>
+                    <p>Cargando la pizarra en vivo…</p>
+                  </div>
+                } @else if (connectionState() !== 'connected') {
+                  <!-- El estado ya cargó por REST: NO se tapa el lienzo. Aviso flotante no bloqueante;
+                       si la conexión en vivo no llega a tiempo, se ofrece reintentar sin recargar. -->
+                  <div class="conn-toast" [class.conn-toast--error]="wsTimedOut()">
+                    <span class="material-icons">{{ wsTimedOut() ? 'wifi_off' : 'sync' }}</span>
+                    @if (wsTimedOut()) {
+                      <span class="conn-toast__text">
+                        No se pudo conectar con la pizarra en vivo. El contenido mostrado puede no
+                        estar actualizado.
+                      </span>
+                      <button type="button" class="btn btn-primary conn-toast__btn" (click)="reconnectRealtime()">
+                        Reintentar conexión
+                      </button>
+                    } @else {
+                      <span class="conn-toast__text">Conectando con la pizarra en vivo…</span>
+                    }
                   </div>
                 }
               </div>
@@ -743,8 +764,15 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private shapeStart: WhiteboardPoint | null = null;
   /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
   private readonly ownEventIds = new Set<string>();
-  private readonly boardStateReady = signal<boolean>(false);
+  readonly boardStateReady = signal<boolean>(false);
   private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
+  /** Temporizador de espera de la conexión en vivo; si expira sin conectar, se marca el fallo. */
+  private connectionTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * `true` cuando la conexión en vivo no se estableció dentro del tiempo de espera. El contenido
+   * cargado por REST se sigue mostrando; solo cambia el aviso a un estado de error con reintento.
+   */
+  readonly wsTimedOut = signal<boolean>(false);
   private boardStrokes: WhiteboardStrokeRecord[] = [];
   private canInteractBeforePause: boolean | null = null;
 
@@ -873,6 +901,14 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
         this.ensureCanvas();
       }
     });
+
+    // Cuando la conexión en vivo se establece, limpia el aviso de tiempo agotado y su temporizador.
+    effect(() => {
+      if (this.connectionState() === 'connected') {
+        this.wsTimedOut.set(false);
+        this.clearConnectionWatch();
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -899,6 +935,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearConnectionWatch();
     this.realtime.disconnect();
   }
 
@@ -935,6 +972,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.session.set(detail);
     this.loading.set(false);
     if (detail.status === 'CLOSED') {
+      this.clearConnectionWatch();
+      this.wsTimedOut.set(false);
       this.realtime.disconnect();
       this.boardStateReady.set(false);
       this.queuedRemoteDrawEvents = [];
@@ -943,11 +982,55 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.boardStateReady.set(false);
     this.queuedRemoteDrawEvents = [];
     this.realtime.connect(this.sessionId);
+    this.startConnectionWatch();
     requestAnimationFrame(() => {
       this.ensureCanvas();
       this.centerPan();
       // Reconstruye el estado actual de la pizarra (trazos + textos) para no quedar en blanco al
       // unirse tarde o recargar; a partir de aquí siguen los eventos en vivo.
+      this.loadBoardState();
+    });
+  }
+
+  /**
+   * Inicia el temporizador de espera de la conexión en vivo. Si al expirar el WebSocket aún no está
+   * conectado, se marca {@link wsTimedOut} para mostrar el estado de error con reintento (sin ocultar
+   * el contenido ya cargado por REST). El efecto del constructor lo cancela al conectar.
+   */
+  private startConnectionWatch(): void {
+    this.clearConnectionWatch();
+    this.wsTimedOut.set(false);
+    this.connectionTimer = setTimeout(() => {
+      this.connectionTimer = null;
+      if (this.connectionState() !== 'connected') {
+        this.wsTimedOut.set(true);
+      }
+    }, WS_CONNECT_TIMEOUT_MS);
+  }
+
+  private clearConnectionWatch(): void {
+    if (this.connectionTimer !== null) {
+      clearTimeout(this.connectionTimer);
+      this.connectionTimer = null;
+    }
+  }
+
+  /**
+   * Reintenta la conexión en vivo tras un fallo. Fuerza una reconexión limpia del WebSocket (por si
+   * el cliente quedó en un estado intermedio) y vuelve a cargar el estado actual del lienzo. No
+   * recarga la página ni pierde la sesión: el contenido visible se mantiene mientras reconecta.
+   */
+  reconnectRealtime(): void {
+    const s = this.session();
+    if (s === null || s.status === 'CLOSED') {
+      return;
+    }
+    this.boardStateReady.set(false);
+    this.queuedRemoteDrawEvents = [];
+    this.realtime.reconnect(this.sessionId);
+    this.startConnectionWatch();
+    requestAnimationFrame(() => {
+      this.ensureCanvas();
       this.loadBoardState();
     });
   }
