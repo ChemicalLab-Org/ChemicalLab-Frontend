@@ -96,6 +96,17 @@ export class TeacherWhiteboardRealtimeService {
     client.activate();
   }
 
+  /**
+   * Fuerza una reconexión limpia a la sesión indicada. A diferencia de {@link connect}, que es
+   * idempotente y no hace nada si ya existe un cliente para la misma sesión, aquí se descarta el
+   * cliente actual (que puede haber quedado en un estado intermedio de «conectando») y se crea uno
+   * nuevo. Lo usa el botón «Reintentar conexión» cuando la conexión en vivo no se establece.
+   */
+  reconnect(sessionId: number): void {
+    this.disconnect();
+    this.connect(sessionId);
+  }
+
   /** Publica un evento de dibujo en el canal de la sesión actual. */
   sendDraw(event: WhiteboardDrawEventRequest): void {
     if (this.client === null || !this.client.connected || this.sessionId === null) {
