@@ -55,7 +55,12 @@ function mapUrlToModule(url: string): UsageModule | null {
   if (path === '/evaluations/results' || path.startsWith('/teacher/results')) return 'RESULTS';
   if (path === '/evaluations') return 'EVALUATIONS';
   if (path === '/admin/users') return 'USERS';
-  if (path === '/admin/academic-supervision' || path === '/admin/logs' || path === '/admin/usage-metrics') {
+  if (
+    path === '/admin/academic-supervision' ||
+    path === '/admin/logs' ||
+    path === '/admin/usage-metrics' ||
+    path === '/admin/student-usage-records'
+  ) {
     return 'ADMIN';
   }
   if (path === '/admin/system-status') return 'SYSTEM_STATUS';

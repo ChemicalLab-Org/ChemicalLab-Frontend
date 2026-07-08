@@ -162,6 +162,17 @@ export const routes: Routes = [
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
+    // Carga diferida: mantiene el registro de uso por estudiante fuera del bundle inicial;
+    // solo se descarga cuando el administrador abre el módulo.
+    path: 'admin/student-usage-records',
+    loadComponent: () =>
+      import('./features/admin/student-usage/student-usage-records.component').then(
+        (m) => m.StudentUsageRecordsComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
     path: 'periodic-table',
     component: PeriodicTableComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
