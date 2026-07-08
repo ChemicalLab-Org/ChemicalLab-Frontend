@@ -11,4 +11,5 @@ export * from './attempt-traceability.models';
 export * from './audit-log.models';
 export * from './supervision.models';
 export * from './usage-metrics.models';
+export * from './student-usage.models';
 export * from './whiteboard.models';
