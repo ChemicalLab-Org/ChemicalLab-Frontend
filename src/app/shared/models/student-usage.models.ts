@@ -16,7 +16,11 @@ export interface StudentUsageRecord {
   readonly role: UserRole;
   readonly grade: string | null;
   readonly section: string | null;
-  /** Siempre null en esta versión: el sistema no registra duración de sesión. */
+  /**
+   * Tiempo total de uso ESTIMADO en minutos: el backend agrupa los momentos de actividad
+   * registrados (logins, eventos de uso e hitos de intentos) en sesiones con un corte de
+   * inactividad de 30 minutos y suma sus duraciones. Debe presentarse como estimación.
+   */
   readonly totalUsageMinutes: number | null;
   readonly sessionsStarted: number | null;
   readonly visitedModulesCount: number | null;

@@ -28,9 +28,11 @@ const NOT_AVAILABLE = 'No disponible';
  * actividades asignadas/completadas, avance, intentos, aciertos/errores, tasa de acierto,
  * retroalimentaciones e incidencias técnicas.
  *
- * <p>Los indicadores que el sistema aún no puede calcular con datos reales (p. ej. el
- * tiempo total de uso, que requiere registrar la duración de sesión) llegan como null y
- * se muestran como «No disponible»: nunca se presentan valores inventados.</p>
+ * <p>El tiempo total de uso es una estimación con regla declarada (sesiones de actividad
+ * registrada con corte de inactividad de 30 minutos, calculadas en el backend) y se
+ * presenta con «≈» y tooltip explicativo. Los indicadores que no pueden calcularse con
+ * datos reales llegan como null y se muestran como «No disponible»: nunca se presentan
+ * valores inventados.</p>
  */
 @Component({
   selector: 'app-admin-student-usage-records',
@@ -254,10 +256,12 @@ const NOT_AVAILABLE = 'No disponible';
                       <td><span [class]="roleChipClass(r.role)">{{ roleLabel(r.role) }}</span></td>
                       <td>{{ formatGradeSection(r) }}</td>
                       <td class="num">{{ formatCount(r.sessionsStarted) }}</td>
-                      <td>
-                        <span class="na-chip" [title]="'El sistema aún no registra la duración de las sesiones'">
+                      <td class="num" [title]="usageTimeHint">
+                        @if (r.totalUsageMinutes !== null) {
                           {{ formatMinutes(r.totalUsageMinutes) }}
-                        </span>
+                        } @else {
+                          <span class="na-chip">No disponible</span>
+                        }
                       </td>
                       <td class="num" [title]="visitedModulesTitle(r)">{{ formatCount(r.visitedModulesCount) }}</td>
                       <td class="num">{{ formatCount(r.assignedActivities) }}</td>
@@ -283,8 +287,10 @@ const NOT_AVAILABLE = 'No disponible';
               </table>
             </section>
             <p class="table-note">
-              El tiempo total de uso requiere registrar la duración de las sesiones, aún no
-              instrumentada: se muestra como «No disponible» en lugar de estimarse.
+              El tiempo total es un valor estimado (por eso el símbolo ≈): se agrupan los
+              momentos de actividad registrados en sesiones con un corte de inactividad de
+              30 minutos y se suman sus duraciones. Es una estimación conservadora: el
+              tiempo de lectura sin interacción no genera eventos y no se cuenta.
             </p>
           }
         }
@@ -335,11 +341,11 @@ const NOT_AVAILABLE = 'No disponible';
                   <div class="mini-card__value">{{ formatCount(det.summary.sessionsStarted) }}</div>
                   <div class="mini-card__label">Sesiones iniciadas</div>
                 </div>
-                <div class="mini-card">
-                  <div class="mini-card__value mini-card__value--muted">
+                <div class="mini-card" [title]="usageTimeHint">
+                  <div class="mini-card__value" [class.mini-card__value--muted]="det.summary.totalUsageMinutes === null">
                     {{ formatMinutes(det.summary.totalUsageMinutes) }}
                   </div>
-                  <div class="mini-card__label">Tiempo total de uso</div>
+                  <div class="mini-card__label">Tiempo estimado de uso</div>
                 </div>
                 <div class="mini-card">
                   <div class="mini-card__value">{{ formatCount(det.summary.visitedModulesCount) }}</div>
@@ -514,6 +520,11 @@ export class StudentUsageRecordsComponent implements OnInit {
   readonly navItems: readonly SidebarNavItem[] = ADMIN_NAV_ITEMS;
   readonly userRole = 'Admin';
 
+  /** Explicación de la regla del tiempo estimado, mostrada como tooltip. */
+  readonly usageTimeHint =
+    'Tiempo estimado: suma de sesiones de actividad registrada (logins, eventos e intentos), ' +
+    'con corte de inactividad de 30 minutos. La lectura sin interacción no se cuenta.';
+
   readonly gradeOptions: readonly string[] = ['1', '2', '3', '4', '5'];
   readonly sectionOptions: readonly string[] = ['A', 'B', 'C', 'D', 'E', 'F'];
   readonly moduleOptions: readonly UsageModule[] = [
@@ -673,8 +684,13 @@ export class StudentUsageRecordsComponent implements OnInit {
     return value === null ? NOT_AVAILABLE : `${value}%`;
   }
 
+  /** Tiempo estimado legible: «≈ 45 min», «≈ 2 h 5 min». El ≈ recalca que es estimación. */
   formatMinutes(value: number | null): string {
-    return value === null ? NOT_AVAILABLE : `${value} min`;
+    if (value === null) return NOT_AVAILABLE;
+    if (value < 60) return `≈ ${value} min`;
+    const hours = Math.floor(value / 60);
+    const minutes = value % 60;
+    return minutes === 0 ? `≈ ${hours} h` : `≈ ${hours} h ${minutes} min`;
   }
 
   formatIncidents(record: StudentUsageRecord): string {
