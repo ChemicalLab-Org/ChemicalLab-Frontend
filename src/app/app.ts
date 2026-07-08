@@ -12,7 +12,7 @@ import { UsageModule } from './shared/models';
   styleUrl: './app.scss',
 })
 export class App {
-  protected readonly title = signal('chemical-lab-frontend');
+  protected readonly title = signal('Chemical Lab');
 
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
