@@ -7,10 +7,11 @@ import { SidebarNavItem } from './sidebar.component';
 export const TEACHER_NAV_ITEMS: readonly SidebarNavItem[] = [
   { label: 'Inicio', icon: 'home', route: '/teacher-dashboard' },
   { label: 'Mis estudiantes', icon: 'group', route: '/teacher/students' },
+  { label: 'Tabla periódica', icon: 'science', route: '/periodic-table' },
+  { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
   { label: 'Contenidos conceptuales', icon: 'library_books', route: '/teacher/concepts' },
+  { label: 'Pizarra interactiva', icon: 'draw', route: '/teacher/whiteboards' },
   { label: 'Evaluaciones', icon: 'grading', route: '/teacher/evaluations' },
   { label: 'Resultados', icon: 'bar_chart', route: '/teacher/results' },
-  { label: 'Pizarra interactiva', icon: 'draw', route: '/teacher/whiteboards' },
-  { label: 'Formación de compuestos', icon: 'biotech', route: '/compounds' },
   { label: 'Restablecer contraseñas', icon: 'lock_reset', route: '/teacher/passwords' },
 ];

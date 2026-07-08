@@ -26,7 +26,7 @@ export interface SidebarNavItem {
           <span class="material-icons">science</span>
         </div>
         <div class="sidebar__brand-text">
-          <div class="sidebar__brand-title">QuímicaLab</div>
+          <div class="sidebar__brand-title">ChemicalLab</div>
           <div class="sidebar__brand-subtitle">Laboratorio Digital</div>
         </div>
       </div>

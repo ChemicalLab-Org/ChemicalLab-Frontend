@@ -19,7 +19,7 @@ import { AuthService } from '../../../core/services/auth.service';
             </svg>
           </div>
           <div>
-            <div class="brand__name">QuímicaLab</div>
+            <div class="brand__name">ChemicalLab</div>
             <div class="brand__sub">Laboratorio Digital</div>
           </div>
         </div>

@@ -35,7 +35,7 @@ import { AuthResponse } from '../../../shared/models';
             </svg>
           </div>
           <div>
-            <p class="brand-logo__title">QuímicaLab</p>
+            <p class="brand-logo__title">ChemicalLab</p>
             <p class="brand-logo__sub">Laboratorio digital</p>
           </div>
         </header>
@@ -66,7 +66,7 @@ import { AuthResponse } from '../../../shared/models';
         </div>
 
         <footer class="brand-footer">
-          <span>© 2026 QuímicaLab</span>
+          <span>© 2026 ChemicalLab</span>
           <span class="brand-footer__links">
             <a href="#">Soporte</a>
             <a href="#">Privacidad</a>
