@@ -23,6 +23,14 @@ import {
   periodOf,
   schematicShells,
 } from './data/elements-data';
+import {
+  ElementEducation,
+  ElementEducationMap,
+  blockLabel,
+  familyOf,
+  metalClassOf,
+  schoolValencesLabel,
+} from './data/element-education';
 
 interface PropertyRow {
   readonly label: string;
@@ -236,6 +244,15 @@ const ORBIT_3D_ROTATIONS: readonly number[] = [-22, 18, -8, 26, -16, 10, -24];
                   </span>
                 </div>
 
+                <!-- Chips de clasificación (metal/no metal, grupo, período, bloque, familia, estado) -->
+                @if (chips().length > 0) {
+                  <div class="detail-chips">
+                    @for (chip of chips(); track chip) {
+                      <span class="detail-chip">{{ chip }}</span>
+                    }
+                  </div>
+                }
+
                 <!-- Modelo atómico (SVG esquemático tipo Bohr) -->
                 <section class="detail-section">
                   <h2 class="detail-section__title">Modelo atómico</h2>
@@ -428,11 +445,88 @@ const ORBIT_3D_ROTATIONS: readonly number[] = [-22, 18, -8, 26, -16, 10, -24];
                   </div>
                 </section>
 
-                <!-- Descripción -->
+                <!-- Descripción breve -->
+                @if (shortDescription(); as short) {
+                  <section class="detail-section">
+                    <h2 class="detail-section__title">Descripción breve</h2>
+                    <p class="detail-description detail-description--lead">{{ short }}</p>
+                  </section>
+                }
+
+                <!-- Explicación educativa -->
                 <section class="detail-section">
-                  <h2 class="detail-section__title">Descripción</h2>
-                  <p class="detail-description">{{ description() }}</p>
+                  <h2 class="detail-section__title">Explicación educativa</h2>
+                  <p class="detail-description">{{ educationalDescription() }}</p>
                 </section>
+
+                <!-- Usos cotidianos -->
+                @if (everydayUses().length > 0) {
+                  <section class="detail-section">
+                    <h2 class="detail-section__title">Usos cotidianos</h2>
+                    <ul class="detail-list">
+                      @for (use of everydayUses(); track use) {
+                        <li class="detail-list__item">{{ use }}</li>
+                      }
+                    </ul>
+                  </section>
+                }
+
+                <!-- Usos en química -->
+                @if (chemistryUses().length > 0) {
+                  <section class="detail-section">
+                    <h2 class="detail-section__title">Usos en química</h2>
+                    <ul class="detail-list">
+                      @for (use of chemistryUses(); track use) {
+                        <li class="detail-list__item">{{ use }}</li>
+                      }
+                    </ul>
+                  </section>
+                }
+
+                <!-- Compuestos comunes -->
+                @if (commonCompounds().length > 0) {
+                  <section class="detail-section">
+                    <h2 class="detail-section__title">Compuestos comunes</h2>
+                    <div class="detail-tags">
+                      @for (compound of commonCompounds(); track compound) {
+                        <span class="detail-tag">{{ compound }}</span>
+                      }
+                    </div>
+                  </section>
+                }
+
+                <!-- Consejo para aprender -->
+                @if (learningTip(); as tip) {
+                  <section class="detail-section">
+                    <h2 class="detail-section__title">Consejo para aprender</h2>
+                    <p class="detail-note detail-note--tip">
+                      <span class="material-icons">lightbulb</span>
+                      <span>{{ tip }}</span>
+                    </p>
+                  </section>
+                }
+
+                <!-- Precaución -->
+                @if (safetyNote(); as note) {
+                  <section class="detail-section">
+                    <h2 class="detail-section__title">Precaución</h2>
+                    <p class="detail-note detail-note--warning">
+                      <span class="material-icons">warning</span>
+                      <span>{{ note }}</span>
+                    </p>
+                  </section>
+                }
+
+                <!-- Nota para nivel secundaria -->
+                @if (secondaryLevelNote(); as note) {
+                  <section class="detail-section">
+                    <h2 class="detail-section__title">Nota para secundaria</h2>
+                    <p class="detail-note detail-note--level">
+                      <span class="material-icons">school</span>
+                      <span>{{ note }}</span>
+                    </p>
+                  </section>
+                }
               </div>
 
               <!-- Acciones fijas al fondo -->
@@ -462,12 +556,26 @@ export class PeriodicTableComponent {
   private readonly examSession = inject(ExamSessionService);
   private readonly attemptEvents = inject(AttemptEventService);
 
+  /**
+   * Contenido educativo de los 118 elementos. Se carga por importación dinámica
+   * para mantenerlo fuera del bundle inicial (presupuesto de tamaño). Hasta que
+   * llega, la tabla y los datos base (grupo, período, valencias) funcionan igual
+   * y las secciones educativas simplemente aún no se muestran.
+   */
+  private readonly educationData = signal<ElementEducationMap>({});
+
   constructor() {
     // Trazabilidad del intento: si se abre la tabla periódica durante un intento activo,
     // se registra el uso de la herramienta (solo que se abrió, nunca qué elemento se vio).
     if (this.examSession.isActive()) {
       this.attemptEvents.toolOpened('PERIODIC_TABLE');
     }
+
+    // Precarga del dataset educativo al construir el componente, de modo que ya
+    // esté disponible cuando el estudiante seleccione un elemento.
+    void import('./data/element-education-data').then((module) => {
+      this.educationData.set(module.ELEMENT_EDUCATION);
+    });
   }
 
   readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
@@ -495,41 +603,90 @@ export class PeriodicTableComponent {
     return filter ? filter.categories : null;
   });
 
+  /** Información educativa del elemento seleccionado (sesión 18.4). */
+  readonly education = computed<ElementEducation | undefined>(() => {
+    const el = this.selectedElement();
+    return el === null ? undefined : this.educationData()[el.atomicNumber];
+  });
+
+  /** Chips de clasificación: metal/no metal, grupo, período, bloque, familia y estado. */
+  readonly chips = computed<readonly string[]>(() => {
+    const el = this.selectedElement();
+    if (el === null) {
+      return [];
+    }
+    const edu = this.education();
+    const chips: string[] = [metalClassOf(el)];
+    const group = groupOf(el);
+    if (group !== null) {
+      chips.push('Grupo ' + group);
+    }
+    chips.push('Período ' + periodOf(el));
+    chips.push(blockLabel(el));
+    chips.push(familyOf(el, edu));
+    if (edu?.state) {
+      chips.push(edu.state);
+    }
+    return chips;
+  });
+
   readonly properties = computed<readonly PropertyRow[]>(() => {
     const el = this.selectedElement();
     if (el === null) {
       return [];
     }
+    const edu = this.education();
     const detail = this.detailFor(el);
     const group = groupOf(el);
     const rows: PropertyRow[] = [
       { label: 'Nº atómico', value: String(el.atomicNumber), mono: true },
     ];
-    if (detail.atomicMass) {
-      rows.push({ label: 'Masa atómica', value: detail.atomicMass, mono: true });
-    }
+
+    const mass = edu?.atomicMass ?? detail.atomicMass;
+    rows.push({ label: 'Masa atómica', value: mass ?? 'No disponible', mono: mass != null });
+
     rows.push({ label: 'Grupo', value: group === null ? '—' : String(group), mono: group !== null });
     rows.push({ label: 'Periodo', value: String(periodOf(el)), mono: true });
-    rows.push({ label: 'Tipo', value: detail.typeLabel ?? this.categoryLabel(el.category), mono: false });
-    if (detail.state) {
-      rows.push({ label: 'Estado', value: detail.state, mono: false });
-    }
-    if (detail.valence) {
-      rows.push({ label: 'Valencia', value: detail.valence, mono: true });
-    }
-    if (detail.electronegativity) {
-      rows.push({ label: 'Electronegatividad', value: detail.electronegativity, mono: true });
-    }
+
+    // Valencias comunes: se toman del catálogo del motor de compuestos como
+    // referencia principal para no contradecir a Formación de compuestos.
+    const valences = schoolValencesLabel(el.symbol) ?? edu?.commonOxidationStates ?? null;
+    rows.push({
+      label: 'Valencias comunes',
+      value: valences ?? 'No disponible',
+      mono: valences !== null && /[0-9]/.test(valences),
+    });
+
+    const eneg = edu?.electronegativity ?? detail.electronegativity;
+    rows.push({ label: 'Electronegatividad', value: eneg ?? 'No disponible', mono: eneg != null });
+
     return rows;
   });
 
-  readonly description = computed<string>(() => {
+  /** Descripción breve de una línea, si existe. */
+  readonly shortDescription = computed<string | null>(() => this.education()?.shortDescription ?? null);
+
+  /** Explicación educativa ampliada, con respaldo al detalle previo o texto genérico. */
+  readonly educationalDescription = computed<string>(() => {
     const el = this.selectedElement();
     if (el === null) {
       return '';
     }
-    return this.detailFor(el).description ?? 'Información descriptiva pendiente para este elemento.';
+    return (
+      this.education()?.educationalDescription ??
+      this.detailFor(el).description ??
+      'Información descriptiva pendiente para este elemento.'
+    );
   });
+
+  readonly everydayUses = computed<readonly string[]>(() => this.education()?.everydayUses ?? []);
+  readonly chemistryUses = computed<readonly string[]>(() => this.education()?.chemistryUses ?? []);
+  readonly commonCompounds = computed<readonly string[]>(() => this.education()?.commonCompounds ?? []);
+  readonly learningTip = computed<string | null>(() => this.education()?.learningTip ?? null);
+  readonly safetyNote = computed<string | null>(() => this.education()?.safetyNote ?? null);
+  readonly secondaryLevelNote = computed<string | null>(
+    () => this.education()?.secondaryLevelNote ?? null
+  );
 
   /** Símbolo que se dibuja en el núcleo de las visualizaciones. */
   readonly nucleusSymbol = computed<string>(() => this.selectedElement()?.symbol ?? '');
