@@ -88,6 +88,18 @@ export class UsageMetricsService {
     });
   }
 
+  /** Cambió la nomenclatura visible de un compuesto ya formado. */
+  trackNomenclatureSelection(nomenclature: 'Tradicional' | 'Stock' | 'Sistemática'): void {
+    this.record({
+      module: 'COMPOUNDS',
+      eventType: 'IMPORTANT_CLICK',
+      resourceType: 'NOMENCLATURE',
+      resourceId: nomenclature,
+      description: 'Selección de nomenclatura',
+      metadata: { nomenclature },
+    });
+  }
+
   /** Abrió o visualizó un contenido conceptual. */
   trackContentView(contentId: number, category?: string): void {
     const metadata: Record<string, string> = { contentId: String(contentId) };
