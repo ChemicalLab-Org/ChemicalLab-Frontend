@@ -105,6 +105,7 @@ export const USAGE_RESOURCE_TYPE_LABELS: Record<string, string> = {
   CONCEPT: 'Contenido',
   ELEMENT: 'Elemento',
   COMPOUND: 'Formación de compuestos',
+  NOMENCLATURE: 'Nomenclatura',
 };
 
 /**

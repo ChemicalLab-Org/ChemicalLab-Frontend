@@ -54,8 +54,9 @@ const COMPOUND_TYPES: readonly CompoundTypeMeta[] = [
 type FormStatus = 'idle' | 'loading' | 'success' | 'error';
 type CatalogStatus = 'loading' | 'ready' | 'error';
 type NomenclatureType = 'traditional' | 'stock' | 'systematic';
+type NomenclatureLabel = 'Tradicional' | 'Stock' | 'Sistemática';
 
-const NOMENCLATURE_OPTIONS: readonly { readonly value: NomenclatureType; readonly label: string }[] = [
+const NOMENCLATURE_OPTIONS: readonly { readonly value: NomenclatureType; readonly label: NomenclatureLabel }[] = [
   { value: 'traditional', label: 'Tradicional' },
   { value: 'stock', label: 'Stock' },
   { value: 'systematic', label: 'Sistemática' },
@@ -792,9 +793,12 @@ export class CompoundsComponent {
 
   onNomenclatureChange(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
-    if (value === 'traditional' || value === 'stock' || value === 'systematic') {
-      this.selectedNomenclature.set(value);
+    const option = this.nomenclatureOptions.find((item) => item.value === value);
+    if (option === undefined || option.value === this.selectedNomenclature()) {
+      return;
     }
+    this.selectedNomenclature.set(option.value);
+    this.usageMetrics.trackNomenclatureSelection(option.label);
   }
 
   resetForm(): void {
