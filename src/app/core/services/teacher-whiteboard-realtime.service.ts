@@ -1,8 +1,9 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { Client, IMessage } from '@stomp/stompjs';
 import { Subject } from 'rxjs';
 import SockJS from 'sockjs-client';
 import { environment } from '../../../environments/environment';
+import { SessionCleanupService } from './session-cleanup.service';
 import {
   WhiteboardControlEventResponse,
   WhiteboardDrawEventRequest,
@@ -48,6 +49,12 @@ export class TeacherWhiteboardRealtimeService {
   /** Mensajes de error privados enviados por el backend al rechazar un evento. */
   readonly errors = this.errors$.asObservable();
 
+  constructor() {
+    // Al cerrar sesión debe cerrarse esta conexión STOMP. Se registra la limpieza en lugar de
+    // que AuthService importe este servicio (evita arrastrar sockjs/stompjs al bundle inicial).
+    inject(SessionCleanupService).register(() => this.disconnect());
+  }
+
   /** Conecta y se suscribe a los canales de la sesión indicada. Idempotente por sesión. */
   connect(sessionId: number): void {
     if (this.client !== null && this.sessionId === sessionId) {
@@ -55,7 +62,7 @@ export class TeacherWhiteboardRealtimeService {
     }
     this.disconnect();
 
-    const token = localStorage.getItem('auth_token');
+    const token = sessionStorage.getItem('auth_token');
     if (token === null) {
       this.errors$.next('No hay una sesión autenticada para conectar la pizarra.');
       return;

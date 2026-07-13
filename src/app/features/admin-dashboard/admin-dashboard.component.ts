@@ -210,10 +210,10 @@ export class AdminDashboardComponent {
   }
 
   private readStoredUser(): AuthResponse | null {
-    if (typeof localStorage === 'undefined') {
+    if (typeof sessionStorage === 'undefined') {
       return null;
     }
-    const raw = localStorage.getItem('auth_user');
+    const raw = sessionStorage.getItem('auth_user');
     if (raw === null) {
       return null;
     }
