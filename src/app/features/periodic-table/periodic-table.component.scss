@@ -479,6 +479,98 @@ $categories: (
   font-size: 14px;
   line-height: 1.55;
   color: var(--color-neutral-700);
+
+  &--lead {
+    font-weight: 600;
+    color: var(--color-neutral-800);
+  }
+}
+
+// Chips de clasificación (metal/no metal, grupo, período, bloque, familia, estado).
+.detail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.detail-chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-neutral-100);
+  border: 1.5px solid var(--color-neutral-200);
+  color: var(--color-neutral-700);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+// Listas de usos.
+.detail-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &__item {
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--color-neutral-700);
+  }
+}
+
+// Etiquetas de compuestos comunes.
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.detail-tag {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--color-primary-50, oklch(0.96 0.02 168));
+  border: 1.5px solid var(--color-primary-200, oklch(0.88 0.05 168));
+  color: var(--color-primary-700, oklch(0.42 0.09 168));
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+// Notas destacadas (consejo, precaución, nivel).
+.detail-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  line-height: 1.5;
+
+  .material-icons {
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  &--tip {
+    background: var(--color-primary-50, oklch(0.96 0.02 168));
+    border: 1.5px solid var(--color-primary-200, oklch(0.88 0.05 168));
+    color: var(--color-primary-800, oklch(0.35 0.08 168));
+  }
+
+  &--warning {
+    background: oklch(0.96 0.04 70);
+    border: 1.5px solid oklch(0.85 0.10 70);
+    color: oklch(0.42 0.12 55);
+  }
+
+  &--level {
+    background: var(--color-neutral-100);
+    border: 1.5px solid var(--color-neutral-200);
+    color: var(--color-neutral-700);
+  }
 }
 
 // Acciones fijas al fondo del panel.
