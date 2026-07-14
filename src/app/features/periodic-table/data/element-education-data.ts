@@ -6,8 +6,11 @@
  * el contenido textual (que es la mayor parte del peso) NO entra al bundle
  * inicial y no rompe el presupuesto de tamaño. Ver `element-education.ts`.
  *
- * Todo el contenido queda con `validationStatus: 'pending'`: la validación
- * química formal corresponde a la sesión 18.5.
+ * Sesión 18.5: el contenido fue revisado químicamente (masas atómicas,
+ * estados, familias, electronegatividades, valencias frecuentes, usos,
+ * compuestos comunes y notas de seguridad) contra valores de referencia de
+ * nivel escolar. Los registros verificados quedan con
+ * `validationStatus: 'validated'`.
  */
 
 import { ElementEducation } from './element-education';
@@ -25,7 +28,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Agua (H₂O)', 'Ácido clorhídrico (HCl)', 'Amoníaco (NH₃)'],
     learningTip: 'Aunque suele ir en el grupo 1, no es un metal: se comporta distinto a los alcalinos.',
     safetyNote: 'Es muy inflamable; mezclado con aire puede explotar.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   2: {
     atomicMass: '4.003 u',
@@ -37,7 +40,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Globos y dirigibles', 'Enfriamiento de imanes', 'Mezclas para buceo'],
     commonOxidationStates: 'No forma compuestos habitualmente',
     learningTip: 'Es el segundo elemento más abundante del universo, después del hidrógeno.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   3: {
     atomicMass: '6.94 u',
@@ -51,7 +54,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Cloruro de litio (LiCl)', 'Carbonato de litio (Li₂CO₃)'],
     learningTip: 'Como todos los alcalinos (grupo 1), su valencia común es +1.',
     safetyNote: 'Reacciona con el agua; debe manipularse con cuidado.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   4: {
     atomicMass: '9.012 u',
@@ -65,7 +68,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Óxido de berilio (BeO)'],
     learningTip: 'Grupo 2: comparte la valencia +2 con el magnesio y el calcio.',
     safetyNote: 'Su polvo es tóxico si se inhala.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   5: {
     atomicMass: '10.81 u',
@@ -78,7 +81,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Vidrios resistentes al calor', 'Detergentes (bórax)', 'Fibras y materiales'],
     commonCompounds: ['Ácido bórico (H₃BO₃)', 'Bórax (Na₂B₄O₇)'],
     learningTip: 'Su valencia común es +3, típica del grupo 13.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   6: {
     atomicMass: '12.011 u',
@@ -91,7 +94,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Combustibles', 'Grafito de lápices', 'Diamantes', 'Plásticos'],
     commonCompounds: ['Dióxido de carbono (CO₂)', 'Metano (CH₄)', 'Carbonato de calcio (CaCO₃)'],
     learningTip: 'Puede formar hasta 4 enlaces, por eso genera tantísimos compuestos distintos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   7: {
     atomicMass: '14.007 u',
@@ -104,7 +107,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Fertilizantes', 'Conservación de alimentos', 'Nitrógeno líquido para enfriar'],
     commonCompounds: ['Amoníaco (NH₃)', 'Ácido nítrico (HNO₃)'],
     learningTip: 'Aunque hay mucho en el aire, cuesta que reaccione: su molécula N₂ es muy estable.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   8: {
     atomicMass: '15.999 u',
@@ -117,7 +120,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Respiración', 'Combustión', 'Uso médico', 'Soldadura'],
     commonCompounds: ['Agua (H₂O)', 'Dióxido de carbono (CO₂)', 'Óxido de hierro (Fe₂O₃)'],
     learningTip: 'Su valencia típica es -2; es clave para formar óxidos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   9: {
     atomicMass: '18.998 u',
@@ -131,7 +134,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Fluoruro de sodio (NaF)', 'Ácido fluorhídrico (HF)'],
     learningTip: 'Como halógeno, su valencia común es -1.',
     safetyNote: 'El flúor puro y el HF son muy corrosivos y peligrosos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   10: {
     atomicMass: '20.180 u',
@@ -143,7 +146,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Letreros luminosos', 'Láseres', 'Indicadores'],
     commonOxidationStates: 'No forma compuestos habitualmente',
     learningTip: 'Su capa externa está completa: por eso no reacciona.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   11: {
     atomicMass: '22.990 u',
@@ -157,7 +160,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Cloruro de sodio (NaCl)', 'Hidróxido de sodio (NaOH)', 'Bicarbonato (NaHCO₃)'],
     learningTip: 'Grupo 1: valencia común +1, igual que litio y potasio.',
     safetyNote: 'Reacciona con violencia con el agua.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   12: {
     atomicMass: '24.305 u',
@@ -170,7 +173,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Aleaciones ligeras', 'Suplementos', 'Bengalas y fuegos artificiales'],
     commonCompounds: ['Óxido de magnesio (MgO)', 'Cloruro de magnesio (MgCl₂)'],
     learningTip: 'Grupo 2: valencia común +2.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   13: {
     atomicMass: '26.982 u',
@@ -183,7 +186,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Latas y papel de aluminio', 'Ventanas y estructuras', 'Vehículos'],
     commonCompounds: ['Óxido de aluminio (Al₂O₃)', 'Cloruro de aluminio (AlCl₃)'],
     learningTip: 'Su valencia común es +3.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   14: {
     atomicMass: '28.085 u',
@@ -196,7 +199,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Chips y microprocesadores', 'Vidrio', 'Paneles solares'],
     commonCompounds: ['Dióxido de silicio (SiO₂)'],
     learningTip: 'Está justo debajo del carbono y también forma 4 enlaces.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   15: {
     atomicMass: '30.974 u',
@@ -210,7 +213,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Ácido fosfórico (H₃PO₄)', 'Fosfato de calcio (Ca₃(PO₄)₂)'],
     learningTip: 'Valencias frecuentes en ejercicios: +3 y +5.',
     safetyNote: 'El fósforo blanco es muy inflamable y tóxico.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   16: {
     atomicMass: '32.06 u',
@@ -223,7 +226,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Ácido sulfúrico', 'Vulcanización del caucho', 'Fertilizantes'],
     commonCompounds: ['Ácido sulfúrico (H₂SO₄)', 'Dióxido de azufre (SO₂)'],
     learningTip: 'Valencias frecuentes: -2, +4 y +6.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   17: {
     atomicMass: '35.45 u',
@@ -237,7 +240,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Cloruro de sodio (NaCl)', 'Ácido clorhídrico (HCl)'],
     learningTip: 'Como halógeno, su valencia más común es -1, pero también actúa con +1, +3, +5 y +7.',
     safetyNote: 'El gas cloro es tóxico; nunca se deben mezclar limpiadores que lo liberen.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   18: {
     atomicMass: '39.95 u',
@@ -249,7 +252,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Bombillas', 'Soldadura', 'Atmósferas protegidas'],
     commonOxidationStates: 'No forma compuestos habitualmente',
     learningTip: 'Es el gas noble más abundante en la atmósfera terrestre.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   19: {
     atomicMass: '39.098 u',
@@ -263,7 +266,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Cloruro de potasio (KCl)', 'Hidróxido de potasio (KOH)'],
     learningTip: 'Grupo 1: valencia común +1.',
     safetyNote: 'Reacciona con violencia con el agua.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   20: {
     atomicMass: '40.078 u',
@@ -276,7 +279,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Huesos y dientes', 'Cemento y cal', 'Tiza (carbonato de calcio)'],
     commonCompounds: ['Carbonato de calcio (CaCO₃)', 'Óxido de calcio (CaO)', 'Cloruro de calcio (CaCl₂)'],
     learningTip: 'Grupo 2: valencia común +2.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   21: {
     atomicMass: '44.956 u',
@@ -286,7 +289,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El escandio es un metal de transición ligero y poco común. Se usa en aleaciones especiales, por ejemplo para equipos deportivos y aeronáutica.',
     everydayUses: ['Aleaciones ligeras', 'Iluminación especial'],
     learningTip: 'Abre la serie de los metales de transición (grupo 3).',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   22: {
     atomicMass: '47.867 u',
@@ -297,7 +300,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Prótesis médicas', 'Aviones y naves', 'Pinturas blancas (TiO₂)'],
     commonCompounds: ['Dióxido de titanio (TiO₂)'],
     learningTip: 'Combina resistencia y ligereza, por eso es tan valorado.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   23: {
     atomicMass: '50.942 u',
@@ -307,7 +310,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El vanadio es un metal de transición que se añade al acero para hacerlo más duro y resistente. Forma compuestos de colores llamativos.',
     everydayUses: ['Aceros resistentes', 'Herramientas'],
     learningTip: 'Los metales de transición suelen tener varias valencias.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   24: {
     atomicMass: '51.996 u',
@@ -317,8 +320,8 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El cromo es un metal de transición duro y brillante. Da el acabado plateado del cromado y hace inoxidable al acero. Sus compuestos tienen colores intensos.',
     everydayUses: ['Cromado y acero inoxidable', 'Pigmentos'],
     learningTip: 'Valencias frecuentes en ejercicios: +2, +3 y +6.',
-    safetyNote: 'Algunos compuestos de cromo (VI) son tóxicos.',
-    validationStatus: 'pending',
+    safetyNote: 'Los compuestos de cromo (VI) son tóxicos; no deben manipularse sin supervisión adecuada.',
+    validationStatus: 'validated',
   },
   25: {
     atomicMass: '54.938 u',
@@ -328,7 +331,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El manganeso es un metal de transición que mejora la resistencia del acero. También se usa en pilas. Es un nutriente en pequeñas cantidades.',
     everydayUses: ['Acero', 'Pilas secas', 'Nutrición en trazas'],
     learningTip: 'Valencias frecuentes: +2, +4 y +7.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   26: {
     atomicMass: '55.845 u',
@@ -340,7 +343,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Acero y construcción', 'Herramientas', 'Transporte de oxígeno en la sangre'],
     commonCompounds: ['Óxido de hierro (Fe₂O₃)', 'Cloruro de hierro (FeCl₃)'],
     learningTip: 'Valencias comunes: +2 (ferroso) y +3 (férrico).',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   27: {
     atomicMass: '58.933 u',
@@ -350,7 +353,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El cobalto es un metal de transición usado en imanes fuertes y baterías. Sus compuestos dan un color azul característico a vidrios y cerámicas.',
     everydayUses: ['Imanes', 'Baterías', 'Pigmentos azules'],
     learningTip: 'Valencias frecuentes: +2 y +3.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   28: {
     atomicMass: '58.693 u',
@@ -360,7 +363,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El níquel es un metal de transición resistente a la corrosión. Se usa en monedas, aceros inoxidables y baterías recargables.',
     everydayUses: ['Monedas', 'Acero inoxidable', 'Baterías'],
     learningTip: 'Valencias frecuentes: +2 y +3.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   29: {
     atomicMass: '63.546 u',
@@ -372,7 +375,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Cables eléctricos', 'Tuberías', 'Monedas y utensilios'],
     commonCompounds: ['Sulfato de cobre (CuSO₄)', 'Óxido de cobre (CuO)'],
     learningTip: 'Valencias comunes: +1 (cuproso) y +2 (cúprico).',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   30: {
     atomicMass: '65.38 u',
@@ -383,7 +386,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Galvanizado del hierro', 'Pilas', 'Suplementos'],
     commonCompounds: ['Óxido de zinc (ZnO)', 'Cloruro de zinc (ZnCl₂)'],
     learningTip: 'Valencia común: +2.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   31: {
     atomicMass: '69.723 u',
@@ -393,7 +396,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El galio es un metal blando que se derrite a unos 30 °C, casi con el calor de la mano. Se usa en electrónica y en LED.',
     everydayUses: ['LED y electrónica', 'Semiconductores'],
     learningTip: 'Su valencia común es +3, como el aluminio.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   32: {
     atomicMass: '72.630 u',
@@ -404,7 +407,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El germanio es un metaloide usado en semiconductores y fibras ópticas. Fue clave en los primeros transistores.',
     everydayUses: ['Fibra óptica', 'Semiconductores', 'Cámaras infrarrojas'],
     learningTip: 'Está debajo del silicio y comparte usos electrónicos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   33: {
     atomicMass: '74.922 u',
@@ -416,7 +419,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Semiconductores', 'Aleaciones especiales'],
     learningTip: 'Valencias frecuentes: +3 y +5.',
     safetyNote: 'Es muy tóxico; sus compuestos son venenosos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   34: {
     atomicMass: '78.971 u',
@@ -427,7 +430,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El selenio es un no metal que conduce mejor la electricidad con la luz. Se usa en fotocopiadoras y celdas solares. Es un nutriente en trazas.',
     everydayUses: ['Fotocopiadoras', 'Vidrios de color', 'Suplementos en trazas'],
     learningTip: 'Está debajo del azufre y comparte valencias -2, +4 y +6.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   35: {
     atomicMass: '79.904 u',
@@ -440,7 +443,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Productos ignífugos', 'Tratamiento de aguas'],
     learningTip: 'Como halógeno, su valencia más común es -1.',
     safetyNote: 'Es corrosivo y sus vapores son tóxicos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   36: {
     atomicMass: '83.798 u',
@@ -452,7 +455,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Iluminación', 'Flashes fotográficos'],
     commonOxidationStates: 'No forma compuestos habitualmente',
     learningTip: 'Su nombre viene del griego "kryptos" (oculto).',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   37: {
     atomicMass: '85.468 u',
@@ -464,7 +467,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Relojes atómicos', 'Investigación'],
     learningTip: 'Grupo 1: valencia común +1.',
     safetyNote: 'Reacciona con violencia con el agua.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   38: {
     atomicMass: '87.62 u',
@@ -475,7 +478,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El estroncio es un metal alcalinotérreo que arde con llama roja. Por eso se usa en bengalas y fuegos artificiales.',
     everydayUses: ['Fuegos artificiales', 'Imanes de ferrita'],
     learningTip: 'Grupo 2: valencia común +2.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   39: {
     atomicMass: '88.906 u',
@@ -485,7 +488,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El itrio es un metal de transición usado en pantallas, LED y algunos superconductores. Aparece junto a las tierras raras.',
     everydayUses: ['Pantallas y LED', 'Aleaciones'],
     learningTip: 'Valencia común: +3.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   40: {
     atomicMass: '91.224 u',
@@ -495,7 +498,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El zirconio es un metal de transición resistente a la corrosión y al calor. Se usa en reactores nucleares y en joyería (circonita).',
     everydayUses: ['Reactores nucleares', 'Joyería', 'Cerámicas'],
     learningTip: 'Valencia común: +4.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   41: {
     atomicMass: '92.906 u',
@@ -505,7 +508,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El niobio es un metal de transición que se usa en aleaciones para superconductores e imanes potentes.',
     everydayUses: ['Superconductores', 'Aceros especiales'],
     learningTip: 'Aparece junto al tantalio, con propiedades parecidas.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   42: {
     atomicMass: '95.95 u',
@@ -515,7 +518,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El molibdeno es un metal de transición que soporta temperaturas muy altas. Refuerza aceros y es un nutriente esencial en trazas.',
     everydayUses: ['Aceros resistentes', 'Lubricantes', 'Nutrición en trazas'],
     learningTip: 'Se usa donde se necesita resistir mucho calor.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   43: {
     atomicMass: '[98] u',
@@ -526,7 +529,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Diagnóstico médico por imagen'],
     learningTip: 'Su nombre viene de "technetos", artificial en griego.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   44: {
     atomicMass: '101.07 u',
@@ -536,7 +539,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El rutenio es un metal de transición del grupo del platino. Se usa en contactos eléctricos y como catalizador.',
     everydayUses: ['Electrónica', 'Catalizadores'],
     learningTip: 'Pertenece a los metales del grupo del platino.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   45: {
     atomicMass: '102.906 u',
@@ -546,7 +549,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El rodio es un metal precioso muy reflectante y resistente. Se usa en los catalizadores de los coches para reducir la contaminación.',
     everydayUses: ['Catalizadores de vehículos', 'Joyería'],
     learningTip: 'Es uno de los metales más caros.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   46: {
     atomicMass: '106.42 u',
@@ -556,19 +559,19 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El paladio es un metal precioso que puede absorber gran cantidad de hidrógeno. Se usa en catalizadores y en electrónica.',
     everydayUses: ['Catalizadores', 'Electrónica', 'Joyería'],
     learningTip: 'Como el platino, es un buen catalizador.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   47: {
     atomicMass: '107.868 u',
     state: 'Sólido',
     electronegativity: '1.93',
-    shortDescription: 'El mejor conductor eléctrico de todos.',
+    shortDescription: 'El metal que mejor conduce la electricidad.',
     educationalDescription:
       'La plata es un metal precioso, brillante y el mejor conductor de electricidad. Se usa en joyería, espejos y electrónica.',
     everydayUses: ['Joyería', 'Espejos', 'Electrónica', 'Fotografía'],
     commonCompounds: ['Nitrato de plata (AgNO₃)'],
     learningTip: 'Valencia común: +1.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   48: {
     atomicMass: '112.414 u',
@@ -579,7 +582,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Baterías', 'Pigmentos'],
     learningTip: 'Valencia común: +2.',
     safetyNote: 'Es tóxico y contamina el ambiente.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   49: {
     atomicMass: '114.818 u',
@@ -589,7 +592,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El indio es un metal blando usado en pantallas táctiles y celdas solares, gracias a un compuesto conductor y transparente.',
     everydayUses: ['Pantallas táctiles', 'Paneles solares'],
     learningTip: 'Valencia común: +3.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   50: {
     atomicMass: '118.710 u',
@@ -601,7 +604,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Recubrimiento de latas', 'Soldaduras', 'Bronce'],
     commonCompounds: ['Cloruro de estaño (SnCl₂)'],
     learningTip: 'Valencias comunes: +2 (estannoso) y +4 (estánnico).',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   51: {
     atomicMass: '121.760 u',
@@ -613,7 +616,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Aleaciones', 'Materiales ignífugos', 'Semiconductores'],
     learningTip: 'Valencias frecuentes: +3 y +5.',
     safetyNote: 'Sus compuestos pueden ser tóxicos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   52: {
     atomicMass: '127.60 u',
@@ -624,7 +627,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El telurio es un metaloide poco común. Se usa en aleaciones y en algunos paneles solares.',
     everydayUses: ['Aleaciones', 'Paneles solares'],
     learningTip: 'Está debajo del selenio, con valencias parecidas.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   53: {
     atomicMass: '126.904 u',
@@ -637,7 +640,8 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Sal yodada', 'Desinfectante', 'Medicina'],
     commonCompounds: ['Yoduro de potasio (KI)'],
     learningTip: 'Como halógeno, su valencia más común es -1.',
-    validationStatus: 'pending',
+    safetyNote: 'Sus vapores son irritantes; debe manipularse solo bajo supervisión adecuada.',
+    validationStatus: 'validated',
   },
   54: {
     atomicMass: '131.293 u',
@@ -648,7 +652,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El xenón es un gas noble pesado y raro. Se usa en lámparas muy brillantes y en algunos faros de coches. A diferencia de otros gases nobles, puede formar unos pocos compuestos.',
     everydayUses: ['Lámparas potentes', 'Faros de xenón', 'Anestesia'],
     learningTip: 'Es de los pocos gases nobles que sí llega a formar compuestos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   55: {
     atomicMass: '132.905 u',
@@ -660,7 +664,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Relojes atómicos', 'Sensores'],
     learningTip: 'Grupo 1: valencia común +1. Es de los metales más reactivos.',
     safetyNote: 'Reacciona de forma explosiva con el agua.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   56: {
     atomicMass: '137.327 u',
@@ -672,7 +676,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Contraste en radiografías', 'Fuegos artificiales verdes'],
     learningTip: 'Grupo 2: valencia común +2.',
     safetyNote: 'Sus sales solubles son tóxicas.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   57: {
     atomicMass: '138.905 u',
@@ -682,7 +686,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El lantano es un metal que abre la serie de los lantánidos (tierras raras). Se usa en lentes de cámara y baterías.',
     everydayUses: ['Lentes de cámara', 'Baterías'],
     learningTip: 'Da nombre a los "lantánidos".',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   58: {
     atomicMass: '140.116 u',
@@ -692,7 +696,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El cerio es el lantánido más abundante. Se usa en catalizadores, pulido de vidrio y encendedores.',
     everydayUses: ['Catalizadores', 'Pulido de vidrio'],
     learningTip: 'Es la tierra rara más común en la corteza.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   59: {
     atomicMass: '140.908 u',
@@ -702,7 +706,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El praseodimio es un lantánido usado en imanes potentes y en vidrios de protección para soldadores.',
     everydayUses: ['Imanes', 'Vidrios de protección'],
     learningTip: 'Forma parte de imanes muy potentes junto al neodimio.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   60: {
     atomicMass: '144.242 u',
@@ -712,7 +716,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El neodimio se usa en los imanes permanentes más fuertes que se conocen. Están en altavoces, auriculares y motores.',
     everydayUses: ['Imanes potentes', 'Altavoces', 'Motores'],
     learningTip: 'Los "imanes de neodimio" son muy comunes en la tecnología.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   61: {
     atomicMass: '[145] u',
@@ -722,7 +726,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El prometio es un lantánido radiactivo y muy raro en la naturaleza. Se ha usado en pinturas luminosas y baterías especiales.',
     learningTip: 'Es el único lantánido radiactivo sin isótopos estables.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   62: {
     atomicMass: '150.36 u',
@@ -732,7 +736,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El samario se usa en imanes que soportan altas temperaturas y en algunos reactores.',
     everydayUses: ['Imanes resistentes al calor'],
     learningTip: 'Sus imanes aguantan más calor que los de neodimio.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   63: {
     atomicMass: '151.964 u',
@@ -742,7 +746,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El europio da los colores rojo y azul de muchas pantallas y luces LED. Es un lantánido muy usado en iluminación.',
     everydayUses: ['Pantallas a color', 'Luces LED', 'Billetes (seguridad)'],
     learningTip: 'Aporta el color rojo en muchas pantallas.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   64: {
     atomicMass: '157.25 u',
@@ -752,7 +756,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El gadolinio tiene propiedades magnéticas útiles. Se usa como contraste en resonancias magnéticas médicas.',
     everydayUses: ['Contraste en resonancias', 'Electrónica'],
     learningTip: 'Ayuda a obtener imágenes médicas más nítidas.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   65: {
     atomicMass: '158.925 u',
@@ -762,7 +766,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El terbio es un lantánido que aporta el color verde en pantallas y luces fluorescentes.',
     everydayUses: ['Pantallas', 'Luces fluorescentes'],
     learningTip: 'Aporta el color verde en muchas pantallas.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   66: {
     atomicMass: '162.500 u',
@@ -772,7 +776,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El disprosio mejora los imanes potentes para que funcionen a mayor temperatura, útil en motores eléctricos.',
     everydayUses: ['Imanes de motores', 'Láseres'],
     learningTip: 'Se añade a los imanes de neodimio para vehículos eléctricos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   67: {
     atomicMass: '164.930 u',
@@ -782,7 +786,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El holmio tiene fuertes propiedades magnéticas y se usa en algunos láseres médicos.',
     everydayUses: ['Láseres médicos', 'Imanes de investigación'],
     learningTip: 'Tiene una de las propiedades magnéticas más intensas.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   68: {
     atomicMass: '167.259 u',
@@ -792,7 +796,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El erbio se usa en las fibras ópticas para amplificar la señal de internet a larga distancia. También da color rosado a vidrios.',
     everydayUses: ['Fibra óptica', 'Vidrios de color'],
     learningTip: 'Ayuda a que internet viaje por fibra sin perder señal.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   69: {
     atomicMass: '168.934 u',
@@ -802,7 +806,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El tulio es uno de los lantánidos más raros. Se usa en pequeños equipos portátiles de rayos X.',
     everydayUses: ['Rayos X portátiles', 'Láseres'],
     learningTip: 'Es de las tierras raras menos abundantes.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   70: {
     atomicMass: '173.045 u',
@@ -812,7 +816,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El iterbio se usa en algunos relojes atómicos muy precisos y en electrónica especializada.',
     everydayUses: ['Relojes atómicos', 'Electrónica'],
     learningTip: 'Aparece en relojes atómicos de nueva generación.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   71: {
     atomicMass: '174.967 u',
@@ -822,7 +826,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El lutecio cierra la serie de los lantánidos. Se usa como catalizador y en algunos equipos médicos.',
     everydayUses: ['Catalizadores', 'Medicina nuclear'],
     learningTip: 'Es el lantánido más denso y duro.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   72: {
     atomicMass: '178.486 u',
@@ -832,7 +836,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El hafnio soporta muy altas temperaturas y absorbe neutrones. Se usa en barras de control de reactores nucleares.',
     everydayUses: ['Reactores nucleares', 'Chips avanzados'],
     learningTip: 'Valencia común: +4.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   73: {
     atomicMass: '180.948 u',
@@ -842,7 +846,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El tantalio resiste la corrosión y es compatible con el cuerpo. Se usa en condensadores de móviles y en implantes.',
     everydayUses: ['Condensadores de móviles', 'Implantes médicos'],
     learningTip: 'Está en casi todos los teléfonos, en sus condensadores.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   74: {
     atomicMass: '183.84 u',
@@ -852,7 +856,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El wolframio (o tungsteno) tiene el punto de fusión más alto de todos los metales. Se usaba en los filamentos de las bombillas y en herramientas de corte.',
     everydayUses: ['Herramientas de corte', 'Filamentos', 'Contrapesos'],
     learningTip: 'Aguanta el calor mejor que cualquier otro metal.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   75: {
     atomicMass: '186.207 u',
@@ -862,7 +866,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El renio es uno de los elementos más raros. Se usa en aleaciones para motores de avión que soportan mucho calor.',
     everydayUses: ['Motores de avión', 'Catalizadores'],
     learningTip: 'Fue uno de los últimos elementos estables descubiertos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   76: {
     atomicMass: '190.23 u',
@@ -872,7 +876,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El osmio es uno de los metales más densos que existen. Se usa en aleaciones muy duras, como puntas de bolígrafo antiguas.',
     everydayUses: ['Aleaciones muy duras', 'Contactos eléctricos'],
     learningTip: 'Es de los elementos más densos de la tabla.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   77: {
     atomicMass: '192.217 u',
@@ -882,7 +886,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El iridio es un metal muy duro y resistente a la corrosión. Se encuentra en meteoritos y se usa en bujías y aleaciones especiales.',
     everydayUses: ['Bujías', 'Aleaciones resistentes'],
     learningTip: 'Una capa de iridio en las rocas ayudó a estudiar la extinción de los dinosaurios.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   78: {
     atomicMass: '195.084 u',
@@ -892,7 +896,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El platino es un metal precioso resistente a la corrosión. Se usa en joyería y en los catalizadores de los coches.',
     everydayUses: ['Joyería', 'Catalizadores de vehículos', 'Laboratorio'],
     learningTip: 'Valencias frecuentes: +2 y +4.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   79: {
     atomicMass: '196.967 u',
@@ -903,7 +907,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El oro es un metal precioso, brillante y muy poco reactivo, por eso no se oxida. Se usa en joyería, electrónica y como reserva de valor.',
     everydayUses: ['Joyería', 'Electrónica', 'Reserva económica'],
     learningTip: 'Valencias frecuentes: +1 y +3.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   80: {
     atomicMass: '200.592 u',
@@ -915,7 +919,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Cloruro de mercurio (HgCl₂)'],
     learningTip: 'Valencias comunes: +1 (mercurioso) y +2 (mercúrico).',
     safetyNote: 'Es tóxico; sus vapores son peligrosos.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   81: {
     atomicMass: '204.38 u',
@@ -926,7 +930,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Electrónica especializada'],
     learningTip: 'Valencias frecuentes: +1 y +3.',
     safetyNote: 'Es muy tóxico.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   82: {
     atomicMass: '207.2 u',
@@ -939,7 +943,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonCompounds: ['Óxido de plomo (PbO)'],
     learningTip: 'Valencias comunes: +2 y +4.',
     safetyNote: 'Es tóxico, sobre todo para niños.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   83: {
     atomicMass: '208.980 u',
@@ -947,10 +951,10 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     family: 'Metal representativo',
     shortDescription: 'Metal pesado usado en medicamentos.',
     educationalDescription:
-      'El bismuto es un metal pesado poco tóxico. Se usa en algunos medicamentos para el estómago y en aleaciones de bajo punto de fusión.',
+      'El bismuto es un metal pesado de baja toxicidad en comparación con otros metales pesados. Se usa en algunos medicamentos para el estómago y en aleaciones de bajo punto de fusión.',
     everydayUses: ['Medicamentos digestivos', 'Aleaciones fusibles'],
-    learningTip: 'Valencias frecuentes: +3 y +5.',
-    validationStatus: 'pending',
+    learningTip: 'Su valencia más frecuente es +3.',
+    validationStatus: 'validated',
   },
   84: {
     atomicMass: '[209] u',
@@ -961,7 +965,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El polonio es un elemento radiactivo muy raro y peligroso. Tiene pocos usos prácticos por su alta radiactividad.',
     learningTip: 'Fue descubierto por Marie Curie, que lo nombró por Polonia.',
     safetyNote: 'Es altamente radiactivo y muy tóxico.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   85: {
     atomicMass: '[210] u',
@@ -972,7 +976,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El astato es un halógeno radiactivo tan escaso que apenas existe en la naturaleza. Se estudia para posibles usos médicos.',
     learningTip: 'Es de los elementos naturales más raros de la Tierra.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   86: {
     atomicMass: '[222] u',
@@ -984,7 +988,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     commonOxidationStates: 'No forma compuestos habitualmente',
     learningTip: 'Aunque es gas noble, es peligroso por ser radiactivo.',
     safetyNote: 'Es radiactivo; su acumulación en interiores es un riesgo para la salud.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   87: {
     atomicMass: '[223] u',
@@ -995,7 +999,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El francio es un metal alcalino radiactivo y muy inestable. Apenas existe en la naturaleza y se conoce poco de él.',
     learningTip: 'Grupo 1: valencia esperada +1, pero es rarísimo.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   88: {
     atomicMass: '[226] u',
@@ -1006,7 +1010,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El radio es un metal alcalinotérreo radiactivo. Antes se usaba en pinturas luminosas hasta descubrir lo peligroso que era.',
     learningTip: 'Grupo 2: valencia esperada +2.',
     safetyNote: 'Es altamente radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   89: {
     atomicMass: '[227] u',
@@ -1016,7 +1020,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El actinio es un metal radiactivo que abre la serie de los actínidos. Se estudia para algunos tratamientos médicos.',
     learningTip: 'Da nombre a los "actínidos".',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   90: {
     atomicMass: '232.038 u',
@@ -1027,7 +1031,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Investigación nuclear'],
     learningTip: 'Se investiga como alternativa al uranio.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   91: {
     atomicMass: '231.036 u',
@@ -1037,7 +1041,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El protactinio es un actínido radiactivo raro y difícil de obtener. Se usa casi solo en investigación.',
     learningTip: 'Su nombre indica que precede al actinio en una desintegración.',
     safetyNote: 'Es radiactivo y tóxico.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   92: {
     atomicMass: '238.029 u',
@@ -1046,9 +1050,9 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     educationalDescription:
       'El uranio es un metal radiactivo usado como combustible en centrales nucleares. Fue el primer elemento con el que se logró la fisión nuclear.',
     everydayUses: ['Combustible nuclear', 'Investigación'],
-    learningTip: 'Es el elemento natural más pesado y conocido por la energía nuclear.',
-    safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    learningTip: 'Es el elemento más pesado que se encuentra en la naturaleza en cantidades apreciables.',
+    safetyNote: 'Es radiactivo y químicamente tóxico.',
+    validationStatus: 'validated',
   },
   93: {
     atomicMass: '[237] u',
@@ -1058,7 +1062,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El neptunio es el primer elemento más pesado que el uranio (transuránico). Se produce en reactores nucleares.',
     learningTip: 'Su nombre sigue a "urano" con el planeta Neptuno.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   94: {
     atomicMass: '[244] u',
@@ -1069,7 +1073,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Energía nuclear', 'Sondas espaciales'],
     learningTip: 'Sigue a Neptuno con el nombre del planeta Plutón.',
     safetyNote: 'Es radiactivo y muy tóxico.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   95: {
     atomicMass: '[243] u',
@@ -1080,7 +1084,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Detectores de humo'],
     learningTip: 'Está en muchos detectores de humo domésticos.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   96: {
     atomicMass: '[247] u',
@@ -1090,7 +1094,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El curio es un actínido radiactivo. Se ha usado como fuente de energía en equipos espaciales.',
     learningTip: 'Nombrado en honor a Marie y Pierre Curie.',
     safetyNote: 'Es altamente radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   97: {
     atomicMass: '[247] u',
@@ -1100,7 +1104,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El berkelio es un elemento radiactivo fabricado en laboratorio. Se usa solo en investigación científica.',
     learningTip: 'Nombrado por la ciudad de Berkeley, California.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   98: {
     atomicMass: '[251] u',
@@ -1111,7 +1115,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
     everydayUses: ['Detección de materiales'],
     learningTip: 'Nombrado por el estado de California.',
     safetyNote: 'Es altamente radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   99: {
     atomicMass: '[252] u',
@@ -1121,7 +1125,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El einstenio es un elemento radiactivo sintético descubierto tras una prueba nuclear. Solo se usa en investigación.',
     learningTip: 'Nombrado en honor a Albert Einstein.',
     safetyNote: 'Es altamente radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   100: {
     atomicMass: '[257] u',
@@ -1131,7 +1135,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El fermio es un elemento radiactivo sintético. Se produce en cantidades diminutas y solo se estudia en laboratorio.',
     learningTip: 'Nombrado en honor al físico Enrico Fermi.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   101: {
     atomicMass: '[258] u',
@@ -1141,7 +1145,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El mendelevio es un elemento sintético y radiactivo. Solo existe en el laboratorio en cantidades muy pequeñas.',
     learningTip: 'Nombrado en honor a Mendeléiev, creador de la tabla periódica.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   102: {
     atomicMass: '[259] u',
@@ -1151,7 +1155,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El nobelio es un elemento radiactivo fabricado en laboratorio. Solo tiene interés para la investigación.',
     learningTip: 'Nombrado en honor a Alfred Nobel.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   103: {
     atomicMass: '[266] u',
@@ -1161,7 +1165,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El laurencio cierra la serie de los actínidos. Es sintético, radiactivo y solo se estudia en laboratorio.',
     learningTip: 'Nombrado en honor a Ernest Lawrence.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   104: {
     atomicMass: '[267] u',
@@ -1171,7 +1175,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El rutherfordio es un elemento sintético muy inestable. Solo existe unos instantes en aceleradores de partículas.',
     learningTip: 'Nombrado en honor a Ernest Rutherford.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   105: {
     atomicMass: '[268] u',
@@ -1181,7 +1185,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El dubnio es un elemento sintético muy inestable, producido en cantidades diminutas para investigación.',
     learningTip: 'Nombrado por la ciudad de Dubná, en Rusia.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   106: {
     atomicMass: '[269] u',
@@ -1191,7 +1195,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El seaborgio es un elemento sintético muy inestable. Solo se obtiene átomo a átomo en aceleradores.',
     learningTip: 'Nombrado en honor al químico Glenn Seaborg.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   107: {
     atomicMass: '[270] u',
@@ -1201,7 +1205,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El bohrio es un elemento sintético y radiactivo que existe solo fracciones de segundo.',
     learningTip: 'Nombrado en honor al físico Niels Bohr.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   108: {
     atomicMass: '[269] u',
@@ -1211,7 +1215,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El hasio es un elemento sintético muy inestable, producido solo en experimentos científicos.',
     learningTip: 'Nombrado por el estado alemán de Hesse.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   109: {
     atomicMass: '[278] u',
@@ -1221,7 +1225,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El meitnerio es un elemento sintético y radiactivo. Solo se han creado unos pocos átomos.',
     learningTip: 'Nombrado en honor a la física Lise Meitner.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   110: {
     atomicMass: '[281] u',
@@ -1231,7 +1235,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El darmstadtio es un elemento sintético muy inestable, creado en cantidades diminutas.',
     learningTip: 'Nombrado por la ciudad de Darmstadt, en Alemania.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   111: {
     atomicMass: '[282] u',
@@ -1241,7 +1245,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El roentgenio es un elemento sintético y radiactivo que existe solo fracciones de segundo.',
     learningTip: 'Nombrado en honor a Wilhelm Röntgen, descubridor de los rayos X.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   112: {
     atomicMass: '[285] u',
@@ -1251,7 +1255,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El copernicio es un elemento sintético muy inestable. Se cree que podría comportarse de forma poco habitual para un metal.',
     learningTip: 'Nombrado en honor al astrónomo Nicolás Copérnico.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   113: {
     atomicMass: '[286] u',
@@ -1261,7 +1265,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El nihonio es un elemento sintético y radiactivo. Fue de los primeros elementos descubiertos en Asia.',
     learningTip: '"Nihon" significa Japón, país donde se sintetizó.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   114: {
     atomicMass: '[289] u',
@@ -1271,7 +1275,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El flerovio es un elemento sintético muy inestable, estudiado para entender los átomos superpesados.',
     learningTip: 'Nombrado por el laboratorio Flerov, en Rusia.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   115: {
     atomicMass: '[290] u',
@@ -1281,7 +1285,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El moscovio es un elemento sintético y radiactivo. Solo se han producido unos pocos átomos en laboratorio.',
     learningTip: 'Nombrado por la región de Moscú.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   116: {
     atomicMass: '[293] u',
@@ -1291,7 +1295,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El livermorio es un elemento sintético muy inestable, creado en aceleradores de partículas.',
     learningTip: 'Nombrado por el laboratorio Lawrence Livermore.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   117: {
     atomicMass: '[294] u',
@@ -1302,7 +1306,7 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El teneso es un elemento sintético muy inestable. Aunque se ubica entre los halógenos, apenas se conocen sus propiedades.',
     learningTip: 'Se coloca en el grupo de los halógenos, pero es artificial.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
   118: {
     atomicMass: '[294] u',
@@ -1313,6 +1317,6 @@ export const ELEMENT_EDUCATION: Readonly<Record<number, ElementEducation>> = {
       'El oganesón es el elemento más pesado descubierto hasta ahora. Es sintético, muy inestable y se ubica entre los gases nobles.',
     learningTip: 'Cierra la tabla periódica actual, en el grupo 18.',
     safetyNote: 'Es radiactivo.',
-    validationStatus: 'pending',
+    validationStatus: 'validated',
   },
 };
