@@ -14,6 +14,32 @@
 import { AttemptStatus } from './student-evaluation.models';
 import { QuestionType } from './evaluation.models';
 
+/**
+ * Motivo por el que la revisión detallada está (o no) disponible para el estudiante.
+ * Refleja el enum ReviewUnlockReason del backend.
+ */
+export type ReviewUnlockReason =
+  | 'DEADLINE_REACHED'
+  | 'ALL_ASSIGNED_STUDENTS_FINISHED'
+  | 'LOCKED_WAITING_FOR_GROUP'
+  | 'NO_DEADLINE';
+
+/**
+ * Estado de disponibilidad de la revisión para el grupo, compartido por el resumen y el
+ * detalle del resultado del estudiante (sesión 18.6). Cuando `reviewAvailable` es false,
+ * el backend no envía respuestas correctas ni nota: el estudiante ve "revisión pendiente".
+ */
+export interface StudentReviewAvailability {
+  readonly reviewAvailable: boolean;
+  readonly reviewLocked: boolean;
+  readonly reviewUnlockReason: ReviewUnlockReason;
+  /** Fecha en que la revisión abrirá (o abrió) por plazo; null si no hay fecha límite. */
+  readonly reviewAvailableAt: string | null;
+  readonly assignedStudentsCount: number;
+  readonly finishedStudentsCount: number;
+  readonly pendingStudentsCount: number;
+}
+
 // ─── Docente ──────────────────────────────────────────────────────────────
 
 /** Fila de resultado de un estudiante en una evaluación, vista por el docente. */
@@ -134,6 +160,14 @@ export interface StudentResultSummaryResponse {
   readonly canViewDetailedFeedback: boolean;
   readonly attemptsUsed: number;
   readonly maxAttempts: number;
+  // ─── Disponibilidad de la revisión para el grupo (18.6) ───
+  readonly reviewAvailable: boolean;
+  readonly reviewLocked: boolean;
+  readonly reviewUnlockReason: ReviewUnlockReason;
+  readonly reviewAvailableAt: string | null;
+  readonly assignedStudentsCount: number;
+  readonly finishedStudentsCount: number;
+  readonly pendingStudentsCount: number;
 }
 
 /**
@@ -179,6 +213,16 @@ export interface StudentAttemptResultDetailResponse {
   readonly submittedAt: string | null;
   readonly canViewDetailedFeedback: boolean;
   readonly answers: StudentAnswerResultResponse[];
+  // ─── Disponibilidad de la revisión para el grupo (18.6) ───
+  readonly reviewAvailable: boolean;
+  readonly reviewLocked: boolean;
+  readonly reviewUnlockReason: ReviewUnlockReason;
+  readonly reviewAvailableAt: string | null;
+  readonly assignedStudentsCount: number;
+  readonly finishedStudentsCount: number;
+  readonly pendingStudentsCount: number;
+  /** Mensaje del backend cuando la revisión está bloqueada; null si está disponible. */
+  readonly reviewMessage: string | null;
 }
 
 // ─── Revisión manual (docente) ──────────────────────────────────────────────

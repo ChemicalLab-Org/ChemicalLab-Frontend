@@ -23,7 +23,6 @@ import { PeriodicTableComponent } from './features/periodic-table/periodic-table
 import { CompoundsComponent } from './features/compounds/compounds.component';
 import { ConceptsComponent } from './features/concepts/concepts.component';
 import { StudentEvaluationsComponent } from './features/student/evaluations/student-evaluations.component';
-import { StudentResultsComponent } from './features/student/evaluations/student-results.component';
 import { NotFoundComponent } from './features/not-found/not-found.component';
 
 export const routes: Routes = [
@@ -197,8 +196,13 @@ export const routes: Routes = [
     data: { roles: ['ESTUDIANTE'] },
   },
   {
+    // Carga diferida: la pantalla de resultados/revisión se abre bajo demanda, lo que la
+    // mantiene fuera del bundle inicial (dentro del presupuesto de 1 MB).
     path: 'evaluations/results',
-    component: StudentResultsComponent,
+    loadComponent: () =>
+      import('./features/student/evaluations/student-results.component').then(
+        (m) => m.StudentResultsComponent
+      ),
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
