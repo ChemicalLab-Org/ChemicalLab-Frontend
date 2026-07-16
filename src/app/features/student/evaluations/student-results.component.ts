@@ -92,9 +92,14 @@ const APPROVAL_PERCENTAGE = 60;
                   </div>
 
                   <div class="result-card__score">
-                    @if (!r.gradeClosed) {
+                    @if (r.reviewLocked) {
+                      <!-- La revisión del grupo aún no cierra: no se muestra la nota. -->
                       <span class="badge badge-warning">
-                        <span class="material-icons">hourglass_top</span> Pendiente de revisión
+                        <span class="material-icons">lock_clock</span> Revisión pendiente
+                      </span>
+                    } @else if (!r.gradeClosed) {
+                      <span class="badge badge-warning">
+                        <span class="material-icons">hourglass_top</span> Pendiente de calificación
                       </span>
                     } @else {
                       <span class="result-card__points">{{ formatGrade(r.finalScore) }} / 20</span>
@@ -138,7 +143,43 @@ const APPROVAL_PERCENTAGE = 60;
               }
             </header>
 
-            @if (!d.gradeClosed) {
+            @if (d.reviewLocked) {
+              <!-- ═══ Revisión bloqueada hasta el cierre grupal (18.6) ═══
+                   El backend no envía respuestas correctas ni nota mientras siga bloqueada;
+                   aquí solo se muestra el estado, el plazo y el progreso general (sin nombres). -->
+              <div class="review-pending">
+                <div class="review-pending__icon">
+                  <span class="material-icons">lock_clock</span>
+                </div>
+                <h2 class="review-pending__title">Revisión pendiente</h2>
+                <p class="review-pending__text">
+                  {{ d.reviewMessage ?? defaultLockedMessage }}
+                </p>
+                @if (d.reviewAvailableAt) {
+                  <p class="review-pending__meta">
+                    <span class="material-icons">event</span>
+                    Disponible a partir del {{ formatDate(d.reviewAvailableAt) }}
+                  </p>
+                }
+                @if (d.assignedStudentsCount > 0) {
+                  <div class="review-pending__progress">
+                    <div class="review-pending__progress-head">
+                      <span>Progreso del grupo</span>
+                      <span>{{ d.finishedStudentsCount }} de {{ d.assignedStudentsCount }} finalizaron</span>
+                    </div>
+                    <div class="review-pending__bar">
+                      <div
+                        class="review-pending__bar-fill"
+                        [style.width.%]="groupProgressPct(d)"
+                      ></div>
+                    </div>
+                  </div>
+                }
+                <button type="button" class="btn btn-primary" (click)="reloadDetail()">
+                  <span class="material-icons">refresh</span> Actualizar estado
+                </button>
+              </div>
+            } @else if (!d.gradeClosed) {
               <div class="alert alert-info feedback-locked">
                 <span class="material-icons">hourglass_top</span>
                 Tu evaluación fue enviada y está pendiente de calificación por el docente.
@@ -209,7 +250,9 @@ const APPROVAL_PERCENTAGE = 60;
                       </p>
                     }
                   </div>
-                } @else if (d.canViewDetailedFeedback) {
+                } @else {
+                  <!-- Alternativa única: al llegar aquí la revisión ya está disponible
+                       para el grupo, por lo que se muestra la corrección completa. -->
                   <div class="answer" [class.answer--ok]="a.correct" [class.answer--bad]="a.correct === false">
                     <div class="answer__head">
                       <span class="answer__num">{{ i + 1 }}</span>
@@ -242,13 +285,6 @@ const APPROVAL_PERCENTAGE = 60;
                 }
               }
               </div>
-              @if (!d.canViewDetailedFeedback && hasClosedAnswers(d)) {
-                <div class="alert alert-info feedback-locked">
-                  <span class="material-icons">lock</span>
-                  El detalle de las preguntas de opción múltiple estará disponible cuando
-                  finalicen los intentos permitidos.
-                </div>
-              }
             }
           }
         }
@@ -278,6 +314,11 @@ export class StudentResultsComponent implements OnInit {
   readonly userName = computed<string>(() => this.auth.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
+  /** Mensaje de respaldo si el backend no envía uno mientras la revisión está bloqueada. */
+  readonly defaultLockedMessage =
+    'Tu evaluación fue enviada correctamente. La revisión estará disponible cuando ' +
+    'todas las estudiantes asignadas hayan finalizado o cuando se cumpla la fecha límite.';
+
   ngOnInit(): void {
     this.load();
   }
@@ -305,8 +346,6 @@ export class StudentResultsComponent implements OnInit {
     this.detailAttemptId = attemptId;
     this.view.set('detail');
     this.loadDetail();
-    // Métrica de uso: el estudiante revisó el detalle de un resultado.
-    this.usageMetrics.trackResultsViewed('ESTUDIANTE');
   }
 
   reloadDetail(): void {
@@ -322,6 +361,12 @@ export class StudentResultsComponent implements OnInit {
       next: (d) => {
         this.detail.set(d);
         this.detailLoading.set(false);
+        // Métrica de uso: solo cuenta como revisión efectiva cuando la revisión está
+        // disponible. Un intento con la revisión bloqueada no se registra como consulta
+        // exitosa de resultados (no se ve nota ni corrección).
+        if (d.reviewAvailable) {
+          this.usageMetrics.trackResultsViewed('ESTUDIANTE');
+        }
       },
       error: () => {
         this.detailError.set(true);
@@ -359,9 +404,10 @@ export class StudentResultsComponent implements OnInit {
     return formatNumberWithoutTrailingZero(value);
   }
 
-  /** Indica si el detalle tiene preguntas de un tipo dado. */
-  hasClosedAnswers(d: StudentAttemptResultDetailResponse): boolean {
-    return d.answers.some((a) => a.questionType === 'MULTIPLE_CHOICE');
+  /** Porcentaje de estudiantes del grupo que ya finalizaron (para la barra de progreso). */
+  groupProgressPct(d: StudentAttemptResultDetailResponse): number {
+    if (d.assignedStudentsCount <= 0) return 0;
+    return Math.round((d.finishedStudentsCount / d.assignedStudentsCount) * 100);
   }
 
   formatPct(value: number | null): string {
