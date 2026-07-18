@@ -6,6 +6,7 @@ import { forkJoin } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { UsageMetricsService } from '../../core/services/usage-metrics.service';
 import { ExamSessionService } from '../../core/services/exam-session.service';
+import { AttemptEventService } from '../../core/services/attempt-event.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { EXAM_EXIT_ACTION, STUDENT_NAV_ITEMS, examNavItems } from '../../shared/components/sidebar/student-nav';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
@@ -52,6 +53,14 @@ const COMPOUND_TYPES: readonly CompoundTypeMeta[] = [
 
 type FormStatus = 'idle' | 'loading' | 'success' | 'error';
 type CatalogStatus = 'loading' | 'ready' | 'error';
+type NomenclatureType = 'traditional' | 'stock' | 'systematic';
+type NomenclatureLabel = 'Tradicional' | 'Stock' | 'Sistemática';
+
+const NOMENCLATURE_OPTIONS: readonly { readonly value: NomenclatureType; readonly label: NomenclatureLabel }[] = [
+  { value: 'traditional', label: 'Tradicional' },
+  { value: 'stock', label: 'Stock' },
+  { value: 'systematic', label: 'Sistemática' },
+];
 
 /** Opción simple de elemento para el selector (símbolo + nombre). */
 interface ElementChoice {
@@ -376,31 +385,35 @@ interface ElementChoice {
                     <span class="badge badge-neutral result__type">{{ r.compoundType }}</span>
                   </div>
 
-                  @if (r.nomenclature; as n) {
-                    <div class="result__nomen">
-                      <div class="result__explain-title">Nomenclaturas</div>
-                      <div class="nomen-grid">
-                        <div class="nomen-item">
-                          <span class="nomen-item__label">Tradicional</span>
-                          <span class="nomen-item__value">{{ n.traditional }}</span>
-                        </div>
-                        <div class="nomen-item">
-                          <span class="nomen-item__label">Stock</span>
-                          <span class="nomen-item__value">{{ n.stock }}</span>
-                        </div>
-                        <div class="nomen-item">
-                          <span class="nomen-item__label">Sistemática</span>
-                          <span class="nomen-item__value">{{ n.systematic }}</span>
-                        </div>
-                      </div>
-                      @if (n.notes) {
-                        <p class="nomen-note">
-                          <span class="material-icons">info</span>
-                          <span>{{ n.notes }}</span>
-                        </p>
-                      }
+                  <div class="result__nomen">
+                    <div class="nomen-selector">
+                      <label class="form-label" for="nomenclature-select">
+                        Nomenclatura a mostrar
+                      </label>
+                      <select
+                        id="nomenclature-select"
+                        class="select"
+                        [value]="selectedNomenclature()"
+                        (change)="onNomenclatureChange($event)"
+                      >
+                        @for (option of nomenclatureOptions; track option.value) {
+                          <option [value]="option.value">{{ option.label }}</option>
+                        }
+                      </select>
                     </div>
-                  }
+
+                    <div class="nomen-item" aria-live="polite">
+                      <span class="nomen-item__label">{{ selectedNomenclatureLabel() }}</span>
+                      <span class="nomen-item__value">{{ selectedNomenclatureValue() }}</span>
+                    </div>
+
+                    @if (nomenclatureNotes(); as notes) {
+                      <p class="nomen-note">
+                        <span class="material-icons">info</span>
+                        <span>{{ notes }}</span>
+                      </p>
+                    }
+                  </div>
 
                   @if (r.explanation) {
                     <div class="result__explain">
@@ -438,8 +451,10 @@ export class CompoundsComponent {
   private readonly catalog = inject(ChemistryCatalogService);
   private readonly usageMetrics = inject(UsageMetricsService);
   private readonly examSession = inject(ExamSessionService);
+  private readonly attemptEvents = inject(AttemptEventService);
 
   readonly compoundTypes = COMPOUND_TYPES;
+  readonly nomenclatureOptions = NOMENCLATURE_OPTIONS;
   private readonly elements: readonly PeriodicElement[] = PERIODIC_ELEMENTS;
 
   // ===== Catálogos del backend (fuente de verdad) =====
@@ -470,9 +485,28 @@ export class CompoundsComponent {
   readonly status = signal<FormStatus>('idle');
   readonly result = signal<CompoundResponse | null>(null);
   readonly errorMessage = signal<string>('');
+  readonly selectedNomenclature = signal<NomenclatureType>('traditional');
+  readonly selectedNomenclatureLabel = computed<string>(
+    () =>
+      this.nomenclatureOptions.find((option) => option.value === this.selectedNomenclature())
+        ?.label ?? 'Tradicional'
+  );
+  readonly selectedNomenclatureValue = computed<string>(() => {
+    const value = this.result()?.nomenclature?.[this.selectedNomenclature()];
+    return typeof value === 'string' && value.trim() !== '' ? value : 'No disponible';
+  });
+  readonly nomenclatureNotes = computed<string>(() => {
+    const notes = this.result()?.nomenclature?.notes;
+    return typeof notes === 'string' ? notes.trim() : '';
+  });
 
   constructor() {
     this.loadCatalogs();
+    // Trazabilidad del intento: si se abre la herramienta durante un intento activo, se
+    // registra el uso (solo que se abrió la herramienta, nunca qué se formó).
+    if (this.examSession.isActive()) {
+      this.attemptEvents.toolOpened('COMPOUND_FORMATION');
+    }
   }
 
   /** Carga todos los catálogos del backend en paralelo. */
@@ -757,6 +791,16 @@ export class CompoundsComponent {
     this.oxoanionKey.set((event.target as HTMLSelectElement).value);
   }
 
+  onNomenclatureChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    const option = this.nomenclatureOptions.find((item) => item.value === value);
+    if (option === undefined || option.value === this.selectedNomenclature()) {
+      return;
+    }
+    this.selectedNomenclature.set(option.value);
+    this.usageMetrics.trackNomenclatureSelection(option.label);
+  }
+
   resetForm(): void {
     this.elementSymbol.set('');
     this.valence.set(null);
@@ -769,6 +813,7 @@ export class CompoundsComponent {
     this.status.set('idle');
     this.result.set(null);
     this.errorMessage.set('');
+    this.selectedNomenclature.set('traditional');
   }
 
   onSubmit(event?: Event): void {
@@ -796,6 +841,7 @@ export class CompoundsComponent {
     this.status.set('loading');
     this.result.set(null);
     this.errorMessage.set('');
+    this.selectedNomenclature.set('traditional');
 
     const compoundType = this.selectedType();
     request$.subscribe({
@@ -948,6 +994,9 @@ export class CompoundsComponent {
 
   /** Vuelve al intento sin finalizarlo (no se pierde el progreso). */
   backToAttempt(): void {
+    if (this.examSession.isActive()) {
+      this.attemptEvents.toolReturned('COMPOUND_FORMATION');
+    }
     void this.router.navigateByUrl('/evaluations');
   }
 

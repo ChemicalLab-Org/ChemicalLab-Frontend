@@ -8,17 +8,29 @@ import {
 } from '../../../shared/components/sidebar/sidebar.component';
 import { TEACHER_NAV_ITEMS } from '../../../shared/components/sidebar/teacher-nav';
 import {
+  AttemptEventType,
   AttemptStatus,
+  AttemptTraceabilityResponse,
   TeacherAttemptResultDetailResponse,
+  TeacherAttemptReviewResponse,
   TeacherEvaluationResultsResponse,
+  TeacherReviewAnswerResponse,
   TeacherStudentResultResponse,
 } from '../../../shared/models';
+import { formatNumberWithoutTrailingZero } from '../../../shared/utils/display-format.util';
 
 type ApprovalFilter = 'all' | 'approved' | 'failed';
 type SortKey = 'score' | 'date';
 
 /** Umbral de aprobación (%) usado solo para etiquetar y filtrar filas en la UI. */
 const APPROVAL_PERCENTAGE = 60;
+
+interface SectionFilterOption {
+  readonly key: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly label: string;
+}
 
 /**
  * Vista de resultados de una evaluación para el docente.
@@ -119,11 +131,13 @@ const APPROVAL_PERCENTAGE = 60;
                 />
               </div>
 
-              @if (sections().length > 1) {
+              @if (sections().length > 0) {
                 <select class="input toolbar__select" (change)="onSection($event)">
                   <option value="">Todas las secciones</option>
-                  @for (s of sections(); track s) {
-                    <option [value]="s" [selected]="sectionFilter() === s">Sección {{ s }}</option>
+                  @for (section of sections(); track section.key) {
+                    <option [value]="section.key" [selected]="sectionFilter() === section.key">
+                      {{ section.label }}
+                    </option>
                   }
                 </select>
               }
@@ -162,6 +176,7 @@ const APPROVAL_PERCENTAGE = 60;
                       <th>Intento</th>
                       <th>Puntaje</th>
                       <th>%</th>
+                      <th>Nota final</th>
                       <th>Estado</th>
                       <th>Salidas</th>
                       <th>Enviado</th>
@@ -179,13 +194,26 @@ const APPROVAL_PERCENTAGE = 60;
                         </td>
                         <td>{{ r.grade }} "{{ r.section }}"</td>
                         <td>N.° {{ r.attemptNumber }}</td>
-                        <td class="text-mono">{{ r.score ?? 0 }} / {{ r.maxScore ?? d.maxScore }}</td>
+                        <td class="text-mono">{{ formatScore(r.score) }} / {{ formatScore(r.maxScore ?? d.maxScore) }}</td>
                         <td>
                           <span class="badge" [class]="pctBadge(r.percentage)">
                             {{ formatPct(r.percentage) }}
                           </span>
                         </td>
-                        <td><span class="badge badge-success">{{ statusLabel(r.status) }}</span></td>
+                        <td class="text-mono">
+                          @if (r.gradeClosed) {
+                            {{ formatGrade(r.finalScore) }} / 20
+                          } @else {
+                            <span class="text-muted">—</span>
+                          }
+                        </td>
+                        <td>
+                          @if (r.gradeClosed) {
+                            <span class="badge badge-success">Cerrada</span>
+                          } @else {
+                            <span class="badge" [class]="statusBadge(r.status)">{{ statusLabel(r.status) }}</span>
+                          }
+                        </td>
                         <td>
                           @if (r.tabExitCount > 0) {
                             <span class="badge badge-warning" title="Salidas de pestaña detectadas">
@@ -198,9 +226,20 @@ const APPROVAL_PERCENTAGE = 60;
                         </td>
                         <td>{{ r.submittedAt ? formatDate(r.submittedAt) : '—' }}</td>
                         <td>
-                          <button type="button" class="btn btn-secondary btn-sm" (click)="openDetail(r)">
-                            Ver detalle
-                          </button>
+                          <div class="row-actions">
+                            @if (r.status === 'PENDING_MANUAL_REVIEW') {
+                              <button type="button" class="btn btn-primary btn-sm" (click)="openReview(r)">
+                                Revisar
+                              </button>
+                            } @else if (r.status === 'GRADED' && !r.gradeClosed) {
+                              <button type="button" class="btn btn-primary btn-sm" (click)="openReview(r)">
+                                Ajustar / cerrar
+                              </button>
+                            }
+                            <button type="button" class="btn btn-secondary btn-sm" (click)="openDetail(r)">
+                              Ver detalle
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     }
@@ -253,50 +292,383 @@ const APPROVAL_PERCENTAGE = 60;
                 </div>
                 <div class="detail-head__score">
                   <span class="badge" [class]="pctBadge(dt.percentage)">{{ formatPct(dt.percentage) }}</span>
-                  <span class="detail-head__points">{{ dt.score ?? 0 }} / {{ dt.maxScore ?? 0 }}</span>
+                  <span class="detail-head__points">{{ formatScore(dt.score) }} / {{ formatScore(dt.maxScore) }}</span>
                 </div>
               </div>
 
-              @if (dt.tabExitCount > 0) {
-                <div class="alert alert-warning">
-                  <span class="material-icons">visibility_off</span>
-                  Se detectaron {{ dt.tabExitCount }} salida(s) de pestaña durante este intento.
+              <!-- Trazabilidad del intento -->
+              <section class="trace">
+                <h3 class="trace__title">
+                  <span class="material-icons">timeline</span> Trazabilidad del intento
+                </h3>
+
+                @if (traceLoading()) {
+                  <p class="text-muted">Cargando trazabilidad…</p>
+                } @else if (traceError()) {
+                  <p class="text-muted">No se pudo cargar la trazabilidad de este intento.</p>
+                } @else if (traceability(); as tr) {
+                  <div class="trace__chips">
+                    <span class="chip"><span class="chip__k">Estado final</span><span class="chip__v">{{ statusLabel(tr.finalStatus) }}</span></span>
+                    <span class="chip"><span class="chip__k">Tiempo usado</span><span class="chip__v">{{ formatDuration(tr.timeUsedSeconds) }}</span></span>
+                    <span class="chip"><span class="chip__k">Inicio</span><span class="chip__v">{{ tr.startedAt ? formatDate(tr.startedAt) : '—' }}</span></span>
+                    <span class="chip"><span class="chip__k">Finalización</span><span class="chip__v">{{ tr.submittedAt ? formatDate(tr.submittedAt) : '—' }}</span></span>
+                    <span class="chip"><span class="chip__k">Salidas de pestaña</span><span class="chip__v">{{ tr.tabExitCount }}</span></span>
+                    <span class="chip"><span class="chip__k">Regresos</span><span class="chip__v">{{ tr.tabReturnCount }}</span></span>
+                    <span class="chip"><span class="chip__k">Intentos de salida</span><span class="chip__v">{{ tr.exitAttemptCount }}</span></span>
+                  </div>
+
+                  @if (!tr.trackTabExit) {
+                    <p class="text-muted" style="margin-top:8px">
+                      La detección de salida de pestaña estaba desactivada en esta evaluación.
+                    </p>
+                  }
+
+                  @if (tr.toolsUsed.length > 0) {
+                    <div class="trace__tools">
+                      <span class="text-muted">Herramientas consultadas:</span>
+                      @for (t of tr.toolsUsed; track t) {
+                        <span class="badge badge-neutral">{{ toolLabel(t) }}</span>
+                      }
+                    </div>
+                  }
+
+                  @if (tr.events.length > 0) {
+                    <ul class="timeline">
+                      @for (e of tr.events; track e.id) {
+                        <li class="timeline__item">
+                          <span class="timeline__dot" [class]="eventTone(e.eventType)"></span>
+                          <span class="timeline__time">{{ formatTime(e.occurredAt) }}</span>
+                          <span class="timeline__label">{{ eventLabel(e.eventType) }}</span>
+                          @if (toolFromMetadata(e.metadata); as tool) {
+                            <span class="badge badge-neutral timeline__meta">{{ tool }}</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  } @else {
+                    <p class="text-muted" style="margin-top:8px">
+                      No se registraron eventos durante este intento.
+                    </p>
+                  }
+                }
+              </section>
+
+              <div class="answers">
+                @for (a of dt.answers; track a.questionId; let i = $index) {
+                  @if (a.questionType === 'OPEN_TEXT') {
+                    <div class="answer">
+                      <div class="answer__head">
+                        <span class="answer__num">{{ i + 1 }}</span>
+                        <span class="answer__text">{{ a.questionText }}</span>
+                        @if (a.reviewed) {
+                          <span class="answer__points">{{ formatScore(a.pointsAwarded) }} / {{ formatScore(a.points) }}</span>
+                        } @else {
+                          <span class="badge badge-warning">Pendiente</span>
+                        }
+                      </div>
+                      <div class="answer__row">
+                        <span class="answer__label">Respuesta del estudiante:</span>
+                        <span class="answer__value" [class.answer__value--muted]="!a.answerText">
+                          {{ a.answerText || 'Sin responder' }}
+                        </span>
+                      </div>
+                      @if (a.teacherFeedback) {
+                        <p class="answer__explanation">
+                          <span class="material-icons">rate_review</span>
+                          <strong>Tu retroalimentación:</strong> {{ a.teacherFeedback }}
+                        </p>
+                      }
+                    </div>
+                  } @else {
+                    <div class="answer" [class.answer--ok]="a.correct" [class.answer--bad]="a.correct === false">
+                      <div class="answer__head">
+                        <span class="answer__num">{{ i + 1 }}</span>
+                        <span class="answer__text">{{ a.questionText }}</span>
+                        <span class="answer__points">{{ formatScore(a.pointsAwarded) }} / {{ formatScore(a.points) }}</span>
+                      </div>
+                      <div class="answer__row">
+                        <span class="answer__label">Respuesta del estudiante:</span>
+                        <span class="answer__value" [class.answer__value--muted]="!a.selectedOptionText">
+                          {{ a.selectedOptionText || 'Sin responder' }}
+                          @if (a.correct) {
+                            <span class="material-icons answer__icon answer__icon--ok">check_circle</span>
+                          } @else {
+                            <span class="material-icons answer__icon answer__icon--bad">cancel</span>
+                          }
+                        </span>
+                      </div>
+                      @if (!a.correct && a.correctOptionText) {
+                        <div class="answer__row">
+                          <span class="answer__label">Respuesta correcta:</span>
+                          <span class="answer__value answer__value--correct">{{ a.correctOptionText }}</span>
+                        </div>
+                      }
+                      @if (a.explanation) {
+                        <p class="answer__explanation">
+                          <span class="material-icons">lightbulb</span> {{ a.explanation }}
+                        </p>
+                      }
+                    </div>
+                  }
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Modal: revisión manual de respuestas abiertas -->
+    @if (reviewOpen()) {
+      <div class="modal-overlay" (click)="closeReview()">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <header class="modal__header">
+            <h2 class="modal__title">Revisión manual</h2>
+            <button type="button" class="modal__close" aria-label="Cerrar" (click)="closeReview()">
+              <span class="material-icons">close</span>
+            </button>
+          </header>
+
+          <div class="modal__body">
+            @if (reviewLoading()) {
+              <div class="state">
+                <div class="state__spinner"></div>
+                <p class="state__title">Cargando respuestas…</p>
+              </div>
+            } @else if (reviewError()) {
+              <div class="state state--error">
+                <span class="material-icons state__icon">cloud_off</span>
+                <p class="state__title">No se pudo cargar la revisión.</p>
+                <button type="button" class="btn btn-primary" (click)="reloadReview()">
+                  <span class="material-icons">refresh</span> Reintentar
+                </button>
+              </div>
+            } @else if (review(); as rv) {
+              <div class="detail-head">
+                <div>
+                  <span class="detail-head__name">{{ rv.studentName }}</span>
+                  <span class="detail-head__meta">
+                    {{ rv.studentCode }} · {{ rv.grade }} "{{ rv.section }}" · Intento N.° {{ rv.attemptNumber }}
+                  </span>
+                </div>
+                <div class="detail-head__score">
+                  <span class="badge" [class]="rv.gradeClosed ? 'badge-success' : statusBadge(rv.status)">
+                    {{ rv.gradeClosed ? 'Calificación cerrada' : statusLabel(rv.status) }}
+                  </span>
+                  <span class="detail-head__points">{{ formatScore(rv.score) }} / {{ formatScore(rv.maxScore) }} pts</span>
+                </div>
+              </div>
+
+              <!-- Resumen de nota: base 0–20, ajustes y nota final -->
+              <div class="grade-summary">
+                <span class="chip"><span class="chip__k">Nota base</span><span class="chip__v">{{ formatGrade(rv.baseScore) }}</span></span>
+                <span class="chip"><span class="chip__k">Ajustes</span><span class="chip__v">{{ formatSigned(rv.adjustmentsTotal) }}</span></span>
+                <span class="chip chip--final"><span class="chip__k">Nota final</span><span class="chip__v">{{ formatGrade(rv.finalScore) }} / 20</span></span>
+              </div>
+
+              @if (rv.gradeClosed) {
+                <div class="alert alert-success">
+                  <span class="material-icons">lock</span>
+                  Calificación cerrada{{ rv.gradeClosedAt ? ' el ' + formatDate(rv.gradeClosedAt) : '' }}.
+                  La nota final y la retroalimentación ya son visibles para el estudiante.
+                </div>
+              }
+
+              @if (reviewMessage()) {
+                <div class="alert alert-success">
+                  <span class="material-icons">check_circle</span> {{ reviewMessage() }}
+                </div>
+              }
+              @if (reviewSaveError()) {
+                <div class="alert alert-danger">
+                  <span class="material-icons">error_outline</span> {{ reviewSaveError() }}
                 </div>
               }
 
               <div class="answers">
-                @for (a of dt.answers; track a.questionId; let i = $index) {
-                  <div class="answer" [class.answer--ok]="a.correct" [class.answer--bad]="a.correct === false">
+                @for (a of rv.openAnswers; track a.questionId; let i = $index) {
+                  <div class="answer">
                     <div class="answer__head">
                       <span class="answer__num">{{ i + 1 }}</span>
                       <span class="answer__text">{{ a.questionText }}</span>
-                      <span class="answer__points">{{ a.pointsAwarded }} / {{ a.points }}</span>
+                      @if (a.reviewed) {
+                        <span class="badge badge-success">Revisada</span>
+                      } @else {
+                        <span class="badge badge-warning">Pendiente</span>
+                      }
                     </div>
                     <div class="answer__row">
                       <span class="answer__label">Respuesta del estudiante:</span>
-                      <span class="answer__value" [class.answer__value--muted]="!a.selectedOptionText">
-                        {{ a.selectedOptionText || 'Sin responder' }}
-                        @if (a.correct) {
-                          <span class="material-icons answer__icon answer__icon--ok">check_circle</span>
-                        } @else {
-                          <span class="material-icons answer__icon answer__icon--bad">cancel</span>
-                        }
+                      <span class="answer__value" [class.answer__value--muted]="!a.answerText">
+                        {{ a.answerText || 'Sin responder' }}
                       </span>
                     </div>
-                    @if (!a.correct && a.correctOptionText) {
-                      <div class="answer__row">
-                        <span class="answer__label">Respuesta correcta:</span>
-                        <span class="answer__value answer__value--correct">{{ a.correctOptionText }}</span>
-                      </div>
-                    }
-                    @if (a.explanation) {
+                    @if (a.expectedAnswer) {
                       <p class="answer__explanation">
-                        <span class="material-icons">lightbulb</span> {{ a.explanation }}
+                        <span class="material-icons">fact_check</span>
+                        <strong>Criterio (solo tú lo ves):</strong> {{ a.expectedAnswer }}
                       </p>
+                    }
+
+                    @if (a.answerId !== null) {
+                      @if (rv.gradeClosed) {
+                        <p class="answer__points">Puntaje asignado: {{ formatScore(a.awardedScore) }} / {{ formatScore(a.maxPoints) }}</p>
+                      } @else {
+                        <div class="grade-row">
+                          <label class="form-label">
+                            Puntaje (0 – {{ a.maxPoints }})
+                            <input
+                              type="number"
+                              class="input grade-row__score"
+                              min="0"
+                              [max]="a.maxPoints"
+                              [value]="scoreFor(a.answerId)"
+                              (input)="setScore(a.answerId, $any($event.target).value)"
+                            />
+                          </label>
+                          <label class="form-label form-label--full">
+                            Retroalimentación (opcional)
+                            <textarea
+                              class="textarea"
+                              rows="2"
+                              maxlength="2000"
+                              [value]="feedbackFor(a.answerId)"
+                              (input)="setFeedback(a.answerId, $any($event.target).value)"
+                            ></textarea>
+                          </label>
+                          <button
+                            type="button"
+                            class="btn btn-primary btn-sm"
+                            [disabled]="savingAnswerId() === a.answerId"
+                            (click)="gradeAnswer(a)"
+                          >
+                            {{ savingAnswerId() === a.answerId ? 'Guardando…' : 'Guardar puntaje' }}
+                          </button>
+                        </div>
+                      }
+                    } @else {
+                      <p class="text-muted">El estudiante no dejó respuesta; igual debes asignarle un puntaje.</p>
                     }
                   </div>
                 }
               </div>
+
+              <!-- Ajustes manuales de puntaje -->
+              <section class="adjust">
+                <h3 class="adjust__title">
+                  <span class="material-icons">tune</span> Ajustes de puntaje
+                </h3>
+
+                @if (rv.adjustments.length > 0) {
+                  <ul class="adjust__list">
+                    @for (adj of rv.adjustments; track adj.id) {
+                      <li class="adjust__item">
+                        <span class="badge" [class]="adj.type === 'BONUS' ? 'badge-success' : 'badge-warning'">
+                          {{ formatSigned(adj.amount) }}
+                        </span>
+                        <span class="adjust__reason">{{ adj.reason }}</span>
+                        <span class="adjust__meta">
+                          {{ adj.createdByName || '—' }}{{ adj.createdAt ? ' · ' + formatDate(adj.createdAt) : '' }}
+                        </span>
+                        @if (!rv.gradeClosed) {
+                          <button
+                            type="button"
+                            class="btn btn-icon btn-sm"
+                            title="Anular ajuste"
+                            [disabled]="removingAdjustmentId() === adj.id"
+                            (click)="removeAdjustment(adj.id)"
+                          >
+                            <span class="material-icons">delete_outline</span>
+                          </button>
+                        }
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="text-muted">No hay ajustes aplicados.</p>
+                }
+
+                @if (!rv.gradeClosed) {
+                  <div class="grade-row">
+                    <label class="form-label">
+                      Monto (+/-)
+                      <input
+                        type="number"
+                        class="input grade-row__score"
+                        step="0.5"
+                        [value]="adjustmentAmount()"
+                        (input)="adjustmentAmount.set($any($event.target).value)"
+                      />
+                    </label>
+                    <label class="form-label form-label--full">
+                      Motivo (obligatorio)
+                      <input
+                        type="text"
+                        class="input"
+                        maxlength="500"
+                        [value]="adjustmentReason()"
+                        (input)="adjustmentReason.set($any($event.target).value)"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-sm"
+                      [disabled]="addingAdjustment()"
+                      (click)="addAdjustment()"
+                    >
+                      {{ addingAdjustment() ? 'Agregando…' : 'Agregar ajuste' }}
+                    </button>
+                  </div>
+                }
+              </section>
+
+              <!-- Retroalimentación general -->
+              <section class="adjust">
+                <h3 class="adjust__title">
+                  <span class="material-icons">forum</span> Retroalimentación general
+                </h3>
+                @if (rv.gradeClosed) {
+                  <p class="answer__value" [class.answer__value--muted]="!rv.overallFeedback">
+                    {{ rv.overallFeedback || 'Sin retroalimentación general.' }}
+                  </p>
+                } @else {
+                  <textarea
+                    class="textarea"
+                    rows="3"
+                    maxlength="1500"
+                    placeholder="Comentario general para el estudiante (visible al cerrar la calificación)."
+                    [value]="overallFeedbackDraft()"
+                    (input)="overallFeedbackDraft.set($any($event.target).value)"
+                  ></textarea>
+                  <div class="modal__actions">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      [disabled]="savingFeedback()"
+                      (click)="saveOverallFeedback()"
+                    >
+                      {{ savingFeedback() ? 'Guardando…' : 'Guardar retroalimentación' }}
+                    </button>
+                  </div>
+                }
+              </section>
+
+              <div class="modal__actions">
+                <button type="button" class="btn btn-secondary" (click)="closeReview()">Cerrar</button>
+                @if (!rv.gradeClosed) {
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    [disabled]="rv.pendingOpenCount > 0 || closingGrade()"
+                    (click)="closeGrade()"
+                  >
+                    {{ closingGrade() ? 'Cerrando…' : 'Cerrar calificación' }}
+                  </button>
+                }
+              </div>
+              @if (!rv.gradeClosed && rv.pendingOpenCount > 0) {
+                <p class="text-muted">Faltan {{ rv.pendingOpenCount }} respuestas por calificar para poder cerrar.</p>
+              }
             }
           </div>
         </div>
@@ -339,13 +711,52 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   readonly detail = signal<TeacherAttemptResultDetailResponse | null>(null);
   private detailAttemptId: number | null = null;
 
+  // Trazabilidad del intento (resumen + línea de tiempo), cargada junto al detalle.
+  readonly traceLoading = signal(false);
+  readonly traceError = signal(false);
+  readonly traceability = signal<AttemptTraceabilityResponse | null>(null);
+
+  // Revisión manual de respuestas abiertas.
+  readonly reviewOpen = signal(false);
+  readonly reviewLoading = signal(false);
+  readonly reviewError = signal(false);
+  readonly review = signal<TeacherAttemptReviewResponse | null>(null);
+  readonly savingAnswerId = signal<number | null>(null);
+  readonly reviewMessage = signal<string | null>(null);
+  readonly reviewSaveError = signal<string | null>(null);
+  private reviewAttemptId: number | null = null;
+  // Borradores de puntaje y retroalimentación por respuesta (answerId → valor).
+  private readonly scoreDrafts = signal<Record<number, string>>({});
+  private readonly feedbackDrafts = signal<Record<number, string>>({});
+
+  // Ajustes manuales, retroalimentación general y cierre de calificación.
+  readonly adjustmentAmount = signal('');
+  readonly adjustmentReason = signal('');
+  readonly addingAdjustment = signal(false);
+  readonly removingAdjustmentId = signal<number | null>(null);
+  readonly overallFeedbackDraft = signal('');
+  readonly savingFeedback = signal(false);
+  readonly closingGrade = signal(false);
+
   readonly userName = computed<string>(() => this.auth.currentUser()?.username ?? 'Usuario');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
-  readonly sections = computed<string[]>(() => {
-    const set = new Set<string>();
-    for (const r of this.data()?.results ?? []) set.add(r.section);
-    return [...set].sort();
+  readonly sections = computed<SectionFilterOption[]>(() => {
+    const sections = new Map<string, SectionFilterOption>();
+    for (const r of this.data()?.results ?? []) {
+      const key = sectionKey(r);
+      sections.set(key, {
+        key,
+        grade: r.grade,
+        section: r.section,
+        label: `${r.grade}° ${r.section}`,
+      });
+    }
+    return [...sections.values()].sort(
+      (a, b) =>
+        Number(a.grade) - Number(b.grade) ||
+        a.section.localeCompare(b.section, 'es')
+    );
   });
 
   readonly visibleRows = computed<TeacherStudentResultResponse[]>(() => {
@@ -355,7 +766,7 @@ export class TeacherEvaluationResultsComponent implements OnInit {
     const approval = this.approvalFilter();
 
     const filtered = rows.filter((r) => {
-      if (section && r.section !== section) return false;
+      if (section && sectionKey(r) !== section) return false;
       if (approval === 'approved' && !this.isApproved(r.percentage)) return false;
       if (approval === 'failed' && this.isApproved(r.percentage)) return false;
       if (!q) return true;
@@ -436,12 +847,242 @@ export class TeacherEvaluationResultsComponent implements OnInit {
         this.detailLoading.set(false);
       },
     });
+    this.loadTraceability();
+  }
+
+  /** Carga la trazabilidad del intento abierto. Su error no bloquea el detalle de respuestas. */
+  private loadTraceability(): void {
+    if (this.detailAttemptId === null) return;
+    this.traceability.set(null);
+    this.traceLoading.set(true);
+    this.traceError.set(false);
+    this.service.getAttemptTraceability(this.detailAttemptId).subscribe({
+      next: (t) => {
+        this.traceability.set(t);
+        this.traceLoading.set(false);
+      },
+      error: () => {
+        this.traceError.set(true);
+        this.traceLoading.set(false);
+      },
+    });
   }
 
   closeDetail(): void {
     this.detailOpen.set(false);
     this.detail.set(null);
     this.detailAttemptId = null;
+    this.traceability.set(null);
+    this.traceError.set(false);
+  }
+
+  // ── Revisión manual ──
+
+  openReview(row: TeacherStudentResultResponse): void {
+    this.reviewAttemptId = row.attemptId;
+    this.reviewOpen.set(true);
+    this.reviewMessage.set(null);
+    this.reviewSaveError.set(null);
+    this.loadReview();
+  }
+
+  reloadReview(): void {
+    this.loadReview();
+  }
+
+  private loadReview(): void {
+    if (this.reviewAttemptId === null) return;
+    this.review.set(null);
+    this.reviewLoading.set(true);
+    this.reviewError.set(false);
+    this.service.getAttemptReview(this.reviewAttemptId).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.reviewLoading.set(false);
+      },
+      error: () => {
+        this.reviewError.set(true);
+        this.reviewLoading.set(false);
+      },
+    });
+  }
+
+  /** Inicializa los borradores con los puntajes/retroalimentación ya asignados. */
+  private hydrateDrafts(rv: TeacherAttemptReviewResponse): void {
+    const scores: Record<number, string> = {};
+    const feedback: Record<number, string> = {};
+    for (const a of rv.openAnswers) {
+      if (a.answerId !== null) {
+        scores[a.answerId] = a.awardedScore !== null ? String(a.awardedScore) : '';
+        feedback[a.answerId] = a.teacherFeedback ?? '';
+      }
+    }
+    this.scoreDrafts.set(scores);
+    this.feedbackDrafts.set(feedback);
+    this.overallFeedbackDraft.set(rv.overallFeedback ?? '');
+  }
+
+  scoreFor(answerId: number): string {
+    return this.scoreDrafts()[answerId] ?? '';
+  }
+
+  feedbackFor(answerId: number): string {
+    return this.feedbackDrafts()[answerId] ?? '';
+  }
+
+  setScore(answerId: number, value: string): void {
+    this.scoreDrafts.update((m) => ({ ...m, [answerId]: value }));
+  }
+
+  setFeedback(answerId: number, value: string): void {
+    this.feedbackDrafts.update((m) => ({ ...m, [answerId]: value }));
+  }
+
+  gradeAnswer(answer: TeacherReviewAnswerResponse): void {
+    if (answer.answerId === null || this.reviewAttemptId === null) return;
+    const raw = this.scoreDrafts()[answer.answerId] ?? '';
+    const score = Number(raw);
+    if (raw.trim() === '' || Number.isNaN(score) || score < 0 || score > answer.maxPoints) {
+      this.reviewSaveError.set(`El puntaje debe estar entre 0 y ${answer.maxPoints}.`);
+      return;
+    }
+    const feedback = (this.feedbackDrafts()[answer.answerId] ?? '').trim() || null;
+
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.savingAnswerId.set(answer.answerId);
+    this.service
+      .gradeOpenAnswer(this.reviewAttemptId, answer.answerId, { score, feedback })
+      .subscribe({
+        next: (rv) => {
+          this.review.set(rv);
+          this.hydrateDrafts(rv);
+          this.savingAnswerId.set(null);
+          this.reviewMessage.set('Puntaje guardado.');
+          // El estado del intento puede haber pasado a GRADED: se refresca la lista.
+          this.load();
+        },
+        error: (err: unknown) => {
+          this.savingAnswerId.set(null);
+          this.reviewSaveError.set(this.extractError(err, 'No se pudo guardar el puntaje.'));
+        },
+      });
+  }
+
+  addAdjustment(): void {
+    if (this.reviewAttemptId === null) return;
+    const amount = Number(this.adjustmentAmount());
+    if (this.adjustmentAmount().trim() === '' || Number.isNaN(amount) || amount === 0) {
+      this.reviewSaveError.set('El monto del ajuste debe ser un número distinto de cero.');
+      return;
+    }
+    const reason = this.adjustmentReason().trim();
+    if (!reason) {
+      this.reviewSaveError.set('El motivo del ajuste es obligatorio.');
+      return;
+    }
+
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.addingAdjustment.set(true);
+    this.service.addAdjustment(this.reviewAttemptId, { amount, reason }).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.adjustmentAmount.set('');
+        this.adjustmentReason.set('');
+        this.addingAdjustment.set(false);
+        this.reviewMessage.set('Ajuste agregado.');
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.addingAdjustment.set(false);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo agregar el ajuste.'));
+      },
+    });
+  }
+
+  removeAdjustment(adjustmentId: number): void {
+    if (this.reviewAttemptId === null) return;
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.removingAdjustmentId.set(adjustmentId);
+    this.service.removeAdjustment(this.reviewAttemptId, adjustmentId).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.removingAdjustmentId.set(null);
+        this.reviewMessage.set('Ajuste anulado.');
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.removingAdjustmentId.set(null);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo anular el ajuste.'));
+      },
+    });
+  }
+
+  saveOverallFeedback(): void {
+    if (this.reviewAttemptId === null) return;
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.savingFeedback.set(true);
+    const overallFeedback = this.overallFeedbackDraft().trim() || null;
+    this.service.updateOverallFeedback(this.reviewAttemptId, { overallFeedback }).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.savingFeedback.set(false);
+        this.reviewMessage.set('Retroalimentación guardada.');
+      },
+      error: (err: unknown) => {
+        this.savingFeedback.set(false);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo guardar la retroalimentación.'));
+      },
+    });
+  }
+
+  closeGrade(): void {
+    if (this.reviewAttemptId === null) return;
+    const confirmed = confirm(
+      'Al cerrar la calificación, la nota final y la retroalimentación quedarán visibles para ' +
+        'el estudiante y no podrás editar puntajes ni ajustes. ¿Deseas continuar?'
+    );
+    if (!confirmed) return;
+
+    this.reviewSaveError.set(null);
+    this.reviewMessage.set(null);
+    this.closingGrade.set(true);
+    this.service.closeGrade(this.reviewAttemptId).subscribe({
+      next: (rv) => {
+        this.review.set(rv);
+        this.hydrateDrafts(rv);
+        this.closingGrade.set(false);
+        this.reviewMessage.set('Calificación cerrada. La nota final ya es visible para el estudiante.');
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.closingGrade.set(false);
+        this.reviewSaveError.set(this.extractError(err, 'No se pudo cerrar la calificación.'));
+      },
+    });
+  }
+
+  closeReview(): void {
+    this.reviewOpen.set(false);
+    this.review.set(null);
+    this.reviewAttemptId = null;
+    this.reviewMessage.set(null);
+    this.reviewSaveError.set(null);
+    this.adjustmentAmount.set('');
+    this.adjustmentReason.set('');
+    this.overallFeedbackDraft.set('');
+  }
+
+  private extractError(err: unknown, fallback: string): string {
+    const e = err as { error?: { message?: string } };
+    return e?.error?.message ?? fallback;
   }
 
   goBack(): void {
@@ -467,15 +1108,46 @@ export class TeacherEvaluationResultsComponent implements OnInit {
   }
 
   statusLabel(status: AttemptStatus): string {
-    return status === 'GRADED' ? 'Calificado' : status === 'SUBMITTED' ? 'Enviado' : 'En progreso';
+    switch (status) {
+      case 'GRADED':
+        return 'Calificado';
+      case 'PENDING_MANUAL_REVIEW':
+        return 'Pendiente de revisión';
+      case 'SUBMITTED':
+        return 'Enviado';
+      default:
+        return 'En progreso';
+    }
+  }
+
+  statusBadge(status: AttemptStatus): string {
+    switch (status) {
+      case 'GRADED':
+        return 'badge-success';
+      case 'PENDING_MANUAL_REVIEW':
+        return 'badge-warning';
+      default:
+        return 'badge-neutral';
+    }
   }
 
   formatScore(value: number | null): string {
-    return value === null || value === undefined ? '—' : String(value);
+    return formatNumberWithoutTrailingZero(value);
   }
 
   formatPct(value: number | null): string {
     return value === null || value === undefined ? '—' : `${value}%`;
+  }
+
+  /** Nota en escala 0–20 con un decimal; '—' si no hay valor. */
+  formatGrade(value: number | null): string {
+    return formatNumberWithoutTrailingZero(value);
+  }
+
+  /** Monto de ajuste con su signo explícito (p. ej. +1.0, -0.5). */
+  formatSigned(value: number | null): string {
+    if (value === null || value === undefined) return '—';
+    return `${value > 0 ? '+' : ''}${formatNumberWithoutTrailingZero(value)}`;
   }
 
   formatDate(value: string): string {
@@ -489,6 +1161,81 @@ export class TeacherEvaluationResultsComponent implements OnInit {
       minute: '2-digit',
     }).format(date);
   }
+
+  /** Solo la hora (hh:mm:ss), para la línea de tiempo de eventos. */
+  formatTime(value: string): string {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('es-PE', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(date);
+  }
+
+  /** Tiempo usado en formato legible (mm:ss o hh:mm:ss); '—' si no hay dato. */
+  formatDuration(seconds: number | null): string {
+    if (seconds === null || seconds === undefined) return '—';
+    const s = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+  }
+
+  /** Etiqueta en español para un tipo de evento del intento. */
+  eventLabel(type: AttemptEventType): string {
+    switch (type) {
+      case 'ATTEMPT_STARTED': return 'Inicio del intento';
+      case 'ATTEMPT_SUBMITTED': return 'Envío del intento';
+      case 'ATTEMPT_EXITED': return 'Salida del intento';
+      case 'TIME_EXPIRED': return 'Tiempo agotado';
+      case 'EXIT_ATTEMPTED': return 'Intento de salida';
+      case 'TOOL_OPENED': return 'Abrió una herramienta';
+      case 'TOOL_RETURNED': return 'Volvió al intento';
+      case 'TAB_HIDDEN': return 'Salida de pestaña';
+      case 'WINDOW_BLUR': return 'Ventana sin foco';
+      case 'TAB_VISIBLE': return 'Regreso a la pestaña';
+      case 'WINDOW_FOCUS': return 'Ventana con foco';
+      case 'NAVIGATION_BLOCKED': return 'Navegación bloqueada';
+      default: return type;
+    }
+  }
+
+  /** Tono visual del punto de la línea de tiempo según el tipo de evento. */
+  eventTone(type: AttemptEventType): string {
+    if (type === 'TAB_HIDDEN' || type === 'WINDOW_BLUR') return 'tone-warn';
+    if (type === 'EXIT_ATTEMPTED' || type === 'ATTEMPT_EXITED' || type === 'TIME_EXPIRED') return 'tone-exit';
+    if (type === 'TOOL_OPENED' || type === 'TOOL_RETURNED') return 'tone-tool';
+    return '';
+  }
+
+  /** Nombre legible de una herramienta consultada. */
+  toolLabel(tool: string): string {
+    switch (tool) {
+      case 'PERIODIC_TABLE': return 'Tabla periódica';
+      case 'COMPOUND_FORMATION': return 'Formación de compuestos';
+      default: return tool;
+    }
+  }
+
+  /** Extrae el nombre de la herramienta de una metadata "tool=..."; null si no hay. */
+  toolFromMetadata(metadata: string | null): string | null {
+    if (!metadata) return null;
+    for (const part of metadata.split(';')) {
+      const trimmed = part.trim();
+      if (trimmed.startsWith('tool=')) {
+        const value = trimmed.substring('tool='.length).trim();
+        return value.length > 0 ? this.toolLabel(value) : null;
+      }
+    }
+    return null;
+  }
+}
+
+function sectionKey(row: { grade: string; section: string }): string {
+  return `${row.grade}|${row.section}`;
 }
 
 function buildInitials(name: string): string {

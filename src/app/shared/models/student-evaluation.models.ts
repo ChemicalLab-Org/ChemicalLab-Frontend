@@ -12,16 +12,35 @@
 
 import { QuestionDisplayMode, QuestionType } from './evaluation.models';
 
-/** Estado de un intento de evaluación. */
-export type AttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED';
+/**
+ * Estado de un intento de evaluación. `PENDING_MANUAL_REVIEW` indica que el intento se
+ * envió con preguntas abiertas aún sin calificar: su nota es parcial hasta la revisión
+ * del docente.
+ */
+export type AttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'PENDING_MANUAL_REVIEW' | 'GRADED';
 
-/** Tipo de incidencia de foco reportada durante un intento. */
+/**
+ * Tipo de evento de trazabilidad de un intento. El frontend solo reporta incidencias de
+ * foco, intento de salida y uso de herramientas; los hitos del ciclo de vida
+ * (`ATTEMPT_*`, `TIME_EXPIRED`) los registra el backend y aparecen al consultar la
+ * trazabilidad como docente.
+ */
 export type AttemptEventType =
   | 'TAB_HIDDEN'
   | 'TAB_VISIBLE'
   | 'WINDOW_BLUR'
   | 'WINDOW_FOCUS'
-  | 'NAVIGATION_BLOCKED';
+  | 'NAVIGATION_BLOCKED'
+  | 'TOOL_OPENED'
+  | 'TOOL_RETURNED'
+  | 'EXIT_ATTEMPTED'
+  | 'ATTEMPT_STARTED'
+  | 'ATTEMPT_SUBMITTED'
+  | 'TIME_EXPIRED'
+  | 'ATTEMPT_EXITED';
+
+/** Herramienta de apoyo permitida que el estudiante puede abrir durante un intento. */
+export type AttemptTool = 'PERIODIC_TABLE' | 'COMPOUND_FORMATION';
 
 // ─── Responses ──────────────────────────────────────────────────────────────
 
@@ -55,13 +74,18 @@ export interface StudentOptionResponse {
   readonly orderIndex: number;
 }
 
-/** Pregunta vista por el estudiante, con sus alternativas y sin la respuesta correcta. */
+/**
+ * Pregunta vista por el estudiante. En alternativa única trae sus alternativas (sin la
+ * correcta); en respuesta abierta `options` va vacío y el estudiante responde con texto.
+ * Nunca incluye el criterio de corrección de las preguntas abiertas.
+ */
 export interface StudentQuestionResponse {
   readonly id: number;
   readonly questionText: string;
   readonly questionType: QuestionType;
   readonly points: number;
   readonly orderIndex: number;
+  readonly required: boolean;
   readonly options: StudentOptionResponse[];
 }
 
@@ -90,7 +114,10 @@ export interface StudentEvaluationDetailResponse {
 export interface StudentAnswerResponse {
   readonly id: number;
   readonly questionId: number;
+  readonly questionType: QuestionType;
   readonly selectedOptionId: number | null;
+  /** Texto propio del estudiante en preguntas abiertas (para repoblar el formulario). */
+  readonly answerText: string | null;
   readonly answeredAt: string;
 }
 
@@ -124,11 +151,17 @@ export interface StartEvaluationAttemptRequest {
   readonly assignmentId?: number | null;
 }
 
-/** Respuesta del estudiante a una pregunta de alternativa única. */
+/**
+ * Respuesta del estudiante a una pregunta. En alternativa única se envía
+ * `selectedOptionId`; en respuesta abierta, `answerText` (máx. 3000). El backend toma
+ * solo el campo que corresponde según el tipo de la pregunta.
+ */
 export interface SubmitEvaluationAnswerRequest {
   readonly questionId: number;
   /** Alternativa elegida. Puede ser null si se deja la pregunta en blanco. */
-  readonly selectedOptionId: number | null;
+  readonly selectedOptionId?: number | null;
+  /** Texto de respuesta para preguntas abiertas. */
+  readonly answerText?: string | null;
 }
 
 /** Envío de un intento. Las respuestas son opcionales (pueden haberse guardado antes). */
@@ -137,13 +170,19 @@ export interface SubmitEvaluationAttemptRequest {
 }
 
 /**
- * Cuerpo para reportar una incidencia de foco durante un intento (salida/retorno de
- * pestaña o ventana). El backend solo la registra si la evaluación tiene activada la
- * detección de salida de pestaña y el intento es del propio estudiante.
+ * Cuerpo para reportar un evento de trazabilidad durante un intento: incidencia de foco
+ * (solo si la evaluación tiene activada la detección de salida de pestaña), intento de
+ * salida (`EXIT_ATTEMPTED`) o uso de una herramienta permitida (`TOOL_OPENED`/
+ * `TOOL_RETURNED`). Solo admite metadata segura: la herramienta y un `source` corto que el
+ * backend sanitiza. Nunca se envían respuestas, claves ni datos sensibles.
  */
 export interface RegisterAttemptEventRequest {
   readonly eventType: AttemptEventType;
   readonly description?: string;
+  /** Herramienta abierta (solo para TOOL_OPENED/TOOL_RETURNED). */
+  readonly tool?: AttemptTool;
+  /** Origen del evento (etiqueta corta, p. ej. BUTTON_EXIT, VISIBILITY_CHANGE). */
+  readonly source?: string;
 }
 
 /** Resumen devuelto tras reportar una incidencia de foco. */

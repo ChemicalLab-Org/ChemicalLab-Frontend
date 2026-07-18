@@ -27,6 +27,7 @@ import {
   EvaluationStatus,
   QuestionDisplayMode,
   QuestionResponse,
+  QuestionType,
 } from '../../../shared/models';
 
 type FormMode = 'create' | 'edit';
@@ -37,6 +38,13 @@ interface EvaluationLike {
   readonly id: number;
   readonly title: string;
   readonly status: EvaluationStatus;
+}
+
+interface SectionOption {
+  readonly key: string;
+  readonly grade: string;
+  readonly section: string;
+  readonly label: string;
 }
 
 @Component({
@@ -476,6 +484,10 @@ interface EvaluationLike {
                       <div class="question-item__head">
                         <span class="question-item__index">{{ i + 1 }}</span>
                         <p class="question-item__text">{{ q.questionText }}</p>
+                        <span class="badge" [class.badge-info]="q.questionType === 'OPEN_TEXT'"
+                          [class.badge-neutral]="q.questionType !== 'OPEN_TEXT'">
+                          {{ q.questionType === 'OPEN_TEXT' ? 'Abierta' : 'Opción múltiple' }}
+                        </span>
                         <span class="badge badge-neutral question-item__points">{{ q.points }} pts</span>
                         @if (d.status !== 'ARCHIVED') {
                           <div class="question-item__actions">
@@ -488,16 +500,28 @@ interface EvaluationLike {
                           </div>
                         }
                       </div>
-                      <ul class="option-list">
-                        @for (opt of q.options; track opt.id) {
-                          <li class="option-list__item" [class.option-list__item--correct]="opt.correct">
-                            <span class="material-icons option-list__icon">
-                              {{ opt.correct ? 'check_circle' : 'radio_button_unchecked' }}
-                            </span>
-                            {{ opt.optionText }}
-                          </li>
+                      @if (q.questionType === 'OPEN_TEXT') {
+                        <p class="question-item__open">
+                          <span class="material-icons option-list__icon">edit_note</span>
+                          Respuesta abierta · revisión manual
+                        </p>
+                        @if (q.expectedAnswer) {
+                          <p class="question-item__explanation">
+                            <strong>Criterio (solo docente):</strong> {{ q.expectedAnswer }}
+                          </p>
                         }
-                      </ul>
+                      } @else {
+                        <ul class="option-list">
+                          @for (opt of q.options; track opt.id) {
+                            <li class="option-list__item" [class.option-list__item--correct]="opt.correct">
+                              <span class="material-icons option-list__icon">
+                                {{ opt.correct ? 'check_circle' : 'radio_button_unchecked' }}
+                              </span>
+                              {{ opt.optionText }}
+                            </li>
+                          }
+                        </ul>
+                      }
                       @if (q.explanation) {
                         <p class="question-item__explanation">
                           <strong>Explicación:</strong> {{ q.explanation }}
@@ -576,6 +600,22 @@ interface EvaluationLike {
           <form [formGroup]="questionForm" (ngSubmit)="submitQuestion()" class="modal__body">
             <div class="form-grid">
               <div class="form-group form-group--full">
+                <label class="form-label" for="questionType">Tipo de pregunta</label>
+                <select id="questionType" class="input" formControlName="questionType"
+                  (change)="onQuestionTypeChange($event)">
+                  <option value="MULTIPLE_CHOICE">Opción múltiple</option>
+                  <option value="OPEN_TEXT">Respuesta abierta</option>
+                </select>
+                <p class="field-hint">
+                  @if (questionType() === 'OPEN_TEXT') {
+                    La responde el estudiante con texto y la calificas manualmente.
+                  } @else {
+                    Se califica automáticamente según la alternativa correcta.
+                  }
+                </p>
+              </div>
+
+              <div class="form-group form-group--full">
                 <label class="form-label" for="questionText">Enunciado</label>
                 <textarea id="questionText" class="textarea" formControlName="questionText" rows="3"
                   placeholder="Escribe el enunciado de la pregunta"
@@ -594,43 +634,62 @@ interface EvaluationLike {
                 }
               </div>
 
+              @if (questionType() === 'OPEN_TEXT') {
+                <div class="form-group">
+                  <label class="form-label form-label--check">
+                    <input type="checkbox" formControlName="required" />
+                    Respuesta obligatoria
+                  </label>
+                  <p class="field-hint">Si está marcada, el estudiante no puede enviar sin responder.</p>
+                </div>
+              }
+
               <div class="form-group form-group--full">
                 <label class="form-label" for="explanation">Explicación (opcional)</label>
                 <input id="explanation" class="input" formControlName="explanation"
                   placeholder="Se muestra como retroalimentación" />
               </div>
 
-              <div class="form-group form-group--full">
-                <label class="form-label">Alternativas</label>
-                <p class="field-hint">Marca la alternativa correcta. Debe haber al menos dos alternativas y exactamente una correcta.</p>
-                <div class="option-editor" formArrayName="options">
-                  @for (group of optionsArray.controls; track $index) {
-                    <div class="option-editor__row" [formGroupName]="$index">
-                      <input
-                        type="radio"
-                        class="option-editor__radio"
-                        name="correctOption"
-                        [attr.aria-label]="'Marcar alternativa ' + ($index + 1) + ' como correcta'"
-                        [checked]="group.get('correct')?.value === true"
-                        (change)="markCorrect($index)"
-                      />
-                      <input class="input" formControlName="optionText" [placeholder]="'Alternativa ' + ($index + 1)" />
-                      <button
-                        type="button"
-                        class="row-action row-action--danger"
-                        aria-label="Eliminar alternativa"
-                        [disabled]="optionsArray.length <= 2"
-                        (click)="removeOption($index)"
-                      >
-                        <span class="material-icons">close</span>
-                      </button>
-                    </div>
-                  }
-                  <button type="button" class="btn btn-ghost btn-sm option-editor__add" (click)="addOption()">
-                    <span class="material-icons">add</span> Agregar alternativa
-                  </button>
+              @if (questionType() === 'OPEN_TEXT') {
+                <div class="form-group form-group--full">
+                  <label class="form-label" for="expectedAnswer">Respuesta esperada o criterio (opcional)</label>
+                  <textarea id="expectedAnswer" class="textarea" formControlName="expectedAnswer" rows="3"
+                    placeholder="Visible solo para ti; te orienta al calificar"></textarea>
+                  <p class="field-hint">Solo tú la ves. El estudiante nunca recibe este criterio.</p>
                 </div>
-              </div>
+              } @else {
+                <div class="form-group form-group--full">
+                  <label class="form-label">Alternativas</label>
+                  <p class="field-hint">Marca la alternativa correcta. Debe haber al menos dos alternativas y exactamente una correcta.</p>
+                  <div class="option-editor" formArrayName="options">
+                    @for (group of optionsArray.controls; track $index) {
+                      <div class="option-editor__row" [formGroupName]="$index">
+                        <input
+                          type="radio"
+                          class="option-editor__radio"
+                          name="correctOption"
+                          [attr.aria-label]="'Marcar alternativa ' + ($index + 1) + ' como correcta'"
+                          [checked]="group.get('correct')?.value === true"
+                          (change)="markCorrect($index)"
+                        />
+                        <input class="input" formControlName="optionText" [placeholder]="'Alternativa ' + ($index + 1)" />
+                        <button
+                          type="button"
+                          class="row-action row-action--danger"
+                          aria-label="Eliminar alternativa"
+                          [disabled]="optionsArray.length <= 2"
+                          (click)="removeOption($index)"
+                        >
+                          <span class="material-icons">close</span>
+                        </button>
+                      </div>
+                    }
+                    <button type="button" class="btn btn-ghost btn-sm option-editor__add" (click)="addOption()">
+                      <span class="material-icons">add</span> Agregar alternativa
+                    </button>
+                  </div>
+                </div>
+              }
             </div>
 
             @if (questionError()) {
@@ -665,21 +724,18 @@ interface EvaluationLike {
           </header>
 
           <form [formGroup]="assignForm" (ngSubmit)="submitAssign()" class="modal__body">
-            <p class="modal__text">Selecciona el grado y la sección que rendirán esta evaluación.</p>
+            <p class="modal__text">Selecciona una de tus secciones con estudiantes registrados.</p>
             <div class="form-grid">
-              <div class="form-group">
-                <label class="form-label" for="grade">Grado</label>
-                <select id="grade" class="select" formControlName="grade">
-                  @for (g of gradeOptions(); track g) {
-                    <option [value]="g">{{ g }}° de secundaria</option>
-                  }
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="section">Sección</label>
-                <select id="section" class="select" formControlName="section">
-                  @for (s of sectionOptions(); track s) {
-                    <option [value]="s">Sección {{ s }}</option>
+              <div class="form-group form-group--full">
+                <label class="form-label" for="sectionKey">Sección</label>
+                <select
+                  id="sectionKey"
+                  class="select"
+                  formControlName="sectionKey"
+                  [disabled]="sectionOptions().length === 0"
+                >
+                  @for (option of sectionOptions(); track option.key) {
+                    <option [value]="option.key">{{ option.label }}</option>
                   }
                 </select>
               </div>
@@ -692,6 +748,13 @@ interface EvaluationLike {
                 <input id="dueAt" class="input" type="datetime-local" formControlName="dueAt" />
               </div>
             </div>
+
+            @if (sectionOptions().length === 0) {
+              <div class="alert alert-info modal__note">
+                <span class="material-icons">info</span>
+                Aún no tienes secciones con estudiantes registrados.
+              </div>
+            }
 
             @if (assignTargetAssignments().length > 0) {
               <div class="assignment-list assignment-list--compact">
@@ -715,7 +778,7 @@ interface EvaluationLike {
               <button type="button" class="btn btn-secondary" (click)="closeAssign()" [disabled]="assigning()">
                 Cancelar
               </button>
-              <button type="submit" class="btn btn-primary" [disabled]="assigning()">
+              <button type="submit" class="btn btn-primary" [disabled]="assigning() || sectionOptions().length === 0">
                 {{ assigning() ? 'Asignando…' : 'Asignar' }}
               </button>
             </div>
@@ -835,9 +898,6 @@ export class TeacherEvaluationsComponent {
     { value: 'ARCHIVED', label: 'Archivadas' },
   ];
 
-  private readonly defaultGrades = ['1', '2', '3', '4', '5'];
-  private readonly defaultSections = ['A', 'B', 'C', 'D'];
-
   // Estado de datos
   readonly evaluations = signal<EvaluationResponse[]>([]);
   readonly loading = signal<boolean>(false);
@@ -863,6 +923,8 @@ export class TeacherEvaluationsComponent {
   readonly questionMode = signal<FormMode>('create');
   readonly savingQuestion = signal<boolean>(false);
   readonly questionError = signal<string | null>(null);
+  /** Tipo de pregunta seleccionado en el modal; controla qué campos se muestran. */
+  readonly questionType = signal<QuestionType>('MULTIPLE_CHOICE');
   private readonly questionEvaluationId = signal<number | null>(null);
   private readonly editingQuestionId = signal<number | null>(null);
   private readonly editingQuestionOrder = signal<number | null>(null);
@@ -888,18 +950,9 @@ export class TeacherEvaluationsComponent {
   readonly actionLoading = signal<boolean>(false);
   readonly actionError = signal<string | null>(null);
 
-  // Opciones de grado/sección derivadas de los estudiantes del docente
-  private readonly studentGrades = signal<string[]>([]);
-  private readonly studentSections = signal<string[]>([]);
-
-  readonly gradeOptions = computed<string[]>(() => {
-    const fromStudents = this.studentGrades();
-    return fromStudents.length > 0 ? fromStudents : this.defaultGrades;
-  });
-  readonly sectionOptions = computed<string[]>(() => {
-    const fromStudents = this.studentSections();
-    return fromStudents.length > 0 ? fromStudents : this.defaultSections;
-  });
+  // Opciones de sección derivadas de las combinaciones reales de estudiantes del docente.
+  private readonly studentSectionOptions = signal<SectionOption[]>([]);
+  readonly sectionOptions = computed<SectionOption[]>(() => this.studentSectionOptions());
 
   readonly form: FormGroup = this.fb.group({
     title: ['', [Validators.required, Validators.maxLength(150)]],
@@ -917,14 +970,16 @@ export class TeacherEvaluationsComponent {
 
   readonly questionForm: FormGroup = this.fb.group({
     questionText: ['', [Validators.required]],
+    questionType: ['MULTIPLE_CHOICE' as QuestionType],
     points: [1, [Validators.required, Validators.min(1)]],
     explanation: [''],
+    required: [true],
+    expectedAnswer: [''],
     options: this.fb.array([this.buildOption(), this.buildOption()]),
   });
 
   readonly assignForm: FormGroup = this.fb.group({
-    grade: ['1', [Validators.required]],
-    section: ['A', [Validators.required]],
+    sectionKey: ['', [Validators.required]],
     startAt: [''],
     dueAt: [''],
   });
@@ -990,12 +1045,10 @@ export class TeacherEvaluationsComponent {
     }
     this.userManagementService.listStudentsByTeacher(teacherId).subscribe({
       next: (students) => {
-        this.studentGrades.set([...new Set(students.map((s) => s.grade))].sort());
-        this.studentSections.set([...new Set(students.map((s) => s.section))].sort());
+        this.studentSectionOptions.set(buildSectionOptions(students));
       },
       error: () => {
-        this.studentGrades.set([]);
-        this.studentSections.set([]);
+        this.studentSectionOptions.set([]);
       },
     });
   }
@@ -1174,6 +1227,14 @@ export class TeacherEvaluationsComponent {
     });
   }
 
+  /** Sincroniza la señal de tipo con el selector para mostrar los campos correctos. */
+  onQuestionTypeChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value as QuestionType;
+    this.questionType.set(value);
+    this.questionForm.get('questionType')?.setValue(value);
+    this.questionError.set(null);
+  }
+
   openQuestionCreate(evaluation: EvaluationLike): void {
     if (evaluation.status === 'ARCHIVED') {
       return;
@@ -1194,10 +1255,14 @@ export class TeacherEvaluationsComponent {
     this.editingQuestionOrder.set(question.orderIndex);
     this.questionError.set(null);
 
+    this.questionType.set(question.questionType);
     this.questionForm.reset({
       questionText: question.questionText,
+      questionType: question.questionType,
       points: question.points,
       explanation: question.explanation ?? '',
+      required: question.required ?? true,
+      expectedAnswer: question.expectedAnswer ?? '',
     });
     const array = this.optionsArray;
     array.clear();
@@ -1205,17 +1270,25 @@ export class TeacherEvaluationsComponent {
       .slice()
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .forEach((opt) => array.push(this.buildOption(opt.optionText, opt.correct)));
-    if (array.length < 2) {
-      while (array.length < 2) {
-        array.push(this.buildOption());
-      }
+    // Las preguntas abiertas no tienen alternativas, pero el FormArray necesita el mínimo
+    // por si el docente cambia el tipo a opción múltiple durante la edición.
+    while (array.length < 2) {
+      array.push(this.buildOption());
     }
 
     this.questionModalOpen.set(true);
   }
 
   private resetQuestionForm(): void {
-    this.questionForm.reset({ questionText: '', points: 1, explanation: '' });
+    this.questionType.set('MULTIPLE_CHOICE');
+    this.questionForm.reset({
+      questionText: '',
+      questionType: 'MULTIPLE_CHOICE',
+      points: 1,
+      explanation: '',
+      required: true,
+      expectedAnswer: '',
+    });
     const array = this.optionsArray;
     array.clear();
     array.push(this.buildOption());
@@ -1239,47 +1312,68 @@ export class TeacherEvaluationsComponent {
     }
 
     const raw = this.questionForm.getRawValue();
-    const options = (raw.options as { optionText: string; correct: boolean }[])
-      .map((o, i) => ({
-        optionText: (o.optionText ?? '').trim(),
-        correct: o.correct === true,
-        orderIndex: i,
-      }))
-      .filter((o) => o.optionText.length > 0);
+    const type = (raw.questionType ?? 'MULTIPLE_CHOICE') as QuestionType;
 
-    // Validaciones de negocio de la pregunta.
+    // Validación común: el enunciado es obligatorio para ambos tipos.
     if (!(raw.questionText ?? '').trim()) {
       this.questionForm.markAllAsTouched();
       return;
     }
-    if (options.length < 2) {
-      this.questionError.set('La pregunta debe tener al menos dos alternativas con texto.');
-      return;
-    }
-    const correctCount = options.filter((o) => o.correct).length;
-    if (correctCount === 0) {
-      this.questionError.set('Debes marcar una alternativa como correcta.');
-      return;
-    }
-    if (correctCount > 1) {
-      this.questionError.set('Solo puede haber una alternativa correcta.');
-      return;
-    }
 
-    // Reasignar orderIndex consecutivo tras el filtrado.
-    const normalizedOptions = options.map((o, i) => ({ ...o, orderIndex: i }));
+    const orderIndex =
+      this.questionMode() === 'edit'
+        ? this.editingQuestionOrder() ?? 0
+        : this.detailEvaluation()?.questions.length ?? 0;
 
-    const request: CreateQuestionRequest = {
-      questionText: (raw.questionText ?? '').trim(),
-      questionType: 'MULTIPLE_CHOICE',
-      points: Number(raw.points),
-      explanation: emptyToUndefined(raw.explanation),
-      orderIndex:
-        this.questionMode() === 'edit'
-          ? this.editingQuestionOrder() ?? 0
-          : this.detailEvaluation()?.questions.length ?? 0,
-      options: normalizedOptions,
-    };
+    let request: CreateQuestionRequest;
+
+    if (type === 'OPEN_TEXT') {
+      // Pregunta abierta: sin alternativas, con criterio opcional visible solo para el docente.
+      request = {
+        questionText: (raw.questionText ?? '').trim(),
+        questionType: 'OPEN_TEXT',
+        points: Number(raw.points),
+        explanation: emptyToUndefined(raw.explanation),
+        expectedAnswer: emptyToUndefined(raw.expectedAnswer),
+        required: raw.required === true,
+        orderIndex,
+      };
+    } else {
+      const options = (raw.options as { optionText: string; correct: boolean }[])
+        .map((o, i) => ({
+          optionText: (o.optionText ?? '').trim(),
+          correct: o.correct === true,
+          orderIndex: i,
+        }))
+        .filter((o) => o.optionText.length > 0);
+
+      if (options.length < 2) {
+        this.questionError.set('La pregunta debe tener al menos dos alternativas con texto.');
+        return;
+      }
+      const correctCount = options.filter((o) => o.correct).length;
+      if (correctCount === 0) {
+        this.questionError.set('Debes marcar una alternativa como correcta.');
+        return;
+      }
+      if (correctCount > 1) {
+        this.questionError.set('Solo puede haber una alternativa correcta.');
+        return;
+      }
+
+      // Reasignar orderIndex consecutivo tras el filtrado.
+      const normalizedOptions = options.map((o, i) => ({ ...o, orderIndex: i }));
+
+      request = {
+        questionText: (raw.questionText ?? '').trim(),
+        questionType: 'MULTIPLE_CHOICE',
+        points: Number(raw.points),
+        explanation: emptyToUndefined(raw.explanation),
+        required: raw.required === true,
+        orderIndex,
+        options: normalizedOptions,
+      };
+    }
 
     this.savingQuestion.set(true);
     this.questionError.set(null);
@@ -1356,9 +1450,9 @@ export class TeacherEvaluationsComponent {
       return;
     }
     this.assignError.set(null);
+    const sections = this.sectionOptions();
     this.assignForm.reset({
-      grade: this.gradeOptions()[0] ?? '1',
-      section: this.sectionOptions()[0] ?? 'A',
+      sectionKey: sections[0]?.key ?? '',
       startAt: '',
       dueAt: '',
     });
@@ -1393,6 +1487,11 @@ export class TeacherEvaluationsComponent {
     }
 
     const raw = this.assignForm.getRawValue();
+    const selectedSection = this.sectionOptions().find((option) => option.key === raw.sectionKey);
+    if (selectedSection === undefined) {
+      this.assignError.set('Aún no tienes secciones con estudiantes registrados.');
+      return;
+    }
     const startAt = emptyToNull(raw.startAt);
     const dueAt = emptyToNull(raw.dueAt);
 
@@ -1404,8 +1503,8 @@ export class TeacherEvaluationsComponent {
     this.assigning.set(true);
     this.assignError.set(null);
     const request: AssignEvaluationRequest = {
-      grade: raw.grade,
-      section: raw.section,
+      grade: selectedSection.grade,
+      section: selectedSection.section,
       startAt,
       dueAt,
     };
@@ -1679,6 +1778,24 @@ function toPositiveOrNull(value: number | string | null | undefined): number | n
   }
   const num = Number(value);
   return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+function buildSectionOptions(students: readonly { grade: string; section: string }[]): SectionOption[] {
+  const sections = new Map<string, SectionOption>();
+  for (const student of students) {
+    const grade = student.grade.trim();
+    const section = student.section.trim().toUpperCase();
+    if (grade.length === 0 || section.length === 0) {
+      continue;
+    }
+    const key = `${grade}|${section}`;
+    sections.set(key, { key, grade, section, label: `${grade}° ${section}` });
+  }
+  return [...sections.values()].sort(
+    (a, b) =>
+      Number(a.grade) - Number(b.grade) ||
+      a.section.localeCompare(b.section, 'es')
+  );
 }
 
 function buildInitials(name: string): string {

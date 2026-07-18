@@ -12,7 +12,7 @@ import { UsageModule } from './shared/models';
   styleUrl: './app.scss',
 })
 export class App {
-  protected readonly title = signal('chemical-lab-frontend');
+  protected readonly title = signal('Chemical Lab');
 
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
@@ -55,7 +55,12 @@ function mapUrlToModule(url: string): UsageModule | null {
   if (path === '/evaluations/results' || path.startsWith('/teacher/results')) return 'RESULTS';
   if (path === '/evaluations') return 'EVALUATIONS';
   if (path === '/admin/users') return 'USERS';
-  if (path === '/admin/academic-supervision' || path === '/admin/logs' || path === '/admin/usage-metrics') {
+  if (
+    path === '/admin/academic-supervision' ||
+    path === '/admin/logs' ||
+    path === '/admin/usage-metrics' ||
+    path === '/admin/student-usage-records'
+  ) {
     return 'ADMIN';
   }
   if (path === '/admin/system-status') return 'SYSTEM_STATUS';

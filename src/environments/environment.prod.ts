@@ -15,5 +15,9 @@
 // No se requiere dominio público. El sistema funciona en red local o institucional.
 export const environment = {
   production: true,
-  apiUrl: 'https://chemicallab-backend.onrender.com/api'
+  apiUrl: 'https://chemicallab-backend.onrender.com/api',
+  // Endpoint SockJS/STOMP de la pizarra interactiva. Debe apuntar al mismo backend que
+  // apiUrl y a la ruta SockJS del backend (/ws). Ajustar junto con apiUrl según el escenario
+  // de despliegue (servidor institucional en LAN, reverse proxy o nube).
+  wsUrl: 'https://chemicallab-backend.onrender.com/ws'
 };

@@ -14,6 +14,24 @@ export interface AuthResponse {
   readonly userId: number;
   readonly username: string;
   readonly email: string | null;
+  readonly names: string | null;
+  readonly lastNames: string | null;
+  readonly role: UserRole;
+  readonly active: boolean;
+  readonly temporaryPassword: boolean;
+}
+
+/**
+ * Datos del usuario autenticado devueltos por GET /api/auth/me. No incluye el token
+ * (que ya obra en poder del cliente) ni información sensible (hash de contraseña). Sirve
+ * para validar contra el backend que la sesión almacenada sigue siendo válida y vigente.
+ */
+export interface CurrentUser {
+  readonly userId: number;
+  readonly username: string;
+  readonly email: string | null;
+  readonly names: string | null;
+  readonly lastNames: string | null;
   readonly role: UserRole;
   readonly active: boolean;
   readonly temporaryPassword: boolean;

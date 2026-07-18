@@ -6,6 +6,7 @@ import { UserManagementService } from '../../core/services/user-management.servi
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { TEACHER_NAV_ITEMS } from '../../shared/components/sidebar/teacher-nav';
 import { AuthResponse } from '../../shared/models';
+import { buildInitials, firstNameAndLastName } from '../../shared/utils/display-format.util';
 
 interface MetricCard {
   readonly id: string;
@@ -108,16 +109,11 @@ export class TeacherDashboardComponent {
 
   private readonly storedUser = signal<AuthResponse | null>(this.readStoredUser());
 
-  readonly userName = computed<string>(() => this.storedUser()?.username ?? 'Docente');
+  readonly userName = computed<string>(() =>
+    firstNameAndLastName(this.storedUser(), this.storedUser()?.username ?? 'Docente')
+  );
 
-  readonly firstName = computed<string>(() => {
-    const name = this.userName().trim();
-    if (name.length === 0) {
-      return '';
-    }
-    const space = name.indexOf(' ');
-    return space === -1 ? name : name.substring(0, space);
-  });
+  readonly firstName = computed<string>(() => firstNameAndLastName(this.storedUser(), 'Docente'));
 
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
@@ -166,6 +162,15 @@ export class TeacherDashboardComponent {
       tone: 'green',
       cta: 'Ver resultados',
       route: '/teacher/results',
+    },
+    {
+      id: 'whiteboards',
+      title: 'Pizarra interactiva',
+      description: 'Dibuja y explica conceptos en vivo con tu clase.',
+      icon: 'draw',
+      tone: 'blue',
+      cta: 'Abrir pizarra',
+      route: '/teacher/whiteboards',
     },
     {
       id: 'compounds',
@@ -220,10 +225,10 @@ export class TeacherDashboardComponent {
   }
 
   private readStoredUser(): AuthResponse | null {
-    if (typeof localStorage === 'undefined') {
+    if (typeof sessionStorage === 'undefined') {
       return null;
     }
-    const raw = localStorage.getItem('auth_user');
+    const raw = sessionStorage.getItem('auth_user');
     if (raw === null) {
       return null;
     }
@@ -235,13 +240,3 @@ export class TeacherDashboardComponent {
   }
 }
 
-function buildInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter((p) => p.length > 0);
-  if (parts.length === 0) {
-    return '??';
-  }
-  if (parts.length === 1) {
-    return parts[0].substring(0, 2).toUpperCase();
-  }
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}

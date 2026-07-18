@@ -26,7 +26,7 @@ export interface SidebarNavItem {
           <span class="material-icons">science</span>
         </div>
         <div class="sidebar__brand-text">
-          <div class="sidebar__brand-title">QuímicaLab</div>
+          <div class="sidebar__brand-title">ChemicalLab</div>
           <div class="sidebar__brand-subtitle">Laboratorio Digital</div>
         </div>
       </div>
@@ -93,9 +93,19 @@ export class SidebarComponent {
   }
 
   isActive(route: string): boolean {
+    if (route === '') {
+      return false;
+    }
+
     const current = this.activeUrl();
     if (route === '/') {
       return current === '/' || current === '';
+    }
+    if (route === '/evaluations') {
+      return (
+        current === '/evaluations' ||
+        (current.startsWith('/evaluations/') && !current.startsWith('/evaluations/results'))
+      );
     }
     return current === route || current.startsWith(route + '/');
   }

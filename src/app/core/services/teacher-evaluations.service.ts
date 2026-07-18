@@ -4,15 +4,21 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   AssignEvaluationRequest,
+  AttemptTraceabilityResponse,
+  CreateAdjustmentRequest,
   CreateEvaluationRequest,
   CreateQuestionRequest,
   EvaluationAssignmentResponse,
   EvaluationDetailResponse,
   EvaluationResponse,
+  ManualGradeRequest,
+  PendingReviewAttemptResponse,
   QuestionResponse,
   TeacherAttemptResultDetailResponse,
+  TeacherAttemptReviewResponse,
   TeacherEvaluationResultsResponse,
   TeacherEvaluationResultsSummaryResponse,
+  UpdateAttemptFeedbackRequest,
   UpdateEvaluationRequest,
   UpdateQuestionRequest,
 } from '../../shared/models';
@@ -147,6 +153,93 @@ export class TeacherEvaluationsService {
   ): Observable<TeacherAttemptResultDetailResponse> {
     return this.http.get<TeacherAttemptResultDetailResponse>(
       `${this.baseUrl}/attempts/${attemptId}/result`
+    );
+  }
+
+  /**
+   * Trazabilidad de un intento: resumen (tiempo usado, estado final, salidas/regresos de
+   * pestaña, intentos de salida, herramientas consultadas) y línea de tiempo de eventos.
+   * Solo de intentos de evaluaciones propias; no incluye respuestas ni claves.
+   */
+  getAttemptTraceability(attemptId: number): Observable<AttemptTraceabilityResponse> {
+    return this.http.get<AttemptTraceabilityResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/traceability`
+    );
+  }
+
+  // ─── Revisión manual de preguntas abiertas ─────────────────────────────────
+
+  /** Bandeja de intentos del docente pendientes de revisión manual. */
+  listPendingManualReview(): Observable<PendingReviewAttemptResponse[]> {
+    return this.http.get<PendingReviewAttemptResponse[]>(`${this.baseUrl}/manual-review`);
+  }
+
+  /** Detalle de un intento para revisar sus respuestas abiertas. */
+  getAttemptReview(attemptId: number): Observable<TeacherAttemptReviewResponse> {
+    return this.http.get<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/review`
+    );
+  }
+
+  /** Asigna puntaje y retroalimentación a una respuesta abierta. */
+  gradeOpenAnswer(
+    attemptId: number,
+    answerId: number,
+    request: ManualGradeRequest
+  ): Observable<TeacherAttemptReviewResponse> {
+    return this.http.patch<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/answers/${answerId}/manual-grade`,
+      request
+    );
+  }
+
+  /** Marca la revisión como completa y recalcula la nota (no cierra la calificación). */
+  completeReview(attemptId: number): Observable<TeacherAttemptReviewResponse> {
+    return this.http.patch<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/complete-review`,
+      {}
+    );
+  }
+
+  // ─── Ajustes manuales, retroalimentación general y cierre ───────────────────
+
+  /** Agrega un ajuste manual de puntaje (bonificación/penalización) al intento. */
+  addAdjustment(
+    attemptId: number,
+    request: CreateAdjustmentRequest
+  ): Observable<TeacherAttemptReviewResponse> {
+    return this.http.post<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/adjustments`,
+      request
+    );
+  }
+
+  /** Anula un ajuste manual de puntaje aplicado al intento. */
+  removeAdjustment(
+    attemptId: number,
+    adjustmentId: number
+  ): Observable<TeacherAttemptReviewResponse> {
+    return this.http.delete<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/adjustments/${adjustmentId}`
+    );
+  }
+
+  /** Guarda la retroalimentación general del intento para el estudiante. */
+  updateOverallFeedback(
+    attemptId: number,
+    request: UpdateAttemptFeedbackRequest
+  ): Observable<TeacherAttemptReviewResponse> {
+    return this.http.patch<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/feedback`,
+      request
+    );
+  }
+
+  /** Cierra la calificación del intento: fija la nota final y la deja visible al estudiante. */
+  closeGrade(attemptId: number): Observable<TeacherAttemptReviewResponse> {
+    return this.http.patch<TeacherAttemptReviewResponse>(
+      `${this.baseUrl}/attempts/${attemptId}/close-grade`,
+      {}
     );
   }
 }

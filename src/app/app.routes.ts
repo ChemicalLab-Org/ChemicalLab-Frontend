@@ -23,7 +23,6 @@ import { PeriodicTableComponent } from './features/periodic-table/periodic-table
 import { CompoundsComponent } from './features/compounds/compounds.component';
 import { ConceptsComponent } from './features/concepts/concepts.component';
 import { StudentEvaluationsComponent } from './features/student/evaluations/student-evaluations.component';
-import { StudentResultsComponent } from './features/student/evaluations/student-results.component';
 import { NotFoundComponent } from './features/not-found/not-found.component';
 
 export const routes: Routes = [
@@ -88,6 +87,26 @@ export const routes: Routes = [
     data: { roles: ['DOCENTE'] },
   },
   {
+    // Carga diferida: el editor en vivo arrastra la dependencia WebSocket/STOMP, que se
+    // mantiene fuera del bundle inicial y solo se descarga al abrir el módulo de pizarra.
+    path: 'teacher/whiteboards',
+    loadComponent: () =>
+      import('./features/teacher/whiteboards/teacher-whiteboards.component').then(
+        (m) => m.TeacherWhiteboardsComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
+    path: 'teacher/whiteboards/:id',
+    loadComponent: () =>
+      import('./features/teacher/whiteboards/teacher-whiteboard-editor.component').then(
+        (m) => m.TeacherWhiteboardEditorComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['DOCENTE'] },
+  },
+  {
     path: 'teacher/results/:evaluationId',
     component: TeacherEvaluationResultsComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
@@ -142,6 +161,17 @@ export const routes: Routes = [
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
+    // Carga diferida: mantiene el registro de uso por estudiante fuera del bundle inicial;
+    // solo se descarga cuando el administrador abre el módulo.
+    path: 'admin/student-usage-records',
+    loadComponent: () =>
+      import('./features/admin/student-usage/student-usage-records.component').then(
+        (m) => m.StudentUsageRecordsComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    data: { roles: ['ADMINISTRADOR'] },
+  },
+  {
     path: 'periodic-table',
     component: PeriodicTableComponent,
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
@@ -166,8 +196,43 @@ export const routes: Routes = [
     data: { roles: ['ESTUDIANTE'] },
   },
   {
+    // Carga diferida: la pantalla de resultados/revisión se abre bajo demanda, lo que la
+    // mantiene fuera del bundle inicial (dentro del presupuesto de 1 MB).
     path: 'evaluations/results',
-    component: StudentResultsComponent,
+    loadComponent: () =>
+      import('./features/student/evaluations/student-results.component').then(
+        (m) => m.StudentResultsComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    data: { roles: ['ESTUDIANTE'] },
+  },
+  {
+    // Carga diferida: el visor en vivo arrastra la dependencia WebSocket/STOMP, que se mantiene
+    // fuera del bundle inicial (igual que el editor docente). Las tres pantallas del estudiante
+    // se cargan bajo demanda al abrir el módulo de pizarra.
+    path: 'student/whiteboards',
+    loadComponent: () =>
+      import('./features/student/whiteboards/student-whiteboards.component').then(
+        (m) => m.StudentWhiteboardsComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    data: { roles: ['ESTUDIANTE'] },
+  },
+  {
+    path: 'student/whiteboards/:id',
+    loadComponent: () =>
+      import('./features/student/whiteboards/student-whiteboard-viewer.component').then(
+        (m) => m.StudentWhiteboardViewerComponent
+      ),
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    data: { roles: ['ESTUDIANTE'] },
+  },
+  {
+    path: 'student/whiteboards/:id/registro',
+    loadComponent: () =>
+      import('./features/student/whiteboards/student-whiteboard-record.component').then(
+        (m) => m.StudentWhiteboardRecordComponent
+      ),
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },

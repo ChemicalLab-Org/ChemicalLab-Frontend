@@ -35,7 +35,7 @@ import { AuthResponse } from '../../../shared/models';
             </svg>
           </div>
           <div>
-            <p class="brand-logo__title">QuímicaLab</p>
+            <p class="brand-logo__title">ChemicalLab</p>
             <p class="brand-logo__sub">Laboratorio digital</p>
           </div>
         </header>
@@ -66,7 +66,7 @@ import { AuthResponse } from '../../../shared/models';
         </div>
 
         <footer class="brand-footer">
-          <span>© 2026 QuímicaLab</span>
+          <span>© 2026 ChemicalLab</span>
           <span class="brand-footer__links">
             <a href="#">Soporte</a>
             <a href="#">Privacidad</a>
@@ -115,7 +115,6 @@ import { AuthResponse } from '../../../shared/models';
             <div class="field">
               <div class="field__row">
                 <label class="field__label" for="password">Contraseña</label>
-                <a class="field__link" href="#">¿Olvidaste tu contraseña?</a>
               </div>
               <div class="field__control">
                 <span class="field__icon" aria-hidden="true">
@@ -203,8 +202,13 @@ export class LoginComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
 
   ngOnInit(): void {
-    if (this.authService.isAuthenticated()) {
+    if (this.authService.hasValidSession()) {
       void this.router.navigate(['/dashboard']);
+      return;
+    }
+
+    if (this.authService.isAuthenticated()) {
+      this.authService.logout();
     }
   }
 
