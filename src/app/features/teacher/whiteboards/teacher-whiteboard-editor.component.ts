@@ -3078,10 +3078,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   /** Guarda inmediatamente el estado pendiente (al destruir el componente o al vencer el debounce). */
   private flushStateSave(): void {
-    if (this.stateSaveTimer !== null) {
-      clearTimeout(this.stateSaveTimer);
-      this.stateSaveTimer = null;
+    // Sin guardado pendiente no hay nada que persistir: evita un PUT innecesario (y, al destruir
+    // el componente por un logout, un 401 espurio si el token ya se limpió antes de la navegación).
+    if (this.stateSaveTimer === null) {
+      return;
     }
+    clearTimeout(this.stateSaveTimer);
+    this.stateSaveTimer = null;
     const session = this.session();
     if (session === null || session.status === 'CLOSED') {
       return;
