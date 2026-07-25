@@ -20,6 +20,14 @@ import {
   StudentResponse,
   UpdateStudentRequest,
 } from '../../../shared/models';
+import {
+  INSTITUTIONAL_IDENTIFIER_PATTERN,
+  PERSON_NAME_PATTERN,
+  normalizePersonName,
+  normalizeStudentCode,
+  sanitizeInstitutionalIdentifierInput,
+  sanitizePersonNameInput,
+} from '../../../shared/utils/institutional-input.util';
 
 type FormMode = 'create' | 'edit';
 type StatusFilter = 'all' | 'active' | 'inactive';
@@ -210,18 +218,20 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               <div class="form-group">
                 <label class="form-label" for="names">Nombres</label>
                 <input id="names" class="input" formControlName="names" placeholder="ej. Ana Lucía"
+                  maxlength="100" (input)="onPersonNameInput($event, 'names')"
                   [class.input-error]="isInvalid('names')" />
                 @if (isInvalid('names')) {
-                  <span class="form-error">Ingresa los nombres (máx. 100 caracteres).</span>
+                  <span class="form-error">Usa solo letras, espacios, apóstrofes o guiones (máx. 100).</span>
                 }
               </div>
 
               <div class="form-group">
                 <label class="form-label" for="lastNames">Apellidos</label>
                 <input id="lastNames" class="input" formControlName="lastNames" placeholder="ej. Mendoza"
+                  maxlength="100" (input)="onPersonNameInput($event, 'lastNames')"
                   [class.input-error]="isInvalid('lastNames')" />
                 @if (isInvalid('lastNames')) {
-                  <span class="form-error">Ingresa los apellidos (máx. 100 caracteres).</span>
+                  <span class="form-error">Usa solo letras, espacios, apóstrofes o guiones (máx. 100).</span>
                 }
               </div>
 
@@ -230,7 +240,12 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                   Código {{ formMode() === 'create' ? '(opcional)' : '' }}
                 </label>
                 <input id="studentCode" class="input text-mono" formControlName="studentCode"
-                  [placeholder]="formMode() === 'create' ? 'Se genera automáticamente' : ''" />
+                  minlength="4" maxlength="20" (input)="onStudentCodeInput($event)"
+                  [placeholder]="formMode() === 'create' ? 'Se genera automáticamente' : ''"
+                  [class.input-error]="isInvalid('studentCode')" />
+                @if (isInvalid('studentCode')) {
+                  <span class="form-error">Usa entre 4 y 20 letras o números, sin espacios ni símbolos.</span>
+                }
                 @if (formMode() === 'create') {
                   <span class="form-hint">Si lo dejas vacío, el sistema generará un código.</span>
                 }
@@ -371,9 +386,22 @@ export class TeacherStudentsComponent {
   readonly deactivating = signal<boolean>(false);
 
   readonly form: FormGroup = this.fb.group({
-    names: ['', [Validators.required, Validators.maxLength(100)]],
-    lastNames: ['', [Validators.required, Validators.maxLength(100)]],
-    studentCode: ['', [Validators.maxLength(20)]],
+    names: [
+      '',
+      [Validators.required, Validators.maxLength(100), Validators.pattern(PERSON_NAME_PATTERN)],
+    ],
+    lastNames: [
+      '',
+      [Validators.required, Validators.maxLength(100), Validators.pattern(PERSON_NAME_PATTERN)],
+    ],
+    studentCode: [
+      '',
+      [
+        Validators.minLength(4),
+        Validators.maxLength(20),
+        Validators.pattern(INSTITUTIONAL_IDENTIFIER_PATTERN),
+      ],
+    ],
     temporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
     grade: ['1', [Validators.required]],
     section: ['A', [Validators.required]],
@@ -454,6 +482,18 @@ export class TeacherStudentsComponent {
     this.statusFilter.set((event.target as HTMLSelectElement).value as StatusFilter);
   }
 
+  onPersonNameInput(event: Event, controlName: 'names' | 'lastNames'): void {
+    this.applySanitizedValue(event, controlName, sanitizePersonNameInput);
+  }
+
+  onStudentCodeInput(event: Event): void {
+    this.applySanitizedValue(
+      event,
+      'studentCode',
+      (value) => sanitizeInstitutionalIdentifierInput(value).toUpperCase()
+    );
+  }
+
   openCreate(): void {
     this.formMode.set('create');
     this.editingId.set(null);
@@ -509,12 +549,12 @@ export class TeacherStudentsComponent {
     this.saving.set(true);
     this.formError.set(null);
     const raw = this.form.getRawValue();
-    const code = (raw.studentCode ?? '').trim();
+    const code = normalizeStudentCode(raw.studentCode ?? '');
 
     if (this.formMode() === 'create') {
       const request: CreateStudentRequest = {
-        names: raw.names.trim(),
-        lastNames: raw.lastNames.trim(),
+        names: normalizePersonName(raw.names),
+        lastNames: normalizePersonName(raw.lastNames),
         temporaryPassword: raw.temporaryPassword,
         grade: raw.grade,
         section: raw.section,
@@ -532,8 +572,8 @@ export class TeacherStudentsComponent {
         return;
       }
       const request: UpdateStudentRequest = {
-        names: raw.names.trim(),
-        lastNames: raw.lastNames.trim(),
+        names: normalizePersonName(raw.names),
+        lastNames: normalizePersonName(raw.lastNames),
         grade: raw.grade,
         section: raw.section,
         active: raw.active,
@@ -545,6 +585,20 @@ export class TeacherStudentsComponent {
           this.onSaveError(err, 'No se pudo actualizar el estudiante.'),
       });
     }
+  }
+
+  private applySanitizedValue(
+    event: Event,
+    controlName: 'names' | 'lastNames' | 'studentCode',
+    sanitizer: (value: string) => string
+  ): void {
+    const input = event.target as HTMLInputElement;
+    const sanitized = sanitizer(input.value);
+    if (sanitized === input.value) {
+      return;
+    }
+    input.value = sanitized;
+    this.form.controls[controlName].setValue(sanitized);
   }
 
   askDeactivate(student: StudentResponse): void {
