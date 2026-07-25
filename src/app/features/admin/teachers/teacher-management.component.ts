@@ -20,6 +20,14 @@ import {
   ResetPasswordRequest,
   TeacherResponse,
 } from '../../../shared/models';
+import {
+  INSTITUTIONAL_IDENTIFIER_PATTERN,
+  PERSON_NAME_PATTERN,
+  normalizeInstitutionalIdentifier,
+  normalizePersonName,
+  sanitizeInstitutionalIdentifierInput,
+  sanitizePersonNameInput,
+} from '../../../shared/utils/institutional-input.util';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -191,27 +199,30 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               <div class="form-group">
                 <label class="form-label" for="names">Nombres</label>
                 <input id="names" class="input" formControlName="names" placeholder="ej. Pedro"
+                  maxlength="100" (input)="onPersonNameInput($event, 'names')"
                   [class.input-error]="isInvalid('names')" />
                 @if (isInvalid('names')) {
-                  <span class="form-error">Ingresa los nombres (máx. 100 caracteres).</span>
+                  <span class="form-error">Usa solo letras, espacios, apóstrofes o guiones (máx. 100).</span>
                 }
               </div>
 
               <div class="form-group">
                 <label class="form-label" for="lastNames">Apellidos</label>
                 <input id="lastNames" class="input" formControlName="lastNames" placeholder="ej. Martínez"
+                  maxlength="100" (input)="onPersonNameInput($event, 'lastNames')"
                   [class.input-error]="isInvalid('lastNames')" />
                 @if (isInvalid('lastNames')) {
-                  <span class="form-error">Ingresa los apellidos (máx. 100 caracteres).</span>
+                  <span class="form-error">Usa solo letras, espacios, apóstrofes o guiones (máx. 100).</span>
                 }
               </div>
 
               <div class="form-group form-group--full">
                 <label class="form-label" for="username">Usuario</label>
-                <input id="username" class="input text-mono" formControlName="username" placeholder="ej. pedro.martinez"
+                <input id="username" class="input text-mono" formControlName="username" placeholder="ej. pedromartinez"
+                  minlength="4" maxlength="50" (input)="onUsernameInput($event)"
                   [class.input-error]="isInvalid('username')" />
                 @if (isInvalid('username')) {
-                  <span class="form-error">El usuario debe tener entre 4 y 50 caracteres.</span>
+                  <span class="form-error">Usa entre 4 y 50 letras o números, sin espacios ni símbolos.</span>
                 } @else {
                   <span class="form-hint">Se usará para iniciar sesión.</span>
                 }
@@ -388,9 +399,23 @@ export class TeacherManagementComponent {
   readonly resetError = signal<string | null>(null);
 
   readonly form: FormGroup = this.fb.group({
-    names: ['', [Validators.required, Validators.maxLength(100)]],
-    lastNames: ['', [Validators.required, Validators.maxLength(100)]],
-    username: ['', [Validators.required, Validators.minLength(4), Validators.maxLength(50)]],
+    names: [
+      '',
+      [Validators.required, Validators.maxLength(100), Validators.pattern(PERSON_NAME_PATTERN)],
+    ],
+    lastNames: [
+      '',
+      [Validators.required, Validators.maxLength(100), Validators.pattern(PERSON_NAME_PATTERN)],
+    ],
+    username: [
+      '',
+      [
+        Validators.required,
+        Validators.minLength(4),
+        Validators.maxLength(50),
+        Validators.pattern(INSTITUTIONAL_IDENTIFIER_PATTERN),
+      ],
+    ],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(100)]],
     temporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
   });
@@ -448,6 +473,14 @@ export class TeacherManagementComponent {
     this.statusFilter.set((event.target as HTMLSelectElement).value as StatusFilter);
   }
 
+  onPersonNameInput(event: Event, controlName: 'names' | 'lastNames'): void {
+    this.applySanitizedValue(event, controlName, sanitizePersonNameInput);
+  }
+
+  onUsernameInput(event: Event): void {
+    this.applySanitizedValue(event, 'username', sanitizeInstitutionalIdentifierInput);
+  }
+
   openCreate(): void {
     this.formError.set(null);
     this.form.reset({
@@ -475,9 +508,9 @@ export class TeacherManagementComponent {
     this.formError.set(null);
     const raw = this.form.getRawValue();
     const request: CreateTeacherRequest = {
-      names: raw.names.trim(),
-      lastNames: raw.lastNames.trim(),
-      username: raw.username.trim(),
+      names: normalizePersonName(raw.names),
+      lastNames: normalizePersonName(raw.lastNames),
+      username: normalizeInstitutionalIdentifier(raw.username),
       email: raw.email.trim(),
       temporaryPassword: raw.temporaryPassword,
     };
@@ -494,6 +527,20 @@ export class TeacherManagementComponent {
         this.formError.set(this.extractError(err, 'No se pudo registrar el docente.'));
       },
     });
+  }
+
+  private applySanitizedValue(
+    event: Event,
+    controlName: 'names' | 'lastNames' | 'username',
+    sanitizer: (value: string) => string
+  ): void {
+    const input = event.target as HTMLInputElement;
+    const sanitized = sanitizer(input.value);
+    if (sanitized === input.value) {
+      return;
+    }
+    input.value = sanitized;
+    this.form.controls[controlName].setValue(sanitized);
   }
 
   askDeactivate(teacher: TeacherResponse): void {

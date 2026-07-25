@@ -23,6 +23,15 @@ import {
   UpdateUserRequest,
   UserRole,
 } from '../../../shared/models';
+import {
+  INSTITUTIONAL_IDENTIFIER_PATTERN,
+  PERSON_NAME_PATTERN,
+  normalizeInstitutionalIdentifier,
+  normalizePersonName,
+  normalizeStudentCode,
+  sanitizeInstitutionalIdentifierInput,
+  sanitizePersonNameInput,
+} from '../../../shared/utils/institutional-input.util';
 
 type UserFilter = 'all' | UserRole | 'active' | 'inactive';
 type FormMode = 'create' | 'edit';
@@ -362,17 +371,19 @@ interface RoleOption {
                 <div class="form-group">
                   <label class="form-label" for="names">Nombres</label>
                   <input id="names" class="input" formControlName="names" placeholder="ej. Pedro"
+                    maxlength="100" (input)="onPersonNameInput($event, 'names')"
                     [class.input-error]="isInvalid('names')" />
                   @if (isInvalid('names')) {
-                    <span class="form-error">Ingresa los nombres (máx. 100 caracteres).</span>
+                    <span class="form-error">Usa solo letras, espacios, apóstrofes o guiones (máx. 100).</span>
                   }
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="lastNames">Apellidos</label>
                   <input id="lastNames" class="input" formControlName="lastNames" placeholder="ej. Martínez"
+                    maxlength="100" (input)="onPersonNameInput($event, 'lastNames')"
                     [class.input-error]="isInvalid('lastNames')" />
                   @if (isInvalid('lastNames')) {
-                    <span class="form-error">Ingresa los apellidos (máx. 100 caracteres).</span>
+                    <span class="form-error">Usa solo letras, espacios, apóstrofes o guiones (máx. 100).</span>
                   }
                 </div>
               }
@@ -381,10 +392,11 @@ interface RoleOption {
               @if (showUsername()) {
                 <div class="form-group form-group--full">
                   <label class="form-label" for="username">Usuario</label>
-                  <input id="username" class="input text-mono" formControlName="username" placeholder="ej. pedro.martinez"
+                  <input id="username" class="input text-mono" formControlName="username" placeholder="ej. pedromartinez"
+                    minlength="4" maxlength="50" (input)="onInstitutionalIdInput($event, 'username')"
                     [class.input-error]="isInvalid('username')" />
                   @if (isInvalid('username')) {
-                    <span class="form-error">El usuario debe tener entre 4 y 50 caracteres.</span>
+                    <span class="form-error">Usa entre 4 y 50 letras o números, sin espacios ni símbolos.</span>
                   } @else {
                     <span class="form-hint">Se usará para iniciar sesión.</span>
                   }
@@ -409,9 +421,10 @@ interface RoleOption {
                   <div class="form-group form-group--full">
                     <label class="form-label" for="studentCode">Código de estudiante (opcional)</label>
                     <input id="studentCode" class="input text-mono" formControlName="studentCode"
+                      minlength="4" maxlength="20" (input)="onInstitutionalIdInput($event, 'studentCode')"
                       placeholder="Se genera automáticamente si lo dejas vacío" [class.input-error]="isInvalid('studentCode')" />
                     @if (isInvalid('studentCode')) {
-                      <span class="form-error">El código no puede superar 20 caracteres.</span>
+                      <span class="form-error">Usa entre 4 y 20 letras o números, sin espacios ni símbolos.</span>
                     } @else {
                       <span class="form-hint">También será su usuario de inicio de sesión.</span>
                     }
@@ -799,6 +812,14 @@ export class AdminUsersComponent {
     this.form.controls['section'].setValue(normalized);
   }
 
+  onPersonNameInput(event: Event, controlName: 'names' | 'lastNames'): void {
+    this.applySanitizedValue(event, controlName, sanitizePersonNameInput);
+  }
+
+  onInstitutionalIdInput(event: Event, controlName: 'username' | 'studentCode'): void {
+    this.applySanitizedValue(event, controlName, sanitizeInstitutionalIdentifierInput);
+  }
+
   // ===================== Crear / editar usuario =====================
 
   openCreate(): void {
@@ -948,26 +969,26 @@ export class AdminUsersComponent {
     if (role === 'ADMINISTRADOR') {
       return {
         role,
-        username: (v.username ?? '').trim(),
+        username: normalizeInstitutionalIdentifier(v.username ?? ''),
         email: trimToUndefined(v.email),
       };
     }
     if (role === 'DOCENTE') {
       return {
         role,
-        names: (v.names ?? '').trim(),
-        lastNames: (v.lastNames ?? '').trim(),
-        username: (v.username ?? '').trim(),
+        names: normalizePersonName(v.names ?? ''),
+        lastNames: normalizePersonName(v.lastNames ?? ''),
+        username: normalizeInstitutionalIdentifier(v.username ?? ''),
         email: trimToUndefined(v.email),
       };
     }
     return {
       role,
-      names: (v.names ?? '').trim(),
-      lastNames: (v.lastNames ?? '').trim(),
+      names: normalizePersonName(v.names ?? ''),
+      lastNames: normalizePersonName(v.lastNames ?? ''),
       grade: (v.grade ?? '').trim(),
       section: (v.section ?? '').trim().toUpperCase(),
-      studentCode: trimToUndefined(v.studentCode),
+      studentCode: trimToUndefined(normalizeStudentCode(v.studentCode ?? '')),
       teacherUserId: v.teacherUserId ?? undefined,
     };
   }
@@ -979,14 +1000,14 @@ export class AdminUsersComponent {
     }
     if (role === 'DOCENTE') {
       return {
-        names: (v.names ?? '').trim(),
-        lastNames: (v.lastNames ?? '').trim(),
+        names: normalizePersonName(v.names ?? ''),
+        lastNames: normalizePersonName(v.lastNames ?? ''),
         email: trimToUndefined(v.email),
       };
     }
     return {
-      names: (v.names ?? '').trim(),
-      lastNames: (v.lastNames ?? '').trim(),
+      names: normalizePersonName(v.names ?? ''),
+      lastNames: normalizePersonName(v.lastNames ?? ''),
       grade: (v.grade ?? '').trim(),
       section: (v.section ?? '').trim().toUpperCase(),
       teacherUserId: v.teacherUserId ?? undefined,
@@ -996,11 +1017,15 @@ export class AdminUsersComponent {
   /** Ajusta los validadores requeridos según el rol y el modo (crear/editar). */
   private configureValidators(role: UserRole, mode: FormMode): void {
     const required: Record<string, ValidatorFn[]> = {
-      names: [Validators.maxLength(100)],
-      lastNames: [Validators.maxLength(100)],
-      username: [Validators.maxLength(50)],
+      names: [Validators.maxLength(100), Validators.pattern(PERSON_NAME_PATTERN)],
+      lastNames: [Validators.maxLength(100), Validators.pattern(PERSON_NAME_PATTERN)],
+      username: [Validators.maxLength(50), Validators.pattern(INSTITUTIONAL_IDENTIFIER_PATTERN)],
       email: [Validators.email, Validators.maxLength(100)],
-      studentCode: [Validators.maxLength(20)],
+      studentCode: [
+        Validators.minLength(4),
+        Validators.maxLength(20),
+        Validators.pattern(INSTITUTIONAL_IDENTIFIER_PATTERN),
+      ],
       grade: [Validators.maxLength(20)],
       section: [Validators.maxLength(20)],
       teacherUserId: [],
@@ -1008,17 +1033,43 @@ export class AdminUsersComponent {
 
     if (role === 'ADMINISTRADOR') {
       if (mode === 'create') {
-        required['username'] = [Validators.required, Validators.minLength(4), Validators.maxLength(50)];
+        required['username'] = [
+          Validators.required,
+          Validators.minLength(4),
+          Validators.maxLength(50),
+          Validators.pattern(INSTITUTIONAL_IDENTIFIER_PATTERN),
+        ];
       }
     } else if (role === 'DOCENTE') {
-      required['names'] = [Validators.required, Validators.maxLength(100)];
-      required['lastNames'] = [Validators.required, Validators.maxLength(100)];
+      required['names'] = [
+        Validators.required,
+        Validators.maxLength(100),
+        Validators.pattern(PERSON_NAME_PATTERN),
+      ];
+      required['lastNames'] = [
+        Validators.required,
+        Validators.maxLength(100),
+        Validators.pattern(PERSON_NAME_PATTERN),
+      ];
       if (mode === 'create') {
-        required['username'] = [Validators.required, Validators.minLength(4), Validators.maxLength(50)];
+        required['username'] = [
+          Validators.required,
+          Validators.minLength(4),
+          Validators.maxLength(50),
+          Validators.pattern(INSTITUTIONAL_IDENTIFIER_PATTERN),
+        ];
       }
     } else {
-      required['names'] = [Validators.required, Validators.maxLength(100)];
-      required['lastNames'] = [Validators.required, Validators.maxLength(100)];
+      required['names'] = [
+        Validators.required,
+        Validators.maxLength(100),
+        Validators.pattern(PERSON_NAME_PATTERN),
+      ];
+      required['lastNames'] = [
+        Validators.required,
+        Validators.maxLength(100),
+        Validators.pattern(PERSON_NAME_PATTERN),
+      ];
       // Grado: entero del 1 al 5. Sección: exactamente una letra (A-Z).
       required['grade'] = [Validators.required, Validators.pattern(/^[1-5]$/)];
       required['section'] = [Validators.required, Validators.pattern(/^[A-Za-z]$/)];
@@ -1030,6 +1081,20 @@ export class AdminUsersComponent {
       control.setValidators(validators);
       control.updateValueAndValidity({ emitEvent: false });
     }
+  }
+
+  private applySanitizedValue(
+    event: Event,
+    controlName: 'names' | 'lastNames' | 'username' | 'studentCode',
+    sanitizer: (value: string) => string
+  ): void {
+    const input = event.target as HTMLInputElement;
+    const sanitized = sanitizer(input.value);
+    if (sanitized === input.value) {
+      return;
+    }
+    input.value = sanitized;
+    this.form.controls[controlName].setValue(sanitized);
   }
 
   // ===================== Desactivar / reactivar =====================

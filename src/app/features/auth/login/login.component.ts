@@ -106,7 +106,7 @@ import { AuthResponse } from '../../../shared/models';
                   class="field__input"
                   type="text"
                   autocomplete="username"
-                  placeholder="ej. ana.mendoza  o  EST-00428"
+                  placeholder="ej. anamendoza  o  EST00428"
                   formControlName="usernameOrEmail"
                 />
               </div>

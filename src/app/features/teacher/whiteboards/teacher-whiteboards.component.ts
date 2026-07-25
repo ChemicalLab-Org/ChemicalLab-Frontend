@@ -16,6 +16,11 @@ import {
   WhiteboardSessionResponse,
   WhiteboardSessionStatus,
 } from '../../../shared/models';
+import {
+  WHITEBOARD_TITLE_PATTERN,
+  normalizeWhiteboardTitle,
+  sanitizeWhiteboardTitleInput,
+} from '../../../shared/utils/institutional-input.util';
 
 /**
  * Sección real del docente (grado + sección) derivada de sus estudiantes registrados. La clave
@@ -192,11 +197,13 @@ interface SectionOption {
                 id="wb-name"
                 class="input"
                 formControlName="name"
-                placeholder="ej. Enlace iónico — repaso"
+                placeholder="ej. Enlace iónico 3 B"
+                maxlength="150"
+                (input)="onTitleInput($event)"
                 [class.input-error]="isInvalid('name')"
               />
               @if (isInvalid('name')) {
-                <span class="form-error">Ingresa un nombre (máx. 150 caracteres).</span>
+                <span class="form-error">Usa solo letras, números y espacios (máx. 150).</span>
               }
             </div>
 
@@ -288,7 +295,14 @@ export class TeacherWhiteboardsComponent {
   readonly formError = signal<string | null>(null);
 
   readonly form: FormGroup = this.fb.group({
-    name: ['', [Validators.required, Validators.maxLength(150)]],
+    name: [
+      '',
+      [
+        Validators.required,
+        Validators.maxLength(150),
+        Validators.pattern(WHITEBOARD_TITLE_PATTERN),
+      ],
+    ],
     sectionKey: ['', [Validators.required]],
     description: ['', [Validators.maxLength(1000)]],
   });
@@ -364,6 +378,16 @@ export class TeacherWhiteboardsComponent {
     this.formError.set(null);
   }
 
+  onTitleInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const sanitized = sanitizeWhiteboardTitleInput(input.value);
+    if (sanitized === input.value) {
+      return;
+    }
+    input.value = sanitized;
+    this.form.controls['name'].setValue(sanitized);
+  }
+
   submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -383,7 +407,7 @@ export class TeacherWhiteboardsComponent {
     const description = (raw.description ?? '').trim();
     // El backend sigue recibiendo grade y section por separado, como espera el endpoint de creación.
     const request: WhiteboardSessionCreateRequest = {
-      name: raw.name.trim(),
+      name: normalizeWhiteboardTitle(raw.name),
       grade: selected.grade,
       section: selected.section,
       ...(description !== '' ? { description } : {}),
