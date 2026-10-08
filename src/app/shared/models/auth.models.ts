@@ -50,6 +50,12 @@ export interface PasswordChangeResponse {
   readonly temporaryPassword: boolean;
 }
 
+/** El cambio propio entrega una sesión nueva; un reset administrativo no. */
+export interface AuthenticatedPasswordChangeResponse extends PasswordChangeResponse {
+  readonly token: string;
+  readonly tokenType: string;
+}
+
 /**
  * Payload para restablecer la contraseña temporal de otro usuario.
  * Lo usan el docente (sobre sus estudiantes) y el administrador (sobre docentes).

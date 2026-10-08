@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, map, of, tap, throwError } from 'rxjs';
+import { Observable, catchError, map, of, tap, throwError, timeout, finalize } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ExamSessionService } from './exam-session.service';
 import { SessionCleanupService } from './session-cleanup.service';
@@ -9,14 +9,14 @@ import {
   ChangePasswordRequest,
   CurrentUser,
   LoginRequest,
-  PasswordChangeResponse,
+  AuthenticatedPasswordChangeResponse,
   UserRole,
 } from '../../shared/models';
 
 /**
  * Claves de almacenamiento de la sesión. Se guardan en sessionStorage para que la sesión
- * NO sobreviva al cierre de la pestaña o del navegador: en los equipos compartidos del
- * colegio, reabrir la web debe exigir un nuevo inicio de sesión. Se conservan los mismos
+ * se retire del navegador al cerrar la pestaña. Esto NO revoca la sesión del servidor:
+ * esta permanece hasta logout, revocación global o caducidad. Se conservan los mismos
  * nombres de clave que usaba localStorage para no romper a los consumidores existentes.
  */
 const TOKEN_KEY = 'auth_token';
@@ -31,6 +31,10 @@ export class AuthService {
 
   private readonly _currentUser = signal<AuthResponse | null>(null);
   private readonly _isLoading = signal<boolean>(false);
+
+  readonly sessionNotice = signal<string | null>(null);
+  readonly signingOut = signal(false);
+  private sessionRevision = 0;
 
   readonly currentUser = computed<AuthResponse | null>(() => this._currentUser());
   readonly isAuthenticated = computed(() => this._currentUser() !== null);
@@ -49,8 +53,11 @@ export class AuthService {
 
   login(request: LoginRequest): Observable<AuthResponse> {
     this._isLoading.set(true);
+    const revision = this.sessionRevision;
+    this.sessionNotice.set(null);
     return this.http.post<AuthResponse>(`${this.baseUrl}/login`, request).pipe(
       tap((response) => {
+        if (revision !== this.sessionRevision) return;
         this.persistSession(response);
         this._currentUser.set(response);
         this._isLoading.set(false);
@@ -62,15 +69,23 @@ export class AuthService {
     );
   }
 
-  changePassword(request: ChangePasswordRequest): Observable<PasswordChangeResponse> {
+  changePassword(request: ChangePasswordRequest): Observable<AuthenticatedPasswordChangeResponse> {
     this._isLoading.set(true);
+    const previousToken = this.getToken();
     return this.http
-      .patch<PasswordChangeResponse>(`${this.baseUrl}/change-temporary-password`, request)
+      .patch<AuthenticatedPasswordChangeResponse>(`${this.baseUrl}/change-temporary-password`, request)
       .pipe(
-        tap(() => {
+        tap((response) => {
+          if (this.getToken() !== previousToken) return;
+          if (!response.token || response.token === previousToken) {
+            this.clearLocalSession();
+            throw new Error('El servidor no entregó una sesión nueva. Inicia sesión de nuevo.');
+          }
+          this.sessionCleanup.runAll();
           const current = this._currentUser();
           if (current !== null) {
-            const updated: AuthResponse = { ...current, temporaryPassword: false };
+            const updated: AuthResponse = { ...current, token: response.token,
+              tokenType: response.tokenType, temporaryPassword: response.temporaryPassword };
             this._currentUser.set(updated);
             this.persistSession(updated);
           }
@@ -83,8 +98,38 @@ export class AuthService {
       );
   }
 
-  logout(): void {
-    this.clearSession();
+  logout(all = false): void {
+    const token = this.getToken();
+    this.clearLocalSession();
+    if (!token) return;
+    const revision = this.sessionRevision;
+    this.signingOut.set(true);
+    this.sessionNotice.set('Sesión local cerrada. Solicitando revocación al servidor…');
+    this.http.post<void>(`${this.baseUrl}/${all ? 'logout-all' : 'logout'}`, {}, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).pipe(timeout(8000), finalize(() => this.signingOut.set(false))).subscribe({
+      next: () => {
+        if (revision === this.sessionRevision && !this.isAuthenticated()) {
+          this.sessionNotice.set(all ? 'Todas tus sesiones fueron revocadas.' : 'La sesión fue revocada.');
+        }
+      },
+      error: () => {
+        if (revision === this.sessionRevision && !this.isAuthenticated()) {
+          this.sessionNotice.set('Sesión local cerrada. No se pudo confirmar la revocación en el servidor.');
+        }
+      },
+    });
+  }
+
+  requirePasswordChange(): boolean {
+    const current = this._currentUser();
+    if (!current || current.temporaryPassword) return false;
+    const updated = { ...current, temporaryPassword: true };
+    this._currentUser.set(updated);
+    this.persistSession(updated);
+    this.examSession.end();
+    this.sessionCleanup.runAll();
+    return true;
   }
 
   /**
@@ -98,14 +143,15 @@ export class AuthService {
     const token = this.getToken();
     if (token === null || token.trim() === '') {
       // Sin token no hay nada que validar; los guards llevarán al login.
-      this.clearSession();
+      this.clearLocalSession();
       return of(void 0);
     }
 
     return this.http.get<CurrentUser>(`${this.baseUrl}/me`).pipe(
       tap((me) => {
+        if (this.getToken() !== token) return;
         if (!me.active) {
-          this.clearSession();
+          this.clearLocalSession();
           return;
         }
         // Se refresca el usuario con los datos frescos del backend conservando el token vigente.
@@ -129,7 +175,7 @@ export class AuthService {
       catchError(() => {
         // 401, cuenta inactiva o backend caído (error de red): por seguridad en el entorno
         // compartido del colegio se limpia la sesión local en lugar de mantenerla activa.
-        this.clearSession();
+        if (this.getToken() === token) this.clearLocalSession();
         return of(void 0);
       })
     );
@@ -168,7 +214,9 @@ export class AuthService {
    * resto antiguo en localStorage, reinicia el estado observable, finaliza el modo examen y
    * cierra las conexiones WebSocket/STOMP de la pizarra para no dejarlas vivas tras el logout.
    */
-  private clearSession(): void {
+  clearLocalSession(): void {
+    this.sessionRevision++;
+    this._isLoading.set(false);
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(USER_KEY);

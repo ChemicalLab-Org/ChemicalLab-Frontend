@@ -3,42 +3,32 @@ import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
+import { environment } from '../../../environments/environment';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const authService = inject(AuthService);
+  const auth = inject(AuthService);
   const router = inject(Router);
-
-  // El login no lleva token y no debe disparar el manejo de 401 (credenciales inválidas).
-  const isLogin = req.url.includes('/auth/login');
-  // La validación de sesión de arranque (/auth/me) gestiona su propio error: si respondiera
-  // 401 no debe forzar una navegación aquí (el router puede no estar listo durante el bootstrap).
-  const isSessionCheck = req.url.includes('/auth/me');
-
-  const token = authService.getToken();
-  const outgoing =
-    !isLogin && token !== null
-      ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
-      : req;
-
-  if (isLogin) {
-    return next(outgoing);
-  }
-
-  return next(outgoing).pipe(
-    catchError((error: unknown) => {
-      if (
-        !isSessionCheck &&
-        error instanceof HttpErrorResponse &&
-        error.status === 401
-      ) {
-        // Token expirado o inválido — limpiar sesión y redirigir al login. Se evita navegar
-        // de más si ya se está en la pantalla de login (no se cierra sesión por un 403).
-        authService.logout();
-        if (!router.url.startsWith('/auth/login')) {
-          void router.navigateByUrl('/auth/login');
+  if (!req.url.startsWith(`${environment.apiUrl}/`)) return next(req);
+  const path = req.url.slice(environment.apiUrl.length).split('?')[0];
+  const isLogin = path === '/auth/login';
+  const isSessionCheck = path === '/auth/me';
+  const isLogout = path === '/auth/logout' || path === '/auth/logout-all';
+  const token = auth.getToken();
+  const outgoing = !isLogin && token && !req.headers.has('Authorization')
+    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
+  return next(outgoing).pipe(catchError((error: unknown) => {
+    // Login/logout own their errors. Ignore late errors from replaced/revoked tokens.
+    if (!isLogin && !isLogout && !isSessionCheck && token && token === auth.getToken()
+      && error instanceof HttpErrorResponse) {
+      if (error.status === 401) {
+        auth.clearLocalSession();
+        if (!router.url.startsWith('/auth/login')) void router.navigateByUrl('/auth/login');
+      } else if (error.status === 403 && error.error?.code === 'PASSWORD_CHANGE_REQUIRED') {
+        if (auth.requirePasswordChange() && !router.url.startsWith('/auth/change-password')) {
+          void router.navigateByUrl('/auth/change-password');
         }
       }
-      return throwError(() => error);
-    })
-  );
+    }
+    return throwError(() => error);
+  }));
 };

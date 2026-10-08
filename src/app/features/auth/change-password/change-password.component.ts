@@ -55,10 +55,10 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
             <span class="brand-pill__dot" aria-hidden="true"></span>
             Paso de seguridad
           </span>
-          <h2 class="brand-body__headline">Antes de continuar…</h2>
+          <h2 class="brand-body__headline">Protege tu cuenta</h2>
           <p class="brand-body__desc">
-            Por seguridad, debes crear tu propia contraseña antes de acceder al
-            laboratorio.
+            Usa una contraseña propia. Este cambio cerrará tus otras sesiones
+            y mantendrá abierta una nueva sesión en este navegador.
           </p>
         </div>
 
@@ -74,8 +74,8 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
       <section class="reset__form-wrap">
         <div class="reset__form">
           <div class="reset__heading">
-            <h1>Crea tu contraseña</h1>
-            <p>Solo se te pedirá esta vez.</p>
+            <h1>Cambia tu contraseña</h1>
+            <p>Al cambiarla se cerrarán tus otras sesiones.</p>
           </div>
 
           @if (errorMessage(); as msg) {
@@ -91,7 +91,7 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
           <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
             <!-- Contraseña temporal -->
             <div class="field">
-              <label class="field__label" for="currentPassword">Contraseña temporal</label>
+              <label class="field__label" for="currentPassword">Contraseña actual</label>
               <div class="field__control">
                 <span class="field__icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -103,7 +103,7 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
                   id="currentPassword"
                   class="field__input field__input--with-action"
                   [type]="showCurrent() ? 'text' : 'password'"
-                  placeholder="La que te dio tu docente o admin"
+                  placeholder="Tu contraseña actual"
                   formControlName="currentPassword"
                 />
                 <button
@@ -319,11 +319,6 @@ export class ChangePasswordComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    if (!this.authService.requiresPasswordChange()) {
-      void this.router.navigate(['/dashboard']);
-      return;
-    }
-
     this.form
       .get('newPassword')
       ?.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
