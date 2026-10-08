@@ -10,7 +10,7 @@ export const authGuard: CanActivateFn = () => {
     return true;
   }
 
-  authService.logout();
+  authService.clearLocalSession();
   router.navigate(['/auth/login']);
   return false;
 };

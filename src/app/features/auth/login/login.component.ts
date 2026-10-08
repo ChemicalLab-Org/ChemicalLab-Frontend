@@ -208,7 +208,7 @@ export class LoginComponent implements OnInit {
     }
 
     if (this.authService.isAuthenticated()) {
-      this.authService.logout();
+      this.authService.clearLocalSession();
     }
   }
 

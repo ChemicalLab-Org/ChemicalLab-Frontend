@@ -4,10 +4,11 @@ import { filter } from 'rxjs';
 import { AuthService } from './core/services/auth.service';
 import { UsageMetricsService } from './core/services/usage-metrics.service';
 import { UsageModule } from './shared/models';
+import { SessionControlsComponent } from './shared/session-controls.component';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, SessionControlsComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
