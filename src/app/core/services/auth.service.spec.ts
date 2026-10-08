@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, provideRouter } from '@angular/router';
@@ -48,6 +48,97 @@ describe('T02 persisted authentication client', () => {
     request.flush(response);
     return response;
   }
+
+  const passwordCases = (['ADMINISTRADOR', 'DOCENTE', 'ESTUDIANTE'] as const)
+    .flatMap(role => [false, true].map(temporary => ({ role, temporary })));
+
+  function submitPasswordForm(fixture: ComponentFixture<ChangePasswordComponent>, currentPassword: string) {
+    for (const [id, value] of Object.entries({ currentPassword, newPassword: 'Replacement123', confirmPassword: 'Replacement123' })) {
+      const input = fixture.nativeElement.querySelector(`#${id}`) as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    fixture.detectChanges();
+    const button = fixture.nativeElement.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    button.click();
+    return http.expectOne(`${base}/auth/change-temporary-password`);
+  }
+
+  async function rejectWrongPasswordInForm(role: UserRole, temporary: boolean) {
+    const old = login(role, temporary);
+    const storedUser = sessionStorage.getItem('auth_user');
+    const navigation = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const fixture = TestBed.createComponent(ChangePasswordComponent);
+    await fixture.whenStable();
+    const request = submitPasswordForm(fixture, 'WrongFixture123');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${old.token}`);
+    request.flush({ code: 'CURRENT_PASSWORD_INVALID', message: 'La contraseña actual es incorrecta.' },
+      { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+    expect(auth.getToken()).toBe(old.token);
+    expect(sessionStorage.getItem('auth_user')).toBe(storedUser);
+    expect(auth.currentUser()).toEqual(old);
+    expect(auth.isAuthenticated()).toBe(true);
+    expect(auth.requiresPasswordChange()).toBe(temporary);
+    expect(cleanup).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(navigation).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[role="alert"] .alert__msg').textContent)
+      .toBe('La contraseña actual es incorrecta. Corrígela e inténtalo de nuevo.');
+    expect(fixture.componentInstance.isLoading()).toBe(false);
+    expect(fixture.nativeElement.querySelector('button[type="submit"]').disabled).toBe(false);
+    return { old, fixture, navigation };
+  }
+
+  it.each(passwordCases)('keeps the real form/session and accepts a corrected retry for $role, temporary=$temporary', async ({ role, temporary }) => {
+    const { old, fixture, navigation } = await rejectWrongPasswordInForm(role, temporary);
+    const request = submitPasswordForm(fixture, 'Fictitious123');
+    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${old.token}`);
+    expect(request.request.body.currentPassword).toBe('Fictitious123');
+    expect(fixture.componentInstance.errorMessage()).toBeNull();
+    const replacement = token('corrected-retry');
+    request.flush({ token: replacement, tokenType: 'Bearer', temporaryPassword: false });
+    fixture.detectChanges();
+    expect(auth.getToken()).toBe(replacement);
+    expect(JSON.parse(sessionStorage.getItem('auth_user')!).token).toBe(replacement);
+    expect(auth.currentRole()).toBe(role);
+    expect(auth.requiresPasswordChange()).toBe(false);
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(navigation).toHaveBeenCalledExactlyOnceWith(['/dashboard']);
+  });
+
+  it.each(passwordCases)('cleans a session revoked before retrying the same form for $role, temporary=$temporary', async ({ role, temporary }) => {
+    const { old, fixture, navigation } = await rejectWrongPasswordInForm(role, temporary);
+    const request = submitPasswordForm(fixture, 'Fictitious123');
+    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${old.token}`);
+    request.flush({ message: 'La sesión ha sido revocada.' }, { status: 401, statusText: 'Unauthorized' });
+    fixture.detectChanges();
+    expect(auth.getToken()).toBeNull();
+    expect(sessionStorage.getItem('auth_user')).toBeNull();
+    expect(auth.currentUser()).toBeNull();
+    expect(auth.isAuthenticated()).toBe(false);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/auth/login');
+    expect(navigation).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('Tu sesión ha expirado');
+    http.expectNone(`${base}/auth/logout`);
+  });
+
+  it('still treats a password-endpoint 401 as invalid authentication regardless of its message', async () => {
+    login('DOCENTE', true);
+    const fixture = TestBed.createComponent(ChangePasswordComponent);
+    await fixture.whenStable();
+    // Characterizes the original bug: the old backend used this 401 for a form error.
+    submitPasswordForm(fixture, 'WrongFixture123').flush({ message: 'La contraseña actual es incorrecta.' },
+      { status: 401, statusText: 'Unauthorized' });
+    expect(auth.getToken()).toBeNull();
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith('/auth/login');
+  });
 
   it.each(['ADMINISTRADOR', 'DOCENTE', 'ESTUDIANTE'] as const)(
     'replaces the token and releases the temporary guard for %s', (role) => {

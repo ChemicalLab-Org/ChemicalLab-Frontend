@@ -391,6 +391,10 @@ export class ChangePasswordComponent implements OnInit {
   private handleError(error: unknown): void {
     this.isLoading.set(false);
     if (error instanceof HttpErrorResponse) {
+      if (error.status === 400 && error.error?.code === 'CURRENT_PASSWORD_INVALID') {
+        this.errorMessage.set('La contraseña actual es incorrecta. Corrígela e inténtalo de nuevo.');
+        return;
+      }
       if (error.status === 400) {
         this.errorMessage.set(
           'La contraseña actual es incorrecta o los datos no son válidos',
