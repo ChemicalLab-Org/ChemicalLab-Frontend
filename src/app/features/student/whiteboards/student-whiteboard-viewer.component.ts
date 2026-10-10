@@ -770,6 +770,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private shapeStart: WhiteboardPoint | null = null;
   /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
   private readonly ownEventIds = new Set<string>();
+  private stateLoadSequence = 0;
+  private appliedRevision = 0;
+  private readonly confirmedOwners = new Map<string, number | null>();
   readonly boardStateReady = signal<boolean>(false);
   private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
   /** Temporizador de espera de la conexión en vivo; si expira sin conectar, se marca el fallo. */
@@ -937,6 +940,14 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((message) => this.showBanner(message, 'warning'));
 
+    this.realtime.resyncRequests.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(reason => this.resynchronize(reason));
+    this.realtime.accessLost.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.boardStateReady.set(false);
+        this.clearUndoHistory();
+        this.refreshDetail();
+      });
     this.reload();
   }
 
@@ -1042,9 +1053,29 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   /** Carga y reproduce el estado actual del lienzo (trazos + textos) de la sesión en vivo. */
+  private resynchronize(reason: 'connected' | 'rejected' = 'connected'): void {
+    this.boardStateReady.set(false);
+    this.queuedRemoteDrawEvents = [];
+    this.ownEventIds.clear();
+    this.cancelText();
+    this.cancelShapePreview();
+    this.clearSelection();
+    this.drawing = false;
+    if (reason === 'rejected') this.clearUndoHistory();
+    this.loadBoardState();
+  }
+
   private loadBoardState(): void {
+    const sequence = ++this.stateLoadSequence;
     this.whiteboardService.getBoardState(this.sessionId).subscribe({
       next: (state) => {
+        if (sequence !== this.stateLoadSequence) return;
+        this.appliedRevision = state.revision ?? 0;
+        this.confirmedOwners.clear();
+        this.boardStrokes = [];
+        this.textItems.set([]);
+        this.shapeItems.set([]);
+        this.clearCanvas();
         if (state.stateJson === null || state.stateJson.trim() === '') {
           this.finishBoardStateLoad();
           return;
@@ -1056,17 +1087,21 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
           this.finishBoardStateLoad();
           return;
         }
+        this.appliedRevision = snapshot.revision ?? state.revision ?? 0;
+        for (const [kind, items] of [['TEXT', snapshot.texts], ['SHAPE', snapshot.shapes ?? []], ['STROKE', snapshot.strokes]] as const) {
+          for (const item of items ?? []) if (item.id) this.confirmedOwners.set(kind + ':' + item.id, item.ownerUserId ?? null);
+        }
         this.replayBoardState(snapshot);
         this.finishBoardStateLoad();
       },
       error: () => {
-        this.finishBoardStateLoad();
-        /* silencioso: sin estado previo el alumno ve solo los eventos nuevos */
+        if (sequence !== this.stateLoadSequence) return;
+        this.boardStateReady.set(false);
+        this.showBanner('No se pudo recuperar el estado verificado. Reintenta la conexión antes de dibujar.', 'warning');
       },
     });
   }
 
-  /** Pinta los trazos y muestra los textos de una instantánea del lienzo. */
   private replayBoardState(snapshot: WhiteboardBoardStateSnapshot): void {
     this.clearCanvas();
     this.textItems.set([]);
@@ -1383,6 +1418,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   // ─── Texto movible: arrastre y reedición ──────────────────────────────────────
 
   onTextItemPointerDown(item: DisplayTextItem, event: PointerEvent): void {
+    if (!this.ownsObject('TEXT', item.id)) return;
     if (this.canEditText()) {
       event.preventDefault();
       event.stopPropagation();
@@ -1451,6 +1487,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   private beginTextEdit(item: DisplayTextItem): void {
+    if (!this.ownsObject('TEXT', item.id)) return;
     this.commitText();
     this.clearSelection();
     this.color.set(item.color);
@@ -1473,6 +1510,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   /** Difunde un objeto de texto del alumno para que el docente y los demás lo vean en vivo. */
+  private ownsObject(kind: string, id: string): boolean {
+    return this.confirmedOwners.get(kind + ':' + id) === this.currentUser()?.userId;
+  }
+
   private clearSelection(): void {
     this.selectedTextId.set(null);
     this.draggingTextId.set(null);
@@ -1490,6 +1531,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   private deleteSelectedText(): boolean {
     const id = this.selectedTextId();
+    if (id !== null && !this.ownsObject('TEXT', id)) return false;
     if (id === null || !this.canDraw()) {
       return false;
     }
@@ -1513,6 +1555,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   private deleteSelectedShape(): boolean {
     const id = this.selectedShapeId();
+    if (id !== null && !this.ownsObject('SHAPE', id)) return false;
     if (id === null || !this.canDraw()) {
       return false;
     }
@@ -1601,6 +1644,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   onShapePointerDown(shape: DisplayShapeItem, event: PointerEvent): void {
+    if (!this.ownsObject('SHAPE', shape.id)) return;
     if (!this.canSelectObject()) {
       return;
     }
@@ -2197,7 +2241,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       return;
     }
     const radius = this.eraserSize() / 2;
-    const hit = items.filter((item) => eraserHitsText(ctx, item, point.x, point.y, radius));
+    const hit = items.filter((item) => this.ownsObject('TEXT', item.id) && eraserHitsText(ctx, item, point.x, point.y, radius));
     if (hit.length === 0) {
       return;
     }
@@ -2225,7 +2269,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       return;
     }
     const radius = this.eraserSize() / 2;
-    const hit = shapes.filter((shape) => eraserHitsShape(shape, point.x, point.y, radius));
+    const hit = shapes.filter((shape) => this.ownsObject('SHAPE', shape.id) && eraserHitsShape(shape, point.x, point.y, radius));
     if (hit.length === 0) {
       return;
     }
@@ -2364,6 +2408,14 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   private applyRemoteDraw(event: WhiteboardDrawEventResponse): void {
+    if (event.revision !== undefined) {
+      if (event.revision <= this.appliedRevision) return;
+      if (event.revision > this.appliedRevision + 1) { this.resynchronize(); return; }
+      this.appliedRevision = event.revision;
+    }
+    if (event.textId) this.confirmedOwners.set('TEXT:' + event.textId, event.ownerUserId ?? null);
+    if (event.shapeId) this.confirmedOwners.set('SHAPE:' + event.shapeId, event.ownerUserId ?? null);
+    if (event.strokeId) this.confirmedOwners.set('STROKE:' + event.strokeId, event.ownerUserId ?? null);
     if (event.clientEventId !== null && this.ownEventIds.has(event.clientEventId)) {
       // Eco de un evento propio que ya se pintó localmente.
       this.ownEventIds.delete(event.clientEventId);
