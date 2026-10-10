@@ -851,7 +851,7 @@ const UNDO_STACK_LIMIT = 80;
           <div class="modal__warn-icon"><span class="material-icons">stop_circle</span></div>
           <h2 class="modal__title">¿Finalizar esta sesión?</h2>
           <p class="modal__text">
-            Si finalizas esta sesión, ya no podrás reabrirla ni editarla. Se guardará una captura
+            Si finalizas esta sesión, ya no podrás reabrirla ni editarla. Se conserva localmente y se reconstruyerá una captura
             final para que los estudiantes la consulten en el historial. ¿Deseas continuar?
           </p>
           @if (finalizeError()) {
@@ -898,16 +898,17 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private shapeStart: WhiteboardPoint | null = null;
   /** clientEventId de eventos propios para no re-renderizar el eco que vuelve por el canal. */
   private readonly ownEventIds = new Set<string>();
+  private stateLoadSequence = 0;
+  private appliedRevision = 0;
+  private readonly confirmedOwners = new Map<string, number | null>();
   private snapshotObjectUrl: string | null = null;
 
   /**
-   * Trazos acumulados (propios y de los alumnos) para reconstruir el estado del lienzo. Se guarda
-   * de forma debounced en el backend (currentStateJson) para que un alumno que entra tarde o
+   * Trazos acumulados (propios y de los alumnos) para reconstruir el estado del lienzo. Se conserva localmente y se reconstruye
+   * desde los eventos verificados del backend para que un alumno que entra tarde o
    * recarga reconstruya lo ya dibujado. Se reinicia al limpiar la pizarra.
    */
   private boardStrokes: WhiteboardStrokeRecord[] = [];
-  private stateSaveTimer: ReturnType<typeof setTimeout> | null = null;
-  private static readonly STATE_SAVE_DEBOUNCE_MS = 1000;
   readonly boardStateReady = signal<boolean>(false);
   private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
   /** Temporizador de espera de la conexión en vivo; si expira sin conectar, se marca el fallo. */
@@ -1085,12 +1086,19 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((message) => this.showBanner(message, 'warning'));
 
+    this.realtime.resyncRequests.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(reason => this.resynchronize(reason));
+    this.realtime.accessLost.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.boardStateReady.set(false);
+        this.clearUndoHistory();
+        this.reload();
+      });
     this.reload();
   }
 
   ngOnDestroy(): void {
     this.clearConnectionWatch();
-    this.flushStateSave();
     this.realtime.disconnect();
     this.revokeSnapshotUrl();
   }
@@ -1373,7 +1381,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       });
       this.broadcastTextDelete(item.id);
     }
-    this.scheduleStateSave();
   }
 
   private eraseShapesAt(point: WhiteboardPoint): void {
@@ -1399,7 +1406,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       });
       this.broadcastShapeDelete(shape.id);
     }
-    this.scheduleStateSave();
   }
 
   onPointerUp(event: PointerEvent): void {
@@ -1425,7 +1431,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           after: this.cloneShapeItem(preview),
         });
         this.broadcastShapeUpsert(preview);
-        this.scheduleStateSave();
       }
       return;
     }
@@ -1573,7 +1578,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           after: null,
         });
         this.broadcastTextDelete(editingId);
-        this.scheduleStateSave();
       }
       return;
     }
@@ -1610,7 +1614,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
     // Difunde el texto en vivo para que el alumno lo vea sin recargar y lo guarda en el estado.
     this.broadcastTextUpsert(saved);
-    this.scheduleStateSave();
   }
 
   cancelText(): void {
@@ -1771,7 +1774,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         after: this.cloneTextItem(moved),
       });
       this.broadcastTextUpsert(moved);
-      this.scheduleStateSave();
     }
   }
 
@@ -1842,7 +1844,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       after: null,
     });
     this.broadcastTextDelete(id);
-    this.scheduleStateSave();
     return true;
   }
 
@@ -1866,7 +1867,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       after: null,
     });
     this.broadcastShapeDelete(id);
-    this.scheduleStateSave();
     return true;
   }
 
@@ -1961,7 +1961,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         after: this.cloneShapeItem(moved),
       });
       this.broadcastShapeUpsert(moved);
-      this.scheduleStateSave();
     }
   }
 
@@ -2149,7 +2148,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       this.shapeItems.update((items) => this.upsertShapeItem(items, shape));
       this.broadcastShapeUpsert(shape);
     }
-    this.scheduleStateSave();
   }
 
   private findUndoObject(action: WhiteboardUndoAction): UndoableObject | null {
@@ -2213,7 +2211,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       this.broadcastStrokeRestore(record, insertAt);
     }
     this.redrawCanvasFromStrokes();
-    this.scheduleStateSave();
   }
 
   private findStrokeIndex(strokeId: string): number {
@@ -2324,7 +2321,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.clearUndoHistory();
     const clientEventId = this.newEventId();
     this.realtime.sendDraw({ eventType: 'CLEAR', tool: 'CLEAR', clientEventId });
-    this.scheduleStateSave();
   }
 
   // ─── Acciones de sesión ───────────────────────────────────────────────────────
@@ -2463,6 +2459,14 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   private applyRemoteDraw(event: WhiteboardDrawEventResponse): void {
+    if (event.revision !== undefined) {
+      if (event.revision <= this.appliedRevision) return;
+      if (event.revision > this.appliedRevision + 1) { this.resynchronize(); return; }
+      this.appliedRevision = event.revision;
+    }
+    if (event.textId) this.confirmedOwners.set('TEXT:' + event.textId, event.ownerUserId ?? null);
+    if (event.shapeId) this.confirmedOwners.set('SHAPE:' + event.shapeId, event.ownerUserId ?? null);
+    if (event.strokeId) this.confirmedOwners.set('STROKE:' + event.strokeId, event.ownerUserId ?? null);
     if (event.clientEventId !== null && this.ownEventIds.has(event.clientEventId)) {
       // Es el eco de un evento propio que ya se pintó localmente.
       this.ownEventIds.delete(event.clientEventId);
@@ -2475,12 +2479,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       this.clearCanvas();
       this.boardStrokes = [];
       this.clearUndoHistory();
-      this.scheduleStateSave();
       return;
     }
     if (event.eventType === 'STROKE_DELETE') {
       this.applyRemoteStrokeDelete(event);
-      this.scheduleStateSave();
       return;
     }
     // Texto de un estudiante (los ecos del propio docente se descartan arriba por clientEventId):
@@ -2488,7 +2490,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     // estado para que la recarga y la captura final lo conserven.
     if (event.eventType === 'TEXT') {
       this.upsertRemoteText(event);
-      this.scheduleStateSave();
       return;
     }
     if (event.eventType === 'TEXT_DELETE') {
@@ -2501,13 +2502,11 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           this.clearSelection();
         }
         this.textItems.update((items) => items.filter((i) => i.id !== id));
-        this.scheduleStateSave();
       }
       return;
     }
     if (event.eventType === 'SHAPE') {
       this.upsertRemoteShape(event);
-      this.scheduleStateSave();
       return;
     }
     if (event.eventType === 'SHAPE_DELETE') {
@@ -2517,12 +2516,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           this.clearSelection();
         }
         this.shapeItems.update((items) => items.filter((shape) => shape.id !== id));
-        this.scheduleStateSave();
       }
       return;
     }
     this.applyRemoteStrokeEvent(event);
-    this.scheduleStateSave();
   }
 
   private onControlEvent(event: { eventType: string; status: WhiteboardSessionStatus | null }): void {
@@ -2832,7 +2829,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       strokeIndex: this.boardStrokes.length - 1,
       gestureId: this.currentEraserGestureId ?? undefined,
     });
-    this.scheduleStateSave();
   }
 
   private toCanvasPoint(event: PointerEvent): WhiteboardPoint {
@@ -3065,73 +3061,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   // ─── Estado actual del lienzo (persistencia para recarga / unión tardía) ───────
 
-  /** Programa el guardado debounced del estado del lienzo (trazos + textos) en el backend. */
-  private scheduleStateSave(): void {
-    if (this.stateSaveTimer !== null) {
-      clearTimeout(this.stateSaveTimer);
-    }
-    this.stateSaveTimer = setTimeout(
-      () => this.flushStateSave(),
-      TeacherWhiteboardEditorComponent.STATE_SAVE_DEBOUNCE_MS
-    );
-  }
 
-  /** Guarda inmediatamente el estado pendiente (al destruir el componente o al vencer el debounce). */
-  private flushStateSave(): void {
-    // Sin guardado pendiente no hay nada que persistir: evita un PUT innecesario (y, al destruir
-    // el componente por un logout, un 401 espurio si el token ya se limpió antes de la navegación).
-    if (this.stateSaveTimer === null) {
-      return;
-    }
-    clearTimeout(this.stateSaveTimer);
-    this.stateSaveTimer = null;
-    const session = this.session();
-    if (session === null || session.status === 'CLOSED') {
-      return;
-    }
-    const snapshot: WhiteboardBoardStateSnapshot = {
-      v: 1,
-      strokes: this.boardStrokes,
-      texts: this.textItems().map((t) => ({
-        id: t.id,
-        wx: t.wx,
-        wy: t.wy,
-        color: t.color,
-        size: t.size,
-        runs: t.runs,
-      })),
-      shapes: this.shapeItems().map((shape) => ({
-        id: shape.id,
-        type: shape.type,
-        x1: shape.x1,
-        y1: shape.y1,
-        x2: shape.x2,
-        y2: shape.y2,
-        color: shape.color,
-        strokeWidth: shape.strokeWidth,
-      })),
-    };
-    let json: string;
-    try {
-      json = JSON.stringify(snapshot);
-    } catch {
-      return;
-    }
-    // No reventar el tope del backend (~2 MB): si se excede, se omite el guardado (se reportará).
-    if (json.length > 1_900_000) {
-      return;
-    }
-    this.whiteboardService.saveBoardState(this.sessionId, json).subscribe({
-      next: () => {
-        /* estado guardado */
-      },
-      error: () => {
-        /* silencioso: el dibujo en vivo no debe interrumpirse por un fallo al guardar el estado */
-      },
-    });
-  }
-
-  /** Restaura el estado guardado del lienzo (trazos + textos) al entrar o recargar. */
   /**
    * Inicia el temporizador de espera de la conexión en vivo. Si al expirar el WebSocket aún no está
    * conectado, se marca {@link wsTimedOut} para mostrar el estado de error con reintento (sin ocultar
@@ -3165,9 +3095,6 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     if (s === null || s.status === 'CLOSED') {
       return;
     }
-    // Persiste cualquier estado pendiente antes de recargarlo desde el backend, para no perder
-    // trazos/textos recientes al reconstruir el lienzo.
-    this.flushStateSave();
     this.boardStateReady.set(false);
     this.queuedRemoteDrawEvents = [];
     this.realtime.reconnect(this.sessionId);
@@ -3178,9 +3105,29 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  private resynchronize(reason: 'connected' | 'rejected' = 'connected'): void {
+    this.boardStateReady.set(false);
+    this.queuedRemoteDrawEvents = [];
+    this.ownEventIds.clear();
+    this.cancelText();
+    this.cancelShapePreview();
+    this.clearSelection();
+    this.drawing = false;
+    if (reason === 'rejected') this.clearUndoHistory();
+    this.loadBoardState();
+  }
+
   private loadBoardState(): void {
+    const sequence = ++this.stateLoadSequence;
     this.whiteboardService.getBoardState(this.sessionId).subscribe({
       next: (state) => {
+        if (sequence !== this.stateLoadSequence) return;
+        this.appliedRevision = state.revision ?? 0;
+        this.confirmedOwners.clear();
+        this.boardStrokes = [];
+        this.textItems.set([]);
+        this.shapeItems.set([]);
+        this.clearCanvas();
         if (state.stateJson === null || state.stateJson.trim() === '') {
           this.finishBoardStateLoad();
           return;
@@ -3192,17 +3139,21 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           this.finishBoardStateLoad();
           return;
         }
+        this.appliedRevision = snapshot.revision ?? state.revision ?? 0;
+        for (const [kind, items] of [['TEXT', snapshot.texts], ['SHAPE', snapshot.shapes ?? []], ['STROKE', snapshot.strokes]] as const) {
+          for (const item of items ?? []) if (item.id) this.confirmedOwners.set(kind + ':' + item.id, item.ownerUserId ?? null);
+        }
         this.replayBoardState(snapshot);
         this.finishBoardStateLoad();
       },
       error: () => {
-        this.finishBoardStateLoad();
-        /* silencioso: sin estado previo el docente sigue dibujando con normalidad */
+        if (sequence !== this.stateLoadSequence) return;
+        this.boardStateReady.set(false);
+        this.showBanner('No se pudo recuperar el estado verificado. Reintenta la conexión antes de dibujar.', 'warning');
       },
     });
   }
 
-  /** Pinta los trazos y restaura los textos de una instantánea del lienzo. */
   private replayBoardState(snapshot: WhiteboardBoardStateSnapshot): void {
     const restored = (Array.isArray(snapshot.strokes) ? snapshot.strokes : []).map((s) => ({
       ...s,
