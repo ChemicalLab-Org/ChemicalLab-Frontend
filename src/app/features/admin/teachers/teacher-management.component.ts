@@ -9,6 +9,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
+import { AuthRetryService, authRetryKey } from '../../../core/services/auth-retry.service';
 import { UserManagementService } from '../../../core/services/user-management.service';
 import {
   SidebarComponent,
@@ -357,10 +358,13 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               <button type="button" class="btn btn-secondary" (click)="closeReset()" [disabled]="resetSaving()">
                 Cancelar
               </button>
-              <button type="submit" class="btn btn-primary" [disabled]="resetSaving()">
+              <button type="submit" class="btn btn-primary" [disabled]="resetSaving() || resetRemaining() > 0">
                 {{ resetSaving() ? 'Restableciendo…' : 'Confirmar restablecimiento' }}
               </button>
             </div>
+            @if (resetRemaining() > 0) {
+              <p role="status" aria-live="polite">Espera {{ resetRemaining() }} segundos para volver a intentarlo.</p>
+            }
           </form>
         </div>
       </div>
@@ -368,6 +372,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
   `,
 })
 export class TeacherManagementComponent {
+  private readonly retry = inject(AuthRetryService);
   private readonly authService = inject(AuthService);
   private readonly userManagementService = inject(UserManagementService);
   private readonly router = inject(Router);
@@ -399,6 +404,8 @@ export class TeacherManagementComponent {
 
   // Restablecimiento de contraseña
   readonly resetTarget = signal<TeacherResponse | null>(null);
+  readonly resetRemaining = computed(() => this.retry.remaining(this.resetTarget() === null ? null
+    : authRetryKey('PATCH', `/users/teachers/${this.resetTarget()!.userId}/reset-password`)));
   readonly resetSaving = signal<boolean>(false);
   readonly resetError = signal<string | null>(null);
 
@@ -591,6 +598,7 @@ export class TeacherManagementComponent {
   }
 
   submitReset(): void {
+    if (this.resetRemaining() > 0 || this.resetSaving()) return;
     const target = this.resetTarget();
     if (target === null) {
       return;
@@ -609,8 +617,10 @@ export class TeacherManagementComponent {
       confirmTemporaryPassword: raw.confirmTemporaryPassword,
     };
 
+    const context = this.retry.context();
     this.userManagementService.resetTeacherPassword(target.userId, request).subscribe({
       next: () => {
+        if (context !== this.retry.context()) return;
         this.resetSaving.set(false);
         this.resetTarget.set(null);
         this.flashSuccess(
@@ -620,8 +630,9 @@ export class TeacherManagementComponent {
         this.loadTeachers();
       },
       error: (err: unknown) => {
+        if (context !== this.retry.context()) return;
         this.resetSaving.set(false);
-        this.resetError.set(this.extractError(err, 'No se pudo restablecer la contraseña.'));
+        if (this.resetTarget()?.userId === target.userId) this.resetError.set(this.extractError(err, 'No se pudo restablecer la contraseña.'));
       },
     });
   }

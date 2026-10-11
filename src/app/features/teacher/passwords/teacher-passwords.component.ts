@@ -9,6 +9,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
+import { AuthRetryService, authRetryKey } from '../../../core/services/auth-retry.service';
 import { UserManagementService } from '../../../core/services/user-management.service';
 import {
   SidebarComponent,
@@ -226,11 +227,14 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               </div>
             }
 
+            @if (resetRemaining() > 0) {
+              <p role="status" aria-live="polite">Espera {{ resetRemaining() }} segundos para volver a intentarlo.</p>
+            }
             <div class="modal__actions">
               <button type="button" class="btn btn-secondary" (click)="closeReset()" [disabled]="saving()">
                 Cancelar
               </button>
-              <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              <button type="submit" class="btn btn-primary" [disabled]="saving() || resetRemaining() > 0">
                 {{ saving() ? 'Restableciendo…' : 'Confirmar restablecimiento' }}
               </button>
             </div>
@@ -241,6 +245,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
   `,
 })
 export class TeacherPasswordsComponent {
+  private readonly retry = inject(AuthRetryService);
   private readonly authService = inject(AuthService);
   private readonly userManagementService = inject(UserManagementService);
   private readonly router = inject(Router);
@@ -276,6 +281,8 @@ export class TeacherPasswordsComponent {
   readonly userName = computed<string>(() => this.currentUser()?.username ?? 'Docente');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
   private readonly teacherUserId = computed<number | null>(() => this.currentUser()?.userId ?? null);
+  readonly resetRemaining = computed(() => this.retry.remaining(this.resetTarget() === null ? null
+    : authRetryKey('PATCH', `/users/teachers/${this.teacherUserId()}/students/${this.resetTarget()!.id}/reset-password`)));
 
   readonly filteredStudents = computed<StudentResponse[]>(() => {
     const term = this.searchTerm().trim().toLowerCase();
@@ -337,6 +344,7 @@ export class TeacherPasswordsComponent {
   }
 
   submitReset(): void {
+    if (this.resetRemaining() > 0 || this.saving()) return;
     const teacherId = this.teacherUserId();
     const target = this.resetTarget();
     if (teacherId === null || target === null) {
@@ -362,8 +370,10 @@ export class TeacherPasswordsComponent {
       confirmTemporaryPassword: raw.confirmTemporaryPassword,
     };
 
+    const context = this.retry.context();
     this.userManagementService.resetStudentPassword(teacherId, target.id, request).subscribe({
       next: () => {
+        if (context !== this.retry.context()) return;
         this.saving.set(false);
         this.resetTarget.set(null);
         this.flashSuccess(
@@ -373,8 +383,9 @@ export class TeacherPasswordsComponent {
         this.loadStudents();
       },
       error: (err: unknown) => {
+        if (context !== this.retry.context()) return;
         this.saving.set(false);
-        this.formError.set(this.extractError(err, 'No se pudo restablecer la contraseña.'));
+        if (this.resetTarget()?.id === target.id) this.formError.set(this.extractError(err, 'No se pudo restablecer la contraseña.'));
       },
     });
   }

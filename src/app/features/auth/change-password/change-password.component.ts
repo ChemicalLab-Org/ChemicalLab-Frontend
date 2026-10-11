@@ -1,4 +1,4 @@
-import { AuthRetryService } from "../../../core/services/auth-retry.service";
+import { AuthRetryService, authRetryKey } from '../../../core/services/auth-retry.service';
 import { passwordPolicyValidator, PASSWORD_GUIDANCE } from "../../../shared/utils/password-policy";
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -248,13 +248,13 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
               <span>{{ passwordGuidance }}</span>
             </div>
 
-            @if (retry.remaining() > 0) {
-              <p role="status" aria-live="polite">Espera {{ retry.remaining() }} segundos para volver a intentarlo.</p>
+            @if (retryRemaining() > 0) {
+              <p role="status" aria-live="polite">Espera {{ retryRemaining() }} segundos para volver a intentarlo.</p>
             }
             <button
               type="submit"
               class="btn-primary"
-              [disabled]="isLoading() || form.invalid || retry.remaining() > 0"
+              [disabled]="isLoading() || form.invalid || retryRemaining() > 0"
             >
               @if (isLoading()) {
                 <span>Guardando…</span>
@@ -275,6 +275,7 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
 export class ChangePasswordComponent implements OnInit {
   readonly passwordGuidance = PASSWORD_GUIDANCE;
   readonly retry = inject(AuthRetryService);
+  readonly retryRemaining = computed(() => this.retry.remaining(authRetryKey('PATCH', '/auth/change-temporary-password')));
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -356,7 +357,7 @@ export class ChangePasswordComponent implements OnInit {
   onSubmit(): void {
     this.confirmTouched.set(true);
 
-    if (this.form.invalid || this.isLoading() || this.retry.remaining() > 0) {
+    if (this.form.invalid || this.isLoading() || this.retryRemaining() > 0) {
       this.form.markAllAsTouched();
       return;
     }

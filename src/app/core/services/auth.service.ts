@@ -4,6 +4,7 @@ import { Observable, catchError, map, of, tap, throwError, timeout, finalize } f
 import { environment } from '../../../environments/environment';
 import { ExamSessionService } from './exam-session.service';
 import { SessionCleanupService } from './session-cleanup.service';
+import { AuthRetryService } from './auth-retry.service';
 import {
   AuthResponse,
   ChangePasswordRequest,
@@ -27,6 +28,7 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly examSession = inject(ExamSessionService);
   private readonly sessionCleanup = inject(SessionCleanupService);
+  private readonly authRetry = inject(AuthRetryService);
   private readonly baseUrl = `${environment.apiUrl}/auth`;
 
   private readonly _currentUser = signal<AuthResponse | null>(null);
@@ -58,6 +60,7 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${this.baseUrl}/login`, request).pipe(
       tap((response) => {
         if (revision !== this.sessionRevision) return;
+        this.authRetry.clear();
         this.persistSession(response);
         this._currentUser.set(response);
         this._isLoading.set(false);
