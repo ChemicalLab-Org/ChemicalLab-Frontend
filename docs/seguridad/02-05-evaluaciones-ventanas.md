@@ -46,8 +46,10 @@ El contador usa el answerDeadlineAt del servidor (menor de duración y dueAt),
 ajustando presentación con serverNow. El reloj del navegador nunca autoriza una
 operación: los endpoints vuelven a comprobar su reloj inyectable.
 
-La API elimina la gracia de 60 segundos para incorporar respuestas. Al vencer plazo,
-duración, archivo o desactivación, no acepta nuevos intentos ni guardar/avanzar. El
+La API elimina la gracia de 60 segundos para incorporar respuestas. Al vencer dueAt,
+archivar o desactivar, no acepta nuevos intentos ni guardar/avanzar. Agotar la
+duración cierra la escritura del intento; todavía puede haber otro intento si la
+asignación sigue abierta y queda un reintento autorizado por el servidor. El
 propietario todavía puede finalizar mediante envío/salida o recuperación GET, con
 las respuestas guardadas; un cuerpo tardío se ignora. Abiertas obligatorias faltantes
 no impiden ese cierre. La corrección exige cierre de oportunidades de **todas** las
