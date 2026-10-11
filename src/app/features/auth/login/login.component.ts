@@ -1,3 +1,4 @@
+import { AuthRetryService, authRetryKey } from '../../../core/services/auth-retry.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -154,10 +155,13 @@ import { AuthResponse } from '../../../shared/models';
               </div>
             </div>
 
+            @if (retryRemaining() > 0) {
+              <p role="status" aria-live="polite">Espera {{ retryRemaining() }} segundos para volver a intentarlo.</p>
+            }
             <button
               type="submit"
               class="btn-primary"
-              [disabled]="isLoading() || form.invalid"
+              [disabled]="isLoading() || form.invalid || retryRemaining() > 0"
             >
               @if (isLoading()) {
                 <span>Ingresando…</span>
@@ -187,6 +191,7 @@ import { AuthResponse } from '../../../shared/models';
   `,
 })
 export class LoginComponent implements OnInit {
+  readonly retry = inject(AuthRetryService);
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -202,6 +207,8 @@ export class LoginComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
 
   ngOnInit(): void {
+    this.form.get('usernameOrEmail')!.valueChanges.pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.errorMessage.set(null));
     if (this.authService.hasValidSession()) {
       void this.router.navigate(['/dashboard']);
       return;
@@ -216,8 +223,12 @@ export class LoginComponent implements OnInit {
     this.showPassword.update((v) => !v);
   }
 
+  retryRemaining(): number {
+    return this.retry.remaining(authRetryKey('POST', '/auth/login', this.form.value));
+  }
+
   onSubmit(): void {
-    if (this.form.invalid || this.isLoading()) {
+    if (this.form.invalid || this.isLoading() || this.retryRemaining() > 0) {
       this.form.markAllAsTouched();
       return;
     }
@@ -234,7 +245,8 @@ export class LoginComponent implements OnInit {
       .login({ usernameOrEmail, password })
       .pipe(
         catchError((error: unknown) => {
-          this.handleError(error);
+          this.isLoading.set(false);
+          if (this.form.value.usernameOrEmail === usernameOrEmail) this.handleError(error);
           return EMPTY;
         }),
         takeUntilDestroyed(this.destroyRef),
@@ -250,8 +262,11 @@ export class LoginComponent implements OnInit {
   }
 
   private handleError(error: unknown): void {
-    this.isLoading.set(false);
     if (error instanceof HttpErrorResponse) {
+      if (error.status === 429 || error.error?.code === "AUTH_LIMITS_UNAVAILABLE") {
+        this.errorMessage.set(error.error.message);
+        return;
+      }
       if (error.status === 401) {
         this.errorMessage.set('Usuario o contraseña incorrectos');
         return;

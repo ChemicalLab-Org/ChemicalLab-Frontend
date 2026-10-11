@@ -1,3 +1,4 @@
+import { AuthRetryService, authRetryKey } from '../services/auth-retry.service';
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
@@ -8,8 +9,12 @@ import { environment } from '../../../environments/environment';
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const router = inject(Router);
+  const retry = inject(AuthRetryService);
   if (!req.url.startsWith(`${environment.apiUrl}/`)) return next(req);
   const path = req.url.slice(environment.apiUrl.length).split('?')[0];
+  const retryKey = authRetryKey(req.method, path, req.body);
+  const context = retry.context();
+  if (retryKey && retry.remaining(retryKey) > 0) return throwError(() => retry.error(retryKey));
   const isLogin = path === '/auth/login';
   const isSessionCheck = path === '/auth/me';
   const isLogout = path === '/auth/logout' || path === '/auth/logout-all';
@@ -17,6 +22,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const outgoing = !isLogin && token && !req.headers.has('Authorization')
     ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
   return next(outgoing).pipe(catchError((error: unknown) => {
+    if (retryKey && error instanceof HttpErrorResponse
+      && (error.status === 429 || (error.status === 503 && error.error?.code === 'AUTH_LIMITS_UNAVAILABLE'))) {
+      return throwError(() => retry.start(retryKey, error, context));
+    }
     // Login/logout own their errors. Ignore late errors from replaced/revoked tokens.
     if (!isLogin && !isLogout && !isSessionCheck && token && token === auth.getToken()
       && error instanceof HttpErrorResponse) {

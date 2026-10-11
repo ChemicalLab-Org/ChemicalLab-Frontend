@@ -1,3 +1,5 @@
+import { AuthRetryService, authRetryKey } from '../../../core/services/auth-retry.service';
+import { passwordPolicyValidator, PASSWORD_GUIDANCE } from "../../../shared/utils/password-policy";
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -243,13 +245,16 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
                   <path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3z" />
                 </svg>
               </span>
-              <span><strong>Mínimo 6 caracteres.</strong> Combina letras y números.</span>
+              <span>{{ passwordGuidance }}</span>
             </div>
 
+            @if (retryRemaining() > 0) {
+              <p role="status" aria-live="polite">Espera {{ retryRemaining() }} segundos para volver a intentarlo.</p>
+            }
             <button
               type="submit"
               class="btn-primary"
-              [disabled]="isLoading() || form.invalid"
+              [disabled]="isLoading() || form.invalid || retryRemaining() > 0"
             >
               @if (isLoading()) {
                 <span>Guardando…</span>
@@ -268,6 +273,9 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
   `,
 })
 export class ChangePasswordComponent implements OnInit {
+  readonly passwordGuidance = PASSWORD_GUIDANCE;
+  readonly retry = inject(AuthRetryService);
+  readonly retryRemaining = computed(() => this.retry.remaining(authRetryKey('PATCH', '/auth/change-temporary-password')));
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -276,7 +284,7 @@ export class ChangePasswordComponent implements OnInit {
   readonly form: FormGroup = this.fb.nonNullable.group(
     {
       currentPassword: ['', [Validators.required]],
-      newPassword: ['', [Validators.required, Validators.minLength(6)]],
+      newPassword: ['', [Validators.required, passwordPolicyValidator]],
       confirmPassword: ['', [Validators.required]],
     },
     { validators: [passwordsMatchValidator] },
@@ -295,9 +303,9 @@ export class ChangePasswordComponent implements OnInit {
 
   readonly strengthLabel = computed<string>(() => {
     const s = this.passwordStrength();
-    if (s === 'weak') return 'Débil';
-    if (s === 'medium') return 'Regular';
-    if (s === 'strong') return 'Fuerte';
+    if (s === 'weak') return 'Longitud insuficiente';
+    if (s === 'medium') return 'Longitud válida';
+    if (s === 'strong') return 'Frase extensa';
     return 'Empieza a escribir…';
   });
 
@@ -349,7 +357,7 @@ export class ChangePasswordComponent implements OnInit {
   onSubmit(): void {
     this.confirmTouched.set(true);
 
-    if (this.form.invalid || this.isLoading()) {
+    if (this.form.invalid || this.isLoading() || this.retryRemaining() > 0) {
       this.form.markAllAsTouched();
       return;
     }
@@ -380,24 +388,26 @@ export class ChangePasswordComponent implements OnInit {
   }
 
   private computeStrength(value: string): PasswordStrength {
-    if (value.length === 0) return null;
-    if (value.length < 6) return 'weak';
-    const hasLetters = /[A-Za-z]/.test(value);
-    const hasDigits = /\d/.test(value);
-    if (hasLetters && hasDigits) return 'strong';
-    return 'medium';
+    const length = Array.from(value).length;
+    if (length === 0) return null;
+    if (length < 15) return 'weak';
+    return length >= 20 ? 'strong' : 'medium';
   }
 
   private handleError(error: unknown): void {
     this.isLoading.set(false);
     if (error instanceof HttpErrorResponse) {
+      if (error.status === 429 || error.error?.code === "AUTH_LIMITS_UNAVAILABLE") {
+        this.errorMessage.set(error.error.message);
+        return;
+      }
       if (error.status === 400 && error.error?.code === 'CURRENT_PASSWORD_INVALID') {
         this.errorMessage.set('La contraseña actual es incorrecta. Corrígela e inténtalo de nuevo.');
         return;
       }
       if (error.status === 400) {
         this.errorMessage.set(
-          'La contraseña actual es incorrecta o los datos no son válidos',
+          (error.error?.message ?? Object.values(error.error?.details ?? {}).join(' ')) || 'Revisa los datos de la contraseña.',
         );
         return;
       }
