@@ -22,7 +22,6 @@ import { AcademicSupervisionComponent } from './features/admin/academic-supervis
 import { PeriodicTableComponent } from './features/periodic-table/periodic-table.component';
 import { CompoundsComponent } from './features/compounds/compounds.component';
 import { ConceptsComponent } from './features/concepts/concepts.component';
-import { StudentEvaluationsComponent } from './features/student/evaluations/student-evaluations.component';
 import { NotFoundComponent } from './features/not-found/not-found.component';
 
 export const routes: Routes = [
@@ -191,7 +190,7 @@ export const routes: Routes = [
   },
   {
     path: 'evaluations',
-    component: StudentEvaluationsComponent,
+    loadComponent: () => import('./features/student/evaluations/student-evaluations.component').then(m => m.StudentEvaluationsComponent),
     canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
     data: { roles: ['ESTUDIANTE'] },
   },

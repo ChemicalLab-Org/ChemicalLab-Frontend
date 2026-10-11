@@ -1,3 +1,4 @@
+import { academicDate } from '../../../shared/utils/academic-time.util';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -192,7 +193,7 @@ const APPROVAL_PERCENTAGE = 60;
                   <span class="score-panel__max">/ 20</span>
                 </div>
                 <div class="score-panel__bar">
-                  <div class="score-panel__bar-fill" [style.width.%]="d.percentage ?? 0"></div>
+                  <div class="score-panel__bar-fill" [style.width.%]="d.percentage"></div>
                 </div>
                 <div class="score-panel__facts">
                   <div class="fact">
@@ -265,12 +266,12 @@ const APPROVAL_PERCENTAGE = 60;
                         {{ a.selectedOptionText || 'Sin responder' }}
                         @if (a.correct) {
                           <span class="material-icons answer__icon answer__icon--ok">check_circle</span>
-                        } @else {
+                        } @else if (a.correct === false) {
                           <span class="material-icons answer__icon answer__icon--bad">cancel</span>
                         }
                       </span>
                     </div>
-                    @if (!a.correct && a.correctOptionText) {
+                    @if (a.correct === false && a.correctOptionText) {
                       <div class="answer__row">
                         <span class="answer__label">Respuesta correcta:</span>
                         <span class="answer__value answer__value--correct">{{ a.correctOptionText }}</span>
@@ -389,7 +390,8 @@ export class StudentResultsComponent implements OnInit {
   // ── Utilidades de presentación ──
 
   pctBadge(percentage: number | null): string {
-    const p = percentage ?? 0;
+    if (percentage === null || percentage === undefined || !Number.isFinite(percentage)) return 'badge-neutral';
+    const p = percentage;
     if (p >= APPROVAL_PERCENTAGE) return 'badge-success';
     if (p >= 40) return 'badge-warning';
     return 'badge-danger';
@@ -415,9 +417,9 @@ export class StudentResultsComponent implements OnInit {
   }
 
   formatDate(value: string): string {
-    const date = new Date(value);
+    const date = academicDate(value);
     if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('es-PE', {
+    return new Intl.DateTimeFormat('es-PE', { timeZone: 'America/Lima',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
