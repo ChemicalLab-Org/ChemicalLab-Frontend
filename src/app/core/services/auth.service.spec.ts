@@ -53,7 +53,7 @@ describe('T02 persisted authentication client', () => {
     .flatMap(role => [false, true].map(temporary => ({ role, temporary })));
 
   function submitPasswordForm(fixture: ComponentFixture<ChangePasswordComponent>, currentPassword: string) {
-    for (const [id, value] of Object.entries({ currentPassword, newPassword: 'Replacement123', confirmPassword: 'Replacement123' })) {
+    for (const [id, value] of Object.entries({ currentPassword, newPassword: 'Replacement-phrase-123', confirmPassword: 'Replacement-phrase-123' })) {
       const input = fixture.nativeElement.querySelector(`#${id}`) as HTMLInputElement;
       input.value = value;
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -180,7 +180,7 @@ describe('T02 persisted authentication client', () => {
     const navigation = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     const fixture = TestBed.createComponent(ChangePasswordComponent);
     await fixture.whenStable();
-    fixture.componentInstance.form.setValue({ currentPassword: 'Fixture123', newPassword: 'Replacement123', confirmPassword: 'Replacement123' });
+    fixture.componentInstance.form.setValue({ currentPassword: 'Fixture123', newPassword: 'Replacement-phrase-123', confirmPassword: 'Replacement-phrase-123' });
     fixture.componentInstance.onSubmit();
     const replacement = token('replacement');
     http.expectOne(`${base}/auth/change-temporary-password`).flush({

@@ -1,3 +1,4 @@
+import { passwordPolicyValidator, PASSWORD_GUIDANCE } from "../../../shared/utils/password-policy";
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -194,9 +195,10 @@ type StatusFilter = 'all' | 'active' | 'inactive';
               <div class="form-group form-group--full">
                 <label class="form-label" for="newTemporaryPassword">Nueva contraseña temporal</label>
                 <input id="newTemporaryPassword" class="input" type="text" formControlName="newTemporaryPassword"
-                  placeholder="Mín. 6 caracteres" [class.input-error]="isInvalid('newTemporaryPassword')" />
+                  placeholder="Mín. 15 caracteres; puedes usar una frase" [class.input-error]="isInvalid('newTemporaryPassword')" />
+                <span class="form-hint">{{ passwordGuidance }}</span>
                 @if (isInvalid('newTemporaryPassword')) {
-                  <span class="form-error">La contraseña debe tener entre 6 y 100 caracteres.</span>
+                  <span class="form-error">La contraseña debe tener entre 15 y 128 caracteres Unicode.</span>
                 }
               </div>
 
@@ -205,7 +207,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
                 <input id="confirmTemporaryPassword" class="input" type="text" formControlName="confirmTemporaryPassword"
                   placeholder="Repite la contraseña" [class.input-error]="isInvalid('confirmTemporaryPassword') || mismatch()" />
                 @if (isInvalid('confirmTemporaryPassword')) {
-                  <span class="form-error">Confirma la contraseña (entre 6 y 100 caracteres).</span>
+                  <span class="form-error">Confirma la contraseña (entre 15 y 128 caracteres Unicode).</span>
                 } @else if (mismatch()) {
                   <span class="form-error">La contraseña y su confirmación no coinciden.</span>
                 }
@@ -242,6 +244,7 @@ export class TeacherPasswordsComponent {
   private readonly authService = inject(AuthService);
   private readonly userManagementService = inject(UserManagementService);
   private readonly router = inject(Router);
+  readonly passwordGuidance = PASSWORD_GUIDANCE;
   private readonly fb = inject(FormBuilder);
 
   readonly navItems: readonly SidebarNavItem[] = TEACHER_NAV_ITEMS;
@@ -264,8 +267,8 @@ export class TeacherPasswordsComponent {
   readonly formError = signal<string | null>(null);
 
   readonly form: FormGroup = this.fb.group({
-    newTemporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
-    confirmTemporaryPassword: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(100)]],
+    newTemporaryPassword: ['', [Validators.required, passwordPolicyValidator]],
+    confirmTemporaryPassword: ['', [Validators.required, passwordPolicyValidator]],
   });
 
   // Usuario autenticado
