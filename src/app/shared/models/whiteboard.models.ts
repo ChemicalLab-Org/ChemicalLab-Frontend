@@ -202,6 +202,8 @@ export interface WhiteboardDrawEventRequest {
 
 /** Evento de dibujo difundido a los suscriptores de /topic/whiteboards/{sessionId}. */
 export interface WhiteboardDrawEventResponse {
+  readonly ownerUserId?: number | null;
+  readonly revision?: number;
   readonly sessionId: number;
   readonly eventType: WhiteboardDrawEventType;
   readonly tool: WhiteboardDrawTool;
@@ -251,6 +253,7 @@ export type WhiteboardTopicMessage =
  * se guardó ningún estado. El frontend interpreta el contenido del JSON (trazos + textos).
  */
 export interface WhiteboardBoardStateResponse {
+  readonly revision?: number;
   readonly sessionId: number;
   readonly status: WhiteboardSessionStatus;
   readonly stateJson: string | null;
@@ -262,6 +265,7 @@ export interface WhiteboardBoardStateResponse {
  * Pendiente: para seleccionar/mover trazos se requiere convertirlos a objetos agrupados con id estable.
  */
 export interface WhiteboardStrokeRecord {
+  readonly ownerUserId?: number | null;
   /** Identificador estable local del trazo cuando el frontend puede conservarlo. */
   readonly id?: string;
   readonly eventType: 'DRAW' | 'ERASE';
@@ -273,6 +277,7 @@ export interface WhiteboardStrokeRecord {
 
 /** Objeto de texto serializado dentro del estado del lienzo (coordenadas de workspace). */
 export interface WhiteboardTextRecord {
+  readonly ownerUserId?: number | null;
   readonly id: string;
   readonly wx: number;
   readonly wy: number;
@@ -283,6 +288,7 @@ export interface WhiteboardTextRecord {
 
 /** Forma estructurada serializada dentro del estado del lienzo. */
 export interface WhiteboardShapeRecord {
+  readonly ownerUserId?: number | null;
   readonly id: string;
   readonly type: WhiteboardShapeType;
   readonly x1: number;
@@ -299,6 +305,7 @@ export interface WhiteboardShapeRecord {
  * un alumno que recarga o entra tarde reconstruya el estado actual antes de seguir en vivo.
  */
 export interface WhiteboardBoardStateSnapshot {
+  readonly revision?: number;
   readonly v: 1;
   readonly strokes: readonly WhiteboardStrokeRecord[];
   readonly texts: readonly WhiteboardTextRecord[];
