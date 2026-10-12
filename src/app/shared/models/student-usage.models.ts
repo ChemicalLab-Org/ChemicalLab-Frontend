@@ -1,3 +1,4 @@
+import { QueryPage } from './query-page.models';
 import { UserRole } from './auth.models';
 import { UsageEventType, UsageModule } from './usage-metrics.models';
 
@@ -53,6 +54,7 @@ export interface StudentUsageSummary {
 export interface StudentUsageRecordsResponse {
   readonly summary: StudentUsageSummary;
   readonly records: StudentUsageRecord[];
+  readonly page: QueryPage<StudentUsageRecord>;
 }
 
 /** Evento de uso reciente mostrado en el detalle (sin metadata ni payloads). */
@@ -88,6 +90,7 @@ export interface StudentUsageDetailResponse {
   readonly summary: StudentUsageRecord;
   readonly recentEvents: StudentUsageEventItem[];
   readonly evaluations: StudentUsageEvaluationItem[];
+  readonly evaluationsPage: QueryPage<StudentUsageEvaluationItem>;
   readonly incidents: StudentUsageIncidentItem[];
 }
 

@@ -1,3 +1,4 @@
+import { QueryPage } from '../../shared/models/query-page.models';
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
@@ -27,8 +28,8 @@ export class UserManagementService {
   // ===========================================================================
 
   /** Lista todos los docentes registrados en el sistema. */
-  listTeachers(): Observable<TeacherResponse[]> {
-    return this.http.get<TeacherResponse[]>(`${this.baseUrl}/teachers`);
+  listTeachers(page=0,search='',status='all'): Observable<QueryPage<TeacherResponse>> {
+    return this.http.get<QueryPage<TeacherResponse>>(`${this.baseUrl}/teachers`,{params:{page,size:25,search,status}});
   }
 
   /** Registra un nuevo docente. */
@@ -60,10 +61,11 @@ export class UserManagementService {
   // ===========================================================================
 
   /** Lista los estudiantes asociados a un docente. */
-  listStudentsByTeacher(teacherUserId: number): Observable<StudentResponse[]> {
-    return this.http.get<StudentResponse[]>(
-      `${this.baseUrl}/teachers/${teacherUserId}/students`
-    );
+  listStudentsByTeacher(teacherUserId:number,page=0,search='',grade='',section='',status='all'):Observable<QueryPage<StudentResponse>> {
+    return this.http.get<QueryPage<StudentResponse>>(`${this.baseUrl}/teachers/${teacherUserId}/students`,{params:{page,size:25,search,grade,section,status}});
+  }
+  studentSummary(teacherUserId:number):Observable<{total:number;active:number;groups:{grade:string;section:string}[]}> {
+    return this.http.get<{total:number;active:number;groups:{grade:string;section:string}[]}>(`${this.baseUrl}/teachers/${teacherUserId}/students/summary`);
   }
 
   /** Registra un nuevo estudiante para el docente indicado. */

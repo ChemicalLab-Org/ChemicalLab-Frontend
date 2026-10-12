@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -38,7 +39,7 @@ interface SectionOption {
 @Component({
   selector: 'app-teacher-whiteboards',
   standalone: true,
-  imports: [ReactiveFormsModule, SidebarComponent],
+  imports: [PaginationComponent,ReactiveFormsModule, SidebarComponent],
   styleUrls: ['./teacher-whiteboards.component.scss'],
   template: `
     <div class="layout">
@@ -71,6 +72,7 @@ interface SectionOption {
           </div>
         }
 
+        <app-pagination [page]="page()" [totalPages]="totalPages()" [total]="total()" [loading]="loading()" (pageChange)="changePage($event)" />
         @if (loading()) {
           <div class="loading-state">
             <div class="loading-state__spinner"></div>
@@ -286,6 +288,8 @@ export class TeacherWhiteboardsComponent {
 
   readonly sessions = signal<WhiteboardSessionResponse[]>([]);
   readonly loading = signal<boolean>(false);
+  readonly page=signal(0);readonly totalPages=signal(0);readonly total=signal(0);
+  private requestVersion=0;
   readonly error = signal<string | null>(null);
   readonly successMessage = signal<string | null>(null);
   readonly actionBusyId = signal<number | null>(null);
@@ -322,21 +326,25 @@ export class TeacherWhiteboardsComponent {
     if (teacherId === null) {
       return;
     }
-    this.userManagementService.listStudentsByTeacher(teacherId).subscribe({
-      next: (students) => this.studentSectionOptions.set(buildSectionOptions(students)),
+    this.userManagementService.studentSummary(teacherId).subscribe({
+      next: (students) => this.studentSectionOptions.set(buildSectionOptions(students.groups)),
       error: () => this.studentSectionOptions.set([]),
     });
   }
 
+  changePage(page:number):void {this.page.set(page);this.loadSessions();}
   loadSessions(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.whiteboardService.listSessions().subscribe({
+    const request=++this.requestVersion;
+    this.whiteboardService.listSessions(this.page()).subscribe({
       next: (sessions) => {
-        this.sessions.set(sessions);
+        if(request!==this.requestVersion)return;
+        this.sessions.set(sessions.content);this.totalPages.set(sessions.totalPages);this.total.set(sessions.totalElements);
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if(request!==this.requestVersion)return;
         this.error.set(this.extractError(err, 'Ocurrió un error al cargar las sesiones.'));
         this.loading.set(false);
       },

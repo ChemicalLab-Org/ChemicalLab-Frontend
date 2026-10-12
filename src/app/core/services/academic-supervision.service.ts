@@ -1,3 +1,4 @@
+import { QueryPage } from '../../shared/models/query-page.models';
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
@@ -30,20 +31,23 @@ export class AcademicSupervisionService {
   }
 
   /** Contenidos conceptuales con sus metadatos y secciones asignadas. */
-  listConcepts(): Observable<SupervisionConcept[]> {
-    return this.http.get<SupervisionConcept[]>(`${this.baseUrl}/concepts`);
+  listConcepts(page=0,filters:Record<string,string|boolean>={}): Observable<QueryPage<SupervisionConcept>> {
+    return this.http.get<QueryPage<SupervisionConcept>>(`${this.baseUrl}/concepts`,{params:{page,size:25,...filters}});
   }
 
   /** Evaluaciones con sus metadatos (sin clave de respuestas). */
-  listEvaluations(): Observable<SupervisionEvaluation[]> {
-    return this.http.get<SupervisionEvaluation[]>(`${this.baseUrl}/evaluations`);
+  listEvaluations(page=0,filters:Record<string,string|boolean>={}): Observable<QueryPage<SupervisionEvaluation>> {
+    return this.http.get<QueryPage<SupervisionEvaluation>>(`${this.baseUrl}/evaluations`,{params:{page,size:25,...filters}});
   }
 
   /** Vista unificada de asignaciones de contenidos y evaluaciones. */
-  listAssignments(): Observable<SupervisionAssignment[]> {
-    return this.http.get<SupervisionAssignment[]>(`${this.baseUrl}/assignments`);
+  listAssignments(page=0,filters:Record<string,string|boolean>={}): Observable<QueryPage<SupervisionAssignment>> {
+    return this.http.get<QueryPage<SupervisionAssignment>>(`${this.baseUrl}/assignments`,{params:{page,size:25,...filters}});
   }
 
+  getOptions():Observable<{categories:string[];groups:{grade:string;section:string}[];activeConceptGroups:{grade:string;section:string}[];activeEvaluationGroups:{grade:string;section:string}[]}> {
+    return this.http.get<{categories:string[];groups:{grade:string;section:string}[];activeConceptGroups:{grade:string;section:string}[];activeEvaluationGroups:{grade:string;section:string}[]}>(`${this.baseUrl}/options`);
+  }
   /** Actividad reciente del sistema (registros existentes). */
   getActivity(): Observable<AdminActivity> {
     return this.http.get<AdminActivity>(`${this.baseUrl}/activity`);

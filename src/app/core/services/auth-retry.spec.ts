@@ -186,7 +186,7 @@ describe('T04 password policy and retry flows', () => {
     const fixture = TestBed.createComponent(TeacherPasswordsComponent);
     const students = [2,3].map(id => ({ id, names: 'Fictitious', lastNames: `Student ${id}`, studentCode: `ST${id}`,
       active:true, grade:'3', section:'A' } as StudentResponse));
-    http.expectOne(`${base}/users/teachers/1/students`).flush(students);
+    http.expectOne(r=>r.url===`${base}/users/teachers/1/students`).flush({content:students,number:0,size:25,totalElements:2,totalPages:1});
     await fixture.whenStable();
     vi.useFakeTimers();
     const component = fixture.componentInstance;

@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -37,7 +38,7 @@ const NOT_AVAILABLE = 'No disponible';
 @Component({
   selector: 'app-admin-student-usage-records',
   standalone: true,
-  imports: [FormsModule, SidebarComponent],
+  imports: [PaginationComponent,FormsModule, SidebarComponent],
   styleUrls: ['./student-usage-records.component.scss'],
   template: `
     <div class="layout">
@@ -215,6 +216,7 @@ const NOT_AVAILABLE = 'No disponible';
           </section>
 
           <!-- Tabla consolidada -->
+          <app-pagination [page]="page()" [totalPages]="d.page.totalPages" [total]="d.page.totalElements" [loading]="loading()" (pageChange)="changePage($event)" />
           @if (d.records.length === 0) {
             <div class="state state--empty">
               <span class="material-icons">inbox</span>
@@ -407,6 +409,7 @@ const NOT_AVAILABLE = 'No disponible';
               <h3 class="modal__section-title">
                 <span class="material-icons">assignment</span> Evaluaciones
               </h3>
+              <app-pagination [page]="detailPage()" [totalPages]="det.evaluationsPage.totalPages" [total]="det.evaluationsPage.totalElements" [loading]="detailLoading()" (pageChange)="openDetail(det.summary,$event)" />
               @if (det.evaluations.length === 0) {
                 <p class="modal__empty">Sin evaluaciones asignadas ni intentos registrados.</p>
               } @else {
@@ -537,6 +540,10 @@ export class StudentUsageRecordsComponent implements OnInit {
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
   readonly loading = signal<boolean>(false);
+  readonly page=signal(0);
+  readonly detailPage=signal(0);
+  private requestVersion=0;
+  private detailVersion=0;
   readonly error = signal<string | null>(null);
   readonly data = signal<StudentUsageRecordsResponse | null>(null);
 
@@ -575,6 +582,7 @@ export class StudentUsageRecordsComponent implements OnInit {
     this.load();
   }
 
+  changePage(page:number):void {this.page.set(page);this.load();}
   reload(): void {
     this.load();
   }
@@ -583,7 +591,7 @@ export class StudentUsageRecordsComponent implements OnInit {
     if (this.dateRangeInvalid()) {
       return;
     }
-    this.load();
+    this.page.set(0);this.load();
   }
 
   clearFilters(): void {
@@ -594,22 +602,25 @@ export class StudentUsageRecordsComponent implements OnInit {
     this.fromFilter.set('');
     this.toFilter.set('');
     this.moduleFilter.set('');
-    this.onlyWithActivity.set(false);
+    this.onlyWithActivity.set(false);this.page.set(0);
     this.load();
   }
 
-  openDetail(record: StudentUsageRecord): void {
+  openDetail(record: StudentUsageRecord,page=0): void {
+    this.detailPage.set(page);const request=++this.detailVersion;
     this.detailOpen.set(true);
     this.detailLoading.set(true);
     this.detailError.set(null);
     this.detail.set(null);
 
-    this.studentUsageService.getDetail(record.userId).subscribe({
+    this.studentUsageService.getDetail(record.userId,page).subscribe({
       next: (det) => {
+        if(request!==this.detailVersion)return;
         this.detail.set(det);
         this.detailLoading.set(false);
       },
       error: () => {
+        if(request!==this.detailVersion)return;
         this.detailError.set('No se pudo cargar el detalle del usuario. Intenta nuevamente.');
         this.detailLoading.set(false);
       },
@@ -617,7 +628,7 @@ export class StudentUsageRecordsComponent implements OnInit {
   }
 
   closeDetail(): void {
-    this.detailOpen.set(false);
+    this.detailVersion++;this.detailOpen.set(false);
     this.detail.set(null);
     this.detailError.set(null);
   }
@@ -637,12 +648,15 @@ export class StudentUsageRecordsComponent implements OnInit {
       onlyStudentsWithActivity: this.onlyWithActivity(),
     };
 
-    this.studentUsageService.getRecords(filters).subscribe({
+    const request=++this.requestVersion;
+    this.studentUsageService.getRecords(filters,this.page()).subscribe({
       next: (response) => {
+        if(request!==this.requestVersion)return;
         this.data.set(response);
         this.loading.set(false);
       },
       error: (err) => {
+        if(request!==this.requestVersion)return;
         const message = err?.status === 400
           ? (err?.error?.message ?? 'Los filtros seleccionados no son válidos.')
           : 'No se pudo cargar el registro de uso. Intenta nuevamente.';

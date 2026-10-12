@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  QueryPage,
   AdminActivity,
   AdminPasswordResetResponse,
   AdminSummary,
@@ -29,8 +30,8 @@ export class AdminService {
   }
 
   /** Listado unificado de todos los usuarios (admins, docentes y estudiantes). */
-  listUsers(): Observable<AdminUser[]> {
-    return this.http.get<AdminUser[]>(`${this.adminUrl}/users`);
+  listUsers(page=0, size=25, search='', filter='all'): Observable<QueryPage<AdminUser>> {
+    return this.http.get<QueryPage<AdminUser>>(`${this.adminUrl}/users`, {params:{page,size,search,filter}});
   }
 
   /** Actividad reciente basada en registros existentes. */
@@ -39,8 +40,8 @@ export class AdminService {
   }
 
   /** Docentes activos disponibles como docente responsable de un estudiante. */
-  getTeacherOptions(): Observable<TeacherOption[]> {
-    return this.http.get<TeacherOption[]>(`${this.adminUrl}/users/teacher-options`);
+  getTeacherOptions(page=0,search='',selected?:number): Observable<QueryPage<TeacherOption>> {
+    return this.http.get<QueryPage<TeacherOption>>(`${this.adminUrl}/users/teacher-options`, {params:{page,size:25,search,...(selected?{selected}:{})}});
   }
 
   /**

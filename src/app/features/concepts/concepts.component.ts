@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../shared/components/pagination/pagination.component';
 import {
   Component,
   ElementRef,
@@ -72,7 +73,7 @@ const LEGACY_CATEGORY_ORDER: string[] = [
 @Component({
   selector: 'app-concepts',
   standalone: true,
-  imports: [SidebarComponent],
+  imports: [PaginationComponent,SidebarComponent],
   styleUrls: ['./concepts.component.scss'],
   template: `
     <div class="layout">
@@ -234,6 +235,10 @@ const LEGACY_CATEGORY_ORDER: string[] = [
               @if (concept.materials.length > 0) {
                 <div class="content-section">
                   <div class="content-section__label">Materiales de apoyo</div>
+              @if (concept.materialsPage; as mp) {
+                <app-pagination [page]="mp.number" [totalPages]="mp.totalPages" [total]="mp.totalElements" [loading]="materialsLoading()" (pageChange)="changeMaterialsPage($event)" />
+              }
+              @if (materialsPageError()) {<p role="alert">{{ materialsPageError() }}</p>}
 
                   <!-- Archivos -->
                   @if (fileMaterials().length > 0) {
@@ -502,6 +507,20 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   readonly loading = signal(true);
   readonly loadError = signal(false);
   readonly concepts = signal<StudentConceptContentResponse[]>([]);
+  readonly materialsLoading=signal(false);
+  readonly materialsPageError=signal<string|null>(null);
+  private materialsRequest=0;
+  changeMaterialsPage(page:number):void {
+    const concept=this.selectedConcept();if(!concept)return;
+    const request=++this.materialsRequest;this.materialsLoading.set(true);this.materialsPageError.set(null);
+    this.materialsService.listMaterials(concept.id,page).subscribe({
+      next:mp=>{if(request!==this.materialsRequest)return;
+        this.concepts.update(items=>items.map(c=>c.id===concept.id?{...c,materials:mp.content,materialsPage:mp}:c));
+        this.materialsLoading.set(false);},
+      error:()=>{if(request!==this.materialsRequest)return;this.materialsLoading.set(false);this.materialsPageError.set('No se pudieron cargar los materiales. Inténtalo de nuevo.');}
+    });
+  }
+
 
   readonly query = signal('');
   readonly activeCategory = signal<ConceptCategory | null>(null);
@@ -745,7 +764,7 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   }
 
   materialCount(concept: StudentConceptContentResponse): number {
-    return concept.materials.length;
+    return concept.materialsPage?.totalElements ?? concept.materials.length;
   }
 
   materialIcon(material: ConceptMaterialResponse): string {

@@ -1,3 +1,4 @@
+import { QueryPage } from "./query-page.models";
 /**
  * Modelos de la trazabilidad de un intento para la vista del docente.
  * Reflejan los DTOs del backend `AttemptTraceabilityResponse` y `AttemptEventResponse`
@@ -46,4 +47,5 @@ export interface AttemptTraceabilityResponse {
   readonly toolsUsed: string[];
   /** Línea de tiempo cronológica de eventos del intento. */
   readonly events: AttemptEventResponse[];
+  readonly eventsPage: QueryPage<AttemptEventResponse>;
 }

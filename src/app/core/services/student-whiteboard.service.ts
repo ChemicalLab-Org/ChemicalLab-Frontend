@@ -1,3 +1,4 @@
+import { QueryPage } from '../../shared/models/query-page.models';
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
@@ -26,8 +27,8 @@ export class StudentWhiteboardService {
   private readonly baseUrl = `${environment.apiUrl}/whiteboards/student`;
 
   /** Lista las sesiones ACTIVE/PAUSED disponibles para el grado/sección del estudiante. */
-  listActiveSessions(): Observable<WhiteboardStudentSessionResponse[]> {
-    return this.http.get<WhiteboardStudentSessionResponse[]>(`${this.baseUrl}/active`);
+  listActiveSessions(page=0): Observable<QueryPage<WhiteboardStudentSessionResponse>> {
+    return this.http.get<QueryPage<WhiteboardStudentSessionResponse>>(`${this.baseUrl}/active`,{params:{page,size:25}});
   }
 
   /**
@@ -44,8 +45,8 @@ export class StudentWhiteboardService {
   }
 
   /** Lista el historial de sesiones cerradas del grado/sección del estudiante. */
-  listHistory(): Observable<WhiteboardHistoryItemResponse[]> {
-    return this.http.get<WhiteboardHistoryItemResponse[]>(`${this.baseUrl}/history`);
+  listHistory(page=0): Observable<QueryPage<WhiteboardHistoryItemResponse>> {
+    return this.http.get<QueryPage<WhiteboardHistoryItemResponse>>(`${this.baseUrl}/history`,{params:{page,size:25}});
   }
 
   /** Descarga la captura final de una sesión cerrada como imagen (blob) para mostrarla/guardarla. */

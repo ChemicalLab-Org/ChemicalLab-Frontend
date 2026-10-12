@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -33,7 +34,7 @@ type WhiteboardTab = 'live' | 'history';
 @Component({
   selector: 'app-student-whiteboards',
   standalone: true,
-  imports: [SidebarComponent],
+  imports: [PaginationComponent,SidebarComponent],
   styleUrls: ['./student-whiteboards.component.scss'],
   template: `
     <div class="layout">
@@ -86,6 +87,7 @@ type WhiteboardTab = 'live' | 'history';
 
         @if (tab() === 'live') {
           <!-- ── Sesiones en vivo ─────────────────────────────────────────────── -->
+          <app-pagination [page]="livePage()" [totalPages]="livePages()" [total]="liveTotal()" [loading]="liveLoading()" (pageChange)="changeLivePage($event)" />
           @if (liveLoading()) {
             <div class="loading-state">
               <div class="loading-state__spinner"></div>
@@ -168,6 +170,7 @@ type WhiteboardTab = 'live' | 'history';
           }
         } @else {
           <!-- ── Historial ────────────────────────────────────────────────────── -->
+          <app-pagination [page]="historyPage()" [totalPages]="historyPages()" [total]="historyTotal()" [loading]="historyLoading()" (pageChange)="changeHistoryPage($event)" />
           @if (historyLoading()) {
             <div class="loading-state">
               <div class="loading-state__spinner"></div>
@@ -251,6 +254,10 @@ export class StudentWhiteboardsComponent {
   readonly userRole = 'Estudiante';
 
   readonly tab = signal<WhiteboardTab>('live');
+  readonly livePage=signal(0);readonly historyPage=signal(0);
+  readonly livePages=signal(0);readonly historyPages=signal(0);
+  readonly liveTotal=signal(0);readonly historyTotal=signal(0);
+  private liveRequest=0;private historyRequest=0;
 
   readonly liveSessions = signal<WhiteboardStudentSessionResponse[]>([]);
   readonly liveLoading = signal<boolean>(false);
@@ -285,15 +292,20 @@ export class StudentWhiteboardsComponent {
     }
   }
 
+  changeLivePage(page:number):void{this.livePage.set(page);this.loadLive();}
+  changeHistoryPage(page:number):void{this.historyPage.set(page);this.loadHistory();}
   loadLive(): void {
     this.liveLoading.set(true);
     this.liveError.set(null);
-    this.whiteboardService.listActiveSessions().subscribe({
+    const request=++this.liveRequest;
+    this.whiteboardService.listActiveSessions(this.livePage()).subscribe({
       next: (sessions) => {
-        this.liveSessions.set(sessions);
+        if(request!==this.liveRequest)return;
+        this.liveSessions.set(sessions.content);this.livePages.set(sessions.totalPages);this.liveTotal.set(sessions.totalElements);
         this.liveLoading.set(false);
       },
       error: (err: unknown) => {
+        if(request!==this.liveRequest)return;
         this.liveError.set(this.extractError(err, 'Ocurrió un error al cargar las sesiones.'));
         this.liveLoading.set(false);
       },
@@ -303,13 +315,16 @@ export class StudentWhiteboardsComponent {
   loadHistory(): void {
     this.historyLoading.set(true);
     this.historyError.set(null);
-    this.whiteboardService.listHistory().subscribe({
+    const request=++this.historyRequest;
+    this.whiteboardService.listHistory(this.historyPage()).subscribe({
       next: (items) => {
-        this.historyItems.set(items);
+        if(request!==this.historyRequest)return;
+        this.historyItems.set(items.content);this.historyPages.set(items.totalPages);this.historyTotal.set(items.totalElements);
         this.historyLoading.set(false);
         this.historyLoaded = true;
       },
       error: (err: unknown) => {
+        if(request!==this.historyRequest)return;
         this.historyError.set(this.extractError(err, 'Ocurrió un error al cargar el historial.'));
         this.historyLoading.set(false);
       },

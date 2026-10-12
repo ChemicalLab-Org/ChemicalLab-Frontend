@@ -1044,9 +1044,9 @@ export class TeacherEvaluationsComponent {
     if (teacherId === null) {
       return;
     }
-    this.userManagementService.listStudentsByTeacher(teacherId).subscribe({
+    this.userManagementService.studentSummary(teacherId).subscribe({
       next: (students) => {
-        this.studentSectionOptions.set(buildSectionOptions(students));
+        this.studentSectionOptions.set(buildSectionOptions(students.groups));
       },
       error: () => {
         this.studentSectionOptions.set([]);
