@@ -159,14 +159,14 @@ const APPROVAL_PERCENTAGE = 60;
                 @if (d.reviewAvailableAt) {
                   <p class="review-pending__meta">
                     <span class="material-icons">event</span>
-                    Disponible a partir del {{ formatDate(d.reviewAvailableAt) }}
+                    Cierre de las ventanas: {{ formatDate(d.reviewAvailableAt) }} (Lima)
                   </p>
                 }
                 @if (d.assignedStudentsCount > 0) {
                   <div class="review-pending__progress">
                     <div class="review-pending__progress-head">
-                      <span>Progreso del grupo</span>
-                      <span>{{ d.finishedStudentsCount }} de {{ d.assignedStudentsCount }} finalizaron</span>
+                      <span>Intentos de las alumnas actuales</span>
+                      <span>{{ d.finishedStudentsCount }} de {{ d.assignedStudentsCount }} agotaron sus intentos</span>
                     </div>
                     <div class="review-pending__bar">
                       <div
@@ -318,7 +318,8 @@ export class StudentResultsComponent implements OnInit {
   /** Mensaje de respaldo si el backend no envía uno mientras la revisión está bloqueada. */
   readonly defaultLockedMessage =
     'Tu evaluación fue enviada correctamente. La revisión estará disponible cuando ' +
-    'todas las estudiantes asignadas hayan finalizado o cuando se cumpla la fecha límite.';
+    'cierren las ventanas de todas las secciones, aunque las alumnas actuales hayan agotado sus intentos. ' +
+    'Las asignaciones sin fecha límite requieren que el docente las cierre.';
 
   ngOnInit(): void {
     this.load();

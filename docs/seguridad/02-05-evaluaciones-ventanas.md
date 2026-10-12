@@ -54,7 +54,9 @@ propietario todavía puede finalizar mediante envío/salida o recuperación GET,
 las respuestas guardadas; un cuerpo tardío se ignora. Abiertas obligatorias faltantes
 no impiden ese cierre. La corrección exige cierre de oportunidades de **todas** las
 secciones y cierre de nota/GRADED; cerrar la sección A no revela respuestas mientras
-B pueda responder. Con resultados existentes no se reabren asignaciones; con
+B pueda responder. Esto incluye secciones futuras o vacías: agotar intentos del
+padrón actual no adelanta la revisión. Sin dueAt se requiere cierre explícito de
+las asignaciones o archivo. Con resultados existentes no se reabren asignaciones; con
 intentos existentes no se amplían reintentos ni cambia duración/modo.
 
 El frontend nuevo requiere el backend T05. La API añade campos compatibles con el
@@ -66,7 +68,7 @@ presupuesto de producción de 1 MB, sin aumentarlo. Continúan los avisos SCSS p
 
 Las reproducciones previas SEC-11/12 fallaron sobre la base backend actual antes
 de modificar EvaluationService: score=3 restringido y pregunta antes de startAt.
-Ahora pasan; el backend ejecutó **494 pruebas, ninguna omitida**, con PostgreSQL
+Ahora pasan; el backend ejecutó **499 pruebas, ninguna omitida**, con PostgreSQL
 18 desechable y JAR generado. La integración HTTP T05 incluye dos alumnas/secciones,
 límites ±1 ns, fechas ausentes/invalidación, duración y sin gracia, abiertas/notas
 parciales, nota cerrada/no cerrada, ajustes, reintentos, secuencial, recursos ajenos,
@@ -78,8 +80,8 @@ navegador distinto, actualización de programación, reanudación sin almacenami
 URL directa sin crear otro intento, guardado/avance rechazados con recuperación,
 y notas/corrección ausentes sin cero/error. Se ejecutan también las regresiones
 T02–T04 y transporte STOMP real con `T03_LIVE_FIXTURE` de otra fixture desechable.
-Resultado final: **128 pruebas, 0 fallos y 0 omitidas**. Build de producción
-correcto, bundle inicial 943.56 kB, sin aumentar presupuestos. Los siete escenarios
+Resultado final: **129 pruebas, 0 fallos y 0 omitidas**. Build de producción
+correcto, bundle inicial 943.56 kB, sin aumentar presupuestos. Los diez escenarios
 HTTP backend también pasaron con JVM `-Duser.timezone=Asia/Tokyo`, conservando los
 límites académicos de Lima.
 
@@ -102,6 +104,30 @@ incorporó. No hubo errores de consola en ese flujo. Capturas locales
 configuraciones locales. Solo código, pruebas y documentación ficticia revisada.
 
 ## Límites
+
+### Corrección antes del merge: padrón mutable
+
+Sobre backend #59 HEAD `6cd9e49a58fef1a99c332dc83da98d5c3cc4f244` se reprodujeron
+la sección futura vacía y el grupo disponible terminado seguido de incorporaciones:
+dos pruebas de servicio y dos HTTP fallaron por corrección expuesta antes del cierre.
+Se elimina la liberación anticipada; se espera al cierre definitivo de todas las
+asignaciones. No se agrega cierre persistente ni cambia el modelo institucional.
+Una alta, reactivación o cambio de sección posterior no puede reabrir esas ventanas.
+
+Angular mantiene reviewLocked aunque los contadores actuales indiquen 100% de
+intentos agotados o ninguna alumna. El mensaje de respaldo ahora explica el cierre
+de las ventanas de todas las secciones y el cierre docente requerido sin dueAt.
+El progreso se identifica como intentos de las alumnas actuales; la fecha se
+presenta como cierre de ventanas, sin prometer liberación por padrón terminado.
+Una nueva prueba DOM/HTTP comprueba esos estados y ausencia de nota/corrección.
+La nota backend detalla los tres nuevos escenarios PostgreSQL de altas/reactivación,
+cambio de sección y consultas/escrituras/recuperación antes/después del cierre.
+El indicador de feedback en el resumen también exige nota cerrada/GRADED; tras
+ese último ajuste backend se ejecutaron 102 pruebas de evaluaciones y package del
+JAR final. La ejecución Angular final fue la habitual, después de terminar Java:
+una ejecución previa abortó por un worker y otra con workers limitados falló en
+el mock de T03; no se omitieron pruebas ni se alteró T02–T04 para obtener el resultado.
+Se continúa etapa 2, seguridad actual, en los PR #59/#81; no se avanza a T06.
 
 No se accedió a la base escolar ni se hicieron despliegues, migraciones productivas,
 rotaciones, merge, instituciones/invitaciones/privacidad o T06. No se amplió a la

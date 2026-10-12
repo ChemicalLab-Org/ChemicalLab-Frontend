@@ -120,4 +120,34 @@ describe('T05 server windows and hidden results', () => {
     expect(resultFixture.nativeElement.querySelector('.answer__icon--bad')).toBeNull();
     expect(resultFixture.nativeElement.textContent).toContain('—'); resultFixture.destroy();
   });
+  it('keeps review blocked when the current roster exhausted attempts but assignments remain open', () => {
+    const resultFixture = TestBed.createComponent(StudentResultsComponent); resultFixture.detectChanges();
+    http.expectOne(`${base}/results`).flush([]);
+    const component = resultFixture.componentInstance;
+    component.openDetail(42);
+    http.expectOne(`${base}/attempts/42/result`).flush({
+      evaluationTitle: 'Ficticio', reviewLocked: true, reviewAvailable: false, gradeClosed: true,
+      canViewDetailedFeedback: false, reviewMessage: null, reviewAvailableAt: '2030-06-04T10:15:00',
+      assignedStudentsCount: 1, finishedStudentsCount: 1, pendingStudentsCount: 0,
+      score: null, maxScore: null, finalScore: null, percentage: null, answers: [],
+    });
+    resultFixture.detectChanges();
+    expect(resultFixture.nativeElement.textContent).toContain('Revisión pendiente');
+    expect(resultFixture.nativeElement.textContent).toContain('cierren las ventanas de todas las secciones');
+    expect(resultFixture.nativeElement.textContent).toContain('1 de 1 agotaron sus intentos');
+    expect(resultFixture.nativeElement.textContent).toContain('Cierre de las ventanas:');
+    expect(resultFixture.nativeElement.querySelector('.score-panel')).toBeNull();
+    expect(resultFixture.nativeElement.querySelector('.answers')).toBeNull();
+    expect(TestBed.inject(UsageMetricsService).trackResultsViewed).not.toHaveBeenCalled();
+    component.reloadDetail();
+    http.expectOne(`${base}/attempts/42/result`).flush({
+      evaluationTitle: 'Ficticio', reviewLocked: true, reviewAvailable: false, gradeClosed: true,
+      canViewDetailedFeedback: false, reviewMessage: null, reviewAvailableAt: null,
+      assignedStudentsCount: 0, finishedStudentsCount: 0, pendingStudentsCount: 0, answers: [],
+    });
+    resultFixture.detectChanges();
+    expect(resultFixture.nativeElement.textContent).toContain('sin fecha límite requieren que el docente las cierre');
+    expect(resultFixture.nativeElement.textContent).not.toContain('Cierre de las ventanas:');
+    resultFixture.destroy();
+  });
 });
