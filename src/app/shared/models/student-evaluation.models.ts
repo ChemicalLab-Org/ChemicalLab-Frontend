@@ -17,6 +17,8 @@ import { QuestionDisplayMode, QuestionType } from './evaluation.models';
  * envió con preguntas abiertas aún sin calificar: su nota es parcial hasta la revisión
  * del docente.
  */
+export type EvaluationAccessState = 'SCHEDULED' | 'AVAILABLE' | 'EXPIRED' | 'UNAVAILABLE';
+
 export type AttemptStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'PENDING_MANUAL_REVIEW' | 'GRADED';
 
 /**
@@ -65,6 +67,10 @@ export interface StudentEvaluationResponse {
   /** Estado del último intento del estudiante; null si aún no ha rendido. */
   readonly attemptStatus: AttemptStatus | null;
   readonly attemptsUsed: number;
+  readonly accessState: EvaluationAccessState;
+  readonly canStart: boolean;
+  readonly inProgressAttemptId: number | null;
+  readonly serverNow: string;
 }
 
 /** Alternativa vista por el estudiante. No incluye el campo `correct`. */
@@ -104,6 +110,11 @@ export interface StudentEvaluationDetailResponse {
   readonly randomizeQuestions: boolean;
   readonly questions: StudentQuestionResponse[];
   readonly assignmentId: number;
+  readonly startAt: string | null;
+  readonly dueAt: string | null;
+  readonly accessState: EvaluationAccessState;
+  readonly questionsVisible: boolean;
+  readonly serverNow: string;
 }
 
 /**
@@ -139,6 +150,12 @@ export interface AttemptResponse {
   /** Si el estudiante puede usar el módulo de Tabla periódica durante este intento. */
   readonly allowPeriodicTable: boolean;
   readonly answers: StudentAnswerResponse[];
+  readonly score: number | null;
+  readonly maxScore: number | null;
+  readonly canAnswer: boolean;
+  readonly answerDeadlineAt: string | null;
+  readonly correctionVisible: boolean;
+  readonly serverNow: string;
 }
 
 // ─── Requests ───────────────────────────────────────────────────────────────

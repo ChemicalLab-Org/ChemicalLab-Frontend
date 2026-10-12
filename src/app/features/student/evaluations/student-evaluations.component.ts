@@ -1,3 +1,4 @@
+import { academicDate, academicTimestamp } from '../../../shared/utils/academic-time.util';
 import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -67,6 +68,8 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
               Revisa y desarrolla las evaluaciones asignadas por tu docente.
             </p>
           </header>
+
+          @if (startError()) { <div class="alert alert-error">{{ startError() }}</div> }
 
           @if (loading()) {
             <div class="page-state">
@@ -176,10 +179,13 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                             {{ ev.timeLimitMinutes }} min
                           </span>
                         }
+                        @if (ev.startAt) {
+                          <span class="ev-card__meta-item">Inicio {{ formatDateTime(ev.startAt) }} (Lima)</span>
+                        }
                         @if (ev.dueAt) {
                           <span class="ev-card__meta-item">
                             <span class="material-icons">event</span>
-                            Hasta {{ formatDate(ev.dueAt) }}
+                            Hasta {{ formatDateTime(ev.dueAt) }} (Lima)
                           </span>
                         }
                       </div>
@@ -194,13 +200,15 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                         <button type="button" class="btn btn-primary" (click)="openEvaluation(ev)">
                           Ver evaluación <span class="material-icons">arrow_forward</span>
                         </button>
+                      } @else if (ev.accessState === 'SCHEDULED') {
+                        <button type="button" class="btn btn-secondary" (click)="openEvaluation(ev)">Ver programación</button>
                       } @else if (isSubmitted(ev)) {
                         <button type="button" class="btn btn-secondary" (click)="goToResults()">
                           Ver resultado
                         </button>
                       } @else {
                         <button type="button" class="btn btn-secondary" disabled>
-                          {{ isOverdue(ev) ? 'Vencida' : 'No disponible' }}
+                          {{ statusLabel(ev) }}
                         </button>
                       }
                     </div>
@@ -246,9 +254,12 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
               }
 
               <div class="ev-detail__facts">
+                @if (d.startAt) {
+                  <div class="fact"><span class="fact__label">Inicio</span><span class="fact__value">{{ formatDateTime(d.startAt) }} (Lima)</span></div>
+                }
                 <div class="fact">
                   <span class="fact__label">Preguntas</span>
-                  <span class="fact__value">{{ d.questions.length }}</span>
+                  <span class="fact__value">{{ selected()?.questionCount ?? (d.questionsVisible ? d.questions.length : '—') }}</span>
                 </div>
                 <div class="fact">
                   <span class="fact__label">Intentos</span>
@@ -260,7 +271,7 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                 </div>
                 <div class="fact">
                   <span class="fact__label">Fecha límite</span>
-                  <span class="fact__value">{{ selectedDueAt() ? formatDate(selectedDueAt()!) : 'Sin fecha' }}</span>
+                  <span class="fact__value">{{ d.dueAt ? formatDateTime(d.dueAt) + ' (Lima)' : 'Sin fecha' }}</span>
                 </div>
                 <div class="fact">
                   <span class="fact__label">Modo de preguntas</span>
@@ -284,16 +295,21 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
                 </div>
               </div>
 
+              @if (!d.questionsVisible) {
+                <div class="alert alert-info">{{ d.accessState === 'SCHEDULED' ? 'Evaluación programada. Las preguntas estarán disponibles desde el inicio indicado.' : 'La ventana para responder está cerrada.' }}</div>
+              }
               <div class="ev-rules">
                 <div class="ev-rules__title">
                   <span class="material-icons">rule</span> Reglas de esta evaluación
                 </div>
                 <ul class="ev-rules__list">
+                  @if (d.questionsVisible) {
                   <li>
                     <span class="material-icons">help_outline</span>
                     {{ d.questions.length }} {{ d.questions.length === 1 ? 'pregunta' : 'preguntas' }},
                     {{ d.questionDisplayMode === 'ONE_BY_ONE' ? 'una por pantalla' : 'todas en una pantalla' }}.
                   </li>
+                  }
                   @if (hasOpenQuestions()) {
                     <li>
                       <span class="material-icons">rate_review</span>
@@ -378,6 +394,7 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
 
               <div class="ev-detail__actions">
                 <button type="button" class="btn btn-secondary" (click)="backToList()">Volver</button>
+                <button type="button" class="btn btn-secondary" (click)="reloadDetail()">Actualizar estado</button>
 
                 @if (selected() && hasInProgress(selected()!)) {
                   <button
@@ -614,7 +631,7 @@ const ATTEMPT_STORAGE_PREFIX = 'chemlab.eval.attempt.';
               <span class="material-icons">check</span>
             </div>
             <h1 class="ev-done__title">Evaluación enviada</h1>
-            <p class="ev-done__subtitle">Tus respuestas fueron registradas correctamente.</p>
+            <p class="ev-done__subtitle">Se conservaron las respuestas recibidas dentro de la ventana autorizada.</p>
 
             @if (info.autoSubmitted) {
               <div class="alert alert-warning ev-done__autonote">
@@ -900,7 +917,13 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.loadEvaluations();
     // Si veníamos de una herramienta permitida (o nos redirigió el guard), seguimos con el
     // intento activo y lo retomamos donde estaba, sin reiniciarlo.
-    if (this.examSession.isActive()) {
+    const directAttempt = Number(this.route.snapshot.queryParamMap.get('attempt'));
+    if (Number.isSafeInteger(directAttempt) && directAttempt > 0) {
+      this.service.getAttempt(directAttempt).subscribe({
+        next: (attempt) => this.enterTake(attempt),
+        error: (err: HttpErrorResponse) => this.startError.set(this.extractError(err, 'No se pudo recuperar el intento.')),
+      });
+    } else if (this.examSession.isActive()) {
       const exitRequested = this.route.snapshot.queryParamMap.get('exit') === '1';
       this.resumeActiveAttempt(exitRequested);
     }
@@ -927,10 +950,7 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.service.getAttempt(attemptId).subscribe({
       next: (attempt) => {
         this.starting.set(false);
-        if (attempt.status !== 'IN_PROGRESS') {
-          this.examSession.end();
-          return;
-        }
+        if (this.showFinalized(attempt)) return;
         this.enterTake(attempt);
         // "Salir del intento" desde una herramienta llega aquí con ?exit=1: tras retomar,
         // mostramos la confirmación de salida.
@@ -964,6 +984,9 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.service.listStudentEvaluations().subscribe({
       next: (data) => {
         this.evaluations.set(data);
+        const selectedId = this.selected()?.id;
+        const updated = data.find(e => e.id === selectedId);
+        if (updated) this.selected.set(updated);
         this.loading.set(false);
       },
       error: () => {
@@ -1008,7 +1031,7 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   // ═══════════════ Estado por evaluación ═══════════════
 
   isOverdue(ev: StudentEvaluationResponse): boolean {
-    return ev.dueAt !== null && new Date(ev.dueAt).getTime() < Date.now();
+    return ev.accessState === 'EXPIRED';
   }
 
   attemptsExhausted(ev: StudentEvaluationResponse): boolean {
@@ -1033,7 +1056,7 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
 
   /** Puede iniciar un intento nuevo: no en progreso, no vencida y con intentos disponibles. */
   canStart(ev: StudentEvaluationResponse): boolean {
-    return !this.hasInProgress(ev) && !this.isOverdue(ev) && !this.attemptsExhausted(ev);
+    return ev.canStart === true;
   }
 
   /** La tarjeta se atenúa cuando ya no hay nada por hacer. */
@@ -1046,7 +1069,9 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     if (this.isPendingReview(ev)) return 'Pendiente de revisión';
     if (this.isSubmitted(ev)) return 'Enviada';
     if (this.isOverdue(ev)) return 'Vencida';
-    return 'Pendiente';
+    if (ev.accessState === 'SCHEDULED') return 'Programada';
+    if (ev.accessState === 'UNAVAILABLE') return 'No disponible';
+    return 'Disponible';
   }
 
   statusBadgeClass(ev: StudentEvaluationResponse): string {
@@ -1069,7 +1094,7 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
 
   reloadDetail(): void {
     const ev = this.selected();
-    if (ev) this.loadDetail(ev.id);
+    if (ev) { this.loadDetail(ev.id); this.loadEvaluations(); }
   }
 
   private loadDetail(evaluationId: number): void {
@@ -1115,12 +1140,14 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
       error: (err: HttpErrorResponse) => {
         this.starting.set(false);
         this.startError.set(this.extractError(err, 'No se pudo iniciar la evaluación.'));
+        this.loadEvaluations();
+        this.loadDetail(ev.id);
       },
     });
   }
 
   continueAttempt(ev: StudentEvaluationResponse): void {
-    const attemptId = this.storedAttemptId(ev.id);
+    const attemptId = ev.inProgressAttemptId ?? this.storedAttemptId(ev.id);
     this.selected.set(ev);
     this.startError.set(null);
     if (attemptId === null) {
@@ -1137,15 +1164,8 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.starting.set(true);
     this.service.getAttempt(attemptId).subscribe({
       next: (attempt) => {
-        if (attempt.status !== 'IN_PROGRESS') {
-          // El intento ya fue enviado: refrescamos la lista y avisamos.
-          this.forgetAttempt(ev.id);
-          this.starting.set(false);
-          this.view.set('detail');
-          this.loadDetail(ev.id);
-          this.startError.set('Este intento ya fue enviado.');
-          return;
-        }
+        this.starting.set(false);
+        if (this.showFinalized(attempt)) return;
         this.enterTake(attempt);
         this.starting.set(false);
       },
@@ -1161,6 +1181,8 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
 
   /** Carga el intento en el estado y entra en modo rendición (asegura el detalle). */
   private enterTake(attempt: AttemptResponse): void {
+    if (this.showFinalized(attempt)) return;
+    this.serverOffsetMs = academicTimestamp(attempt.serverNow) - Date.now();
     this.attempt.set(attempt);
     const map: Record<number, number | null> = {};
     const textMap: Record<number, string> = {};
@@ -1183,13 +1205,17 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
     this.tabExitWarning.set(null);
 
     const loaded = this.detail();
-    if (!loaded || loaded.id !== attempt.evaluationId) {
+    if (!loaded || loaded.id !== attempt.evaluationId || !loaded.questionsVisible) {
       this.detailLoading.set(true);
       this.detailError.set(false);
       this.service.getStudentEvaluation(attempt.evaluationId).subscribe({
         next: (d) => {
           this.detail.set(d);
           this.detailLoading.set(false);
+          if (!d.questionsVisible) {
+            this.recoverRejectedAnswer();
+            return;
+          }
           this.beginTake();
         },
         error: () => {
@@ -1268,7 +1294,8 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
           if (this.savedQuestionId() === questionId) this.savedQuestionId.set(null);
         }, 2000);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
+        this.recoverRejectedAnswer(err);
         this.savingQuestionId.set(null);
         this.saveErrorQuestionId.set(questionId);
       },
@@ -1305,7 +1332,8 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
             if (this.savedQuestionId() === questionId) this.savedQuestionId.set(null);
           }, 2000);
         },
-        error: () => {
+        error: (err: HttpErrorResponse) => {
+          this.recoverRejectedAnswer(err);
           // No bloqueamos la UI: la respuesta queda local y se reenvía al enviar.
           this.savingQuestionId.set(null);
           this.saveErrorQuestionId.set(questionId);
@@ -1358,6 +1386,7 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
         error: (err: HttpErrorResponse) => {
           this.advancing.set(false);
           this.submitError.set(this.extractError(err, 'No se pudo guardar la respuesta.'));
+          this.recoverRejectedAnswer(err);
         },
       });
   }
@@ -1365,6 +1394,32 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   /** Finaliza el intento desde la pantalla de "todas respondidas" (modo una por una). */
   finishSequential(): void {
     this.askFinalSubmit();
+  }
+
+  private showFinalized(attempt: AttemptResponse): boolean {
+    if (attempt.status === 'IN_PROGRESS') return false;
+    this.stopLocalSession();
+    this.examSession.end();
+    this.forgetAttempt(attempt.evaluationId);
+    this.attempt.set(attempt);
+    this.submittedInfo.set({ title: this.detail()?.title ?? this.selected()?.title ?? 'Evaluación',
+      submittedAt: attempt.submittedAt, attemptNumber: attempt.attemptNumber, autoSubmitted: true });
+    this.detail.set(null);
+    this.answers.set({});
+    this.textAnswers.set({});
+    this.view.set('submitted');
+    this.loadEvaluations();
+    return true;
+  }
+
+  private recoverRejectedAnswer(err?: HttpErrorResponse): void {
+    if (err && err.status !== 400 && err.status !== 404) return;
+    const attempt = this.attempt();
+    if (!attempt) return;
+    this.service.getAttempt(attempt.id).subscribe({
+      next: (current) => { this.attempt.set(current); this.showFinalized(current); },
+      error: () => { this.stopLocalSession(); this.examSession.end(); this.backToList(); this.reload(); },
+    });
   }
 
   // ═══════════════ Contador de tiempo ═══════════════
@@ -1375,21 +1430,21 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
    * se abre la pantalla, para que recargar no regale tiempo. El backend valida el
    * tiempo al enviar: este contador es solo la experiencia de usuario.
    */
+  private serverOffsetMs = 0;
+
   private startTimer(): void {
-    const limit = this.detail()?.timeLimitMinutes ?? null;
     const attempt = this.attempt();
-    if (!limit || limit <= 0 || !attempt) {
+    if (!attempt?.answerDeadlineAt) {
       this.remainingSeconds.set(null);
       return;
     }
-    const startedAt = new Date(attempt.startedAt).getTime();
-    const deadline = startedAt + limit * 60 * 1000;
+    const deadline = academicTimestamp(attempt.answerDeadlineAt);
     this.tick(deadline);
-    this.timerId = setInterval(() => this.tick(deadline), 1000);
+    if (!this.autoSubmitted) this.timerId = setInterval(() => this.tick(deadline), 1000);
   }
 
   private tick(deadline: number): void {
-    const remaining = Math.round((deadline - Date.now()) / 1000);
+    const remaining = Math.ceil((deadline - (Date.now() + this.serverOffsetMs)) / 1000);
     this.remainingSeconds.set(Math.max(0, remaining));
     if (remaining <= 0) {
       this.handleTimeUp();
@@ -1639,6 +1694,8 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
       error: (err: HttpErrorResponse) => {
         this.submitting.set(false);
         this.submitError.set(this.extractError(err, 'No se pudo enviar la evaluación.'));
+        this.recoverRejectedAnswer(err);
+        if (!auto && this.view() === 'take') { this.startTimer(); this.attachTabExitListeners(); }
       },
     });
   }
@@ -1726,9 +1783,9 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   }
 
   formatDate(value: string): string {
-    const date = new Date(value);
+    const date = academicDate(value);
     if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('es-PE', {
+    return new Intl.DateTimeFormat('es-PE', { timeZone: 'America/Lima',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
@@ -1736,9 +1793,9 @@ export class StudentEvaluationsComponent implements OnInit, OnDestroy {
   }
 
   formatDateTime(value: string): string {
-    const date = new Date(value);
+    const date = academicDate(value);
     if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat('es-PE', {
+    return new Intl.DateTimeFormat('es-PE', { timeZone: 'America/Lima',
       day: 'numeric',
       month: 'long',
       year: 'numeric',

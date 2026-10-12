@@ -1,3 +1,4 @@
+import { academicDate } from '../../../shared/utils/academic-time.util';
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -740,11 +741,11 @@ interface SectionOption {
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label" for="startAt">Inicio (opcional)</label>
+                <label class="form-label" for="startAt">Inicio, hora de Lima (opcional)</label>
                 <input id="startAt" class="input" type="datetime-local" formControlName="startAt" />
               </div>
               <div class="form-group">
-                <label class="form-label" for="dueAt">Cierre (opcional)</label>
+                <label class="form-label" for="dueAt">Cierre, hora de Lima (opcional)</label>
                 <input id="dueAt" class="input" type="datetime-local" formControlName="dueAt" />
               </div>
             </div>
@@ -1495,7 +1496,7 @@ export class TeacherEvaluationsComponent {
     const startAt = emptyToNull(raw.startAt);
     const dueAt = emptyToNull(raw.dueAt);
 
-    if (startAt !== null && dueAt !== null && new Date(dueAt) <= new Date(startAt)) {
+    if (startAt !== null && dueAt !== null && dueAt <= startAt) {
       this.assignError.set('La fecha de cierre debe ser posterior a la de inicio.');
       return;
     }
@@ -1689,19 +1690,19 @@ export class TeacherEvaluationsComponent {
   }
 
   formatDate(value: string): string {
-    const date = new Date(value);
+    const date = academicDate(value);
     if (Number.isNaN(date.getTime())) {
       return '—';
     }
-    return date.toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: 'short', year: 'numeric' });
   }
 
   formatDateTime(value: string): string {
-    const date = new Date(value);
+    const date = academicDate(value);
     if (Number.isNaN(date.getTime())) {
       return '—';
     }
-    return date.toLocaleString('es-PE', {
+    return date.toLocaleString('es-PE', { timeZone: 'America/Lima',
       day: '2-digit',
       month: 'short',
       hour: '2-digit',

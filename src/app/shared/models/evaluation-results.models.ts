@@ -17,6 +17,8 @@ import { QuestionType } from './evaluation.models';
 /**
  * Motivo por el que la revisión detallada está (o no) disponible para el estudiante.
  * Refleja el enum ReviewUnlockReason del backend.
+ * ALL_ASSIGNED_STUDENTS_FINISHED es un nombre histórico para cierre administrativo;
+ * los contadores del padrón actual no desbloquean revisión.
  */
 export type ReviewUnlockReason =
   | 'DEADLINE_REACHED'
