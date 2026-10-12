@@ -1,0 +1,59 @@
+{
+  "npm": {
+    "before": {
+      "packages_scanned": 567,
+      "unique_advisories": 111,
+      "component_advisory_pairs": 124,
+      "severity_pairs": {
+        "HIGH": 47,
+        "MODERATE": 62,
+        "LOW": 12,
+        "CRITICAL": 3
+      }
+    },
+    "after": {
+      "packages_scanned": 566,
+      "unique_advisories": 0,
+      "component_advisory_pairs": 0,
+      "severity_pairs": {}
+    }
+  },
+  "npm_audit": {
+    "before": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 3,
+        "moderate": 10,
+        "high": 21,
+        "critical": 3,
+        "total": 37
+      },
+      "dependencies": {
+        "prod": 18,
+        "dev": 563,
+        "optional": 125,
+        "peer": 22,
+        "peerOptional": 0,
+        "total": 586
+      }
+    },
+    "after": {
+      "vulnerabilities": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "dependencies": {
+        "prod": 18,
+        "dev": 565,
+        "optional": 127,
+        "peer": 22,
+        "peerOptional": 0,
+        "total": 588
+      }
+    }
+  }
+}

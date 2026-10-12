@@ -1,0 +1,347 @@
+{
+  "algorithm": "SHA-256",
+  "implementation_sha": "bde5597ff42117bbfc5a04f896cec15890173193",
+  "scope": "actual local files; dist/package hashes do not imply deployment identity",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "32612a2adc52666ec9c0ab82fe6ee1583945a549971a101aa39ea2e4e32e717c",
+      "bytes": 991
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "3d15d09ca166f0165660e1fa61ae72362395db3f36b250b87a3b1a689be537df",
+      "bytes": 309707
+    },
+    {
+      "path": "dist/chemical-lab-frontend/3rdpartylicenses.txt",
+      "sha256": "3176f1e7dfaa8a3bff39b90d33699b823a83d7632192c99c7e0fb2cd465fd23e",
+      "bytes": 35468
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-2UDW6A6G.js",
+      "sha256": "1e76b63635de0f50bba04477e5746f8ed138552568808f3db7f54d6fc55abd1f",
+      "bytes": 801
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-52AG3FB6.js",
+      "sha256": "0ec09f3415428097c51a36912a0a1135f24cb7c2af4aa1989c55cc7013d94aae",
+      "bytes": 80799
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-6EMQ3DNJ.js",
+      "sha256": "c7f4256b979f450744cc2f6705d415805eca6da83308c4a1a4cba621d6ccee3e",
+      "bytes": 1249
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-7NKYSNG4.js",
+      "sha256": "2c00e51362cd0d5285fc84badb78800a09f1032eaa77090e25f093fc27b79ee3",
+      "bytes": 604
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-BQIGBSTW.js",
+      "sha256": "0e21211fc29c6b5854610caddc6994ef0570e1deadbb45ebc2bf1f397c81fbf9",
+      "bytes": 504
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-D67N2MU7.js",
+      "sha256": "27a62ea05798905c75e9f2e7be105c51f69d6cb65940a80382b60e7ba93066d5",
+      "bytes": 15226
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-DJFV3PWK.js",
+      "sha256": "cf9b2be99f2a5e8dc1fdae698ae9bae6be992cc4b50e436c388d6e2781ba3832",
+      "bytes": 19248
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-DJUIZQIM.js",
+      "sha256": "5b8d9cb8f063a2aea5f77b4a46633ce337a4907292834189083e9fb6539f1c31",
+      "bytes": 1885
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-DNCBSMYP.js",
+      "sha256": "ed9688e0c685b23cbaf53cfe1e3fab0b35b9523f7219d3ce7600bf9e4d992f90",
+      "bytes": 20600
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-DRWPVKCQ.js",
+      "sha256": "4d951068b644efdb3caece525533af6c6b86d4b4870998b7228607ad9d0c364d",
+      "bytes": 861
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-G4KJWXP3.js",
+      "sha256": "73494784be869d08053b8a359e3d70c5088176d90a1f801640393cf78a66d1fb",
+      "bytes": 11491
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-HHHS5ZAZ.js",
+      "sha256": "0ec6d53e79be58f02f9249a0144955bb190b41e8389653f3cac0f9d1218699d3",
+      "bytes": 1143
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-HIBZ2S4K.js",
+      "sha256": "8cc88ee7c4c73d96ac18abdc53bce2a13b9398876aa92af86304b346d8593ddd",
+      "bytes": 87153
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-KSITFLKI.js",
+      "sha256": "9a6ad9ff358d46ccf9d29d478b6f3b4f246c00a358946acc22213e96c0883062",
+      "bytes": 59932
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-KYOGA4IX.js",
+      "sha256": "6fb44d4d6c531dab7da35ea2895691d39f50af75debf5fbdfd4132d600fe2d1d",
+      "bytes": 2631
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-LP4JI2VJ.js",
+      "sha256": "4a62dc65f9d33dca4b438387eaf3e93d1e5a366b40a3b407c8e5cce958edd5d1",
+      "bytes": 74198
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-MXOCWMNT.js",
+      "sha256": "5cb5afe710e4b94d06ccb4b73c8b29a4402ba4ad9ad9fa63dfce0d2d93ff717b",
+      "bytes": 35941
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-NDCVH37R.js",
+      "sha256": "9667d909b96b1ba2f3d534cae564669b921fa51a21fcec6995fd205de30c3889",
+      "bytes": 576
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-O6JUKWXI.js",
+      "sha256": "cc1973dd697185728dfe09b960a8bd33e124fa8da0892081a88b748a7b83df71",
+      "bytes": 211
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-QEHFCU2O.js",
+      "sha256": "4474a93666293bceb860b393e30e6ff9e5618574c255a5cf095d58eaf032bfab",
+      "bytes": 53980
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-QMREBEGA.js",
+      "sha256": "aa4c69bde57330b7bbd155f93aed3ed683dd6f38f83ade9f01949fe481a86d48",
+      "bytes": 648
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-T2ZEI4OC.js",
+      "sha256": "886dcec205da82627cbd8e108200102249bd3be7b5135b88592b4a1188c3350e",
+      "bytes": 3681
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-VDCOJY7D.js",
+      "sha256": "b2146c1e865f16d2ca6f60a700d333489597539db6d7258ead36597b34f46641",
+      "bytes": 46767
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-VY44IP6K.js",
+      "sha256": "6c54f41c06eb03be21cf821bbe0d6b79c29dcadad20d9abc42d42fcd56b69e45",
+      "bytes": 279318
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/chunk-WTBURMSJ.js",
+      "sha256": "0f4d9ca72b8d869ef9198b9ed80f25f758a53e24d86b45978e2598cf208819e3",
+      "bytes": 1308
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/favicon.ico",
+      "sha256": "f9102be80297c0529207607be5277b4f90bca89d65988fa1771b91c7894e815f",
+      "bytes": 15086
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/index.html",
+      "sha256": "2bd52ca25a6f22a575a1f9236f38eec64b9f297b16df31aea04669263ed5ba3e",
+      "bytes": 3600
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/main-GXLTFMLC.js",
+      "sha256": "fb8f56470e66b21d3539de9120a3654c8aa119f471922ba342a21df3394ff13a",
+      "bytes": 597273
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/polyfills-WV5QH7NU.js",
+      "sha256": "ed63123f0c2c297fb2feed28f5268b342fc2538ad5948b1ad0266420dc6af3ff",
+      "bytes": 40
+    },
+    {
+      "path": "dist/chemical-lab-frontend/browser/styles-43Y4EWMB.css",
+      "sha256": "027c413b2f23840286b1cbeec2e419a5a25ed924e1a862c6e1b297109047e988",
+      "bytes": 15386
+    },
+    {
+      "path": "dist/chemical-lab-frontend/prerendered-routes.json",
+      "sha256": "a79ddcc8a115190e9c19479ed36914741a7d1db74f0a1153529efc80725505fe",
+      "bytes": 18
+    },
+    {
+      "path": "dist/chemical-lab-frontend/stats.json",
+      "sha256": "64ffcddaf63794dd2b70edb238aa32f65179d621e7e9efd76959c80ad2306a5e",
+      "bytes": 442662
+    },
+    {
+      "path": "dist/colegio/3rdpartylicenses.txt",
+      "sha256": "3176f1e7dfaa8a3bff39b90d33699b823a83d7632192c99c7e0fb2cd465fd23e",
+      "bytes": 35468
+    },
+    {
+      "path": "dist/colegio/browser/chunk-3QXEKV66.js",
+      "sha256": "cb6f06509e6ba10518688282dcf2ec095691728a3d3c0a5b864b91047274cfeb",
+      "bytes": 59932
+    },
+    {
+      "path": "dist/colegio/browser/chunk-5KOBD2DG.js",
+      "sha256": "578c953057d7b0b757fbee129ce4b04952b4b728d825c45a62f9bdf518876e32",
+      "bytes": 1249
+    },
+    {
+      "path": "dist/colegio/browser/chunk-5LZPH2FH.js",
+      "sha256": "e8670eb0bb88b6357f226cf04298e9593c3803cc55314a078b66a40828573e66",
+      "bytes": 19248
+    },
+    {
+      "path": "dist/colegio/browser/chunk-5NOWV2RN.js",
+      "sha256": "a86b032df0b4907e8def1a7d8ebc47e64969bee7e77f1681d78ca07d9a1b7dad",
+      "bytes": 15226
+    },
+    {
+      "path": "dist/colegio/browser/chunk-7NKYSNG4.js",
+      "sha256": "2c00e51362cd0d5285fc84badb78800a09f1032eaa77090e25f093fc27b79ee3",
+      "bytes": 604
+    },
+    {
+      "path": "dist/colegio/browser/chunk-7P4VEHKG.js",
+      "sha256": "fa09e05790599356a55f9158cdac88b1905e5fe0e3a988ab9e952d4853d0acc4",
+      "bytes": 1885
+    },
+    {
+      "path": "dist/colegio/browser/chunk-BHAK2COD.js",
+      "sha256": "51f356697933beae1c5c8a8b355f86468a6966a9cfb0570c306a818421e52abf",
+      "bytes": 11491
+    },
+    {
+      "path": "dist/colegio/browser/chunk-BQIGBSTW.js",
+      "sha256": "0e21211fc29c6b5854610caddc6994ef0570e1deadbb45ebc2bf1f397c81fbf9",
+      "bytes": 504
+    },
+    {
+      "path": "dist/colegio/browser/chunk-C4P3QS7C.js",
+      "sha256": "e0f7b4c74d7d8db3edc27b1582841d4db2b81daf8e9c16cdb81a22b8abb96238",
+      "bytes": 74198
+    },
+    {
+      "path": "dist/colegio/browser/chunk-DLQVWTCH.js",
+      "sha256": "cd8425149edfb5020de42f4f150f72b88bcfafaaab221a412969ab71f298557e",
+      "bytes": 1308
+    },
+    {
+      "path": "dist/colegio/browser/chunk-DRWPVKCQ.js",
+      "sha256": "4d951068b644efdb3caece525533af6c6b86d4b4870998b7228607ad9d0c364d",
+      "bytes": 861
+    },
+    {
+      "path": "dist/colegio/browser/chunk-HHHS5ZAZ.js",
+      "sha256": "0ec6d53e79be58f02f9249a0144955bb190b41e8389653f3cac0f9d1218699d3",
+      "bytes": 1143
+    },
+    {
+      "path": "dist/colegio/browser/chunk-KY53GRXB.js",
+      "sha256": "2c036160526837d06811061cadbb88b225b4c962222c38016b6b99afd81007fa",
+      "bytes": 80799
+    },
+    {
+      "path": "dist/colegio/browser/chunk-KYOGA4IX.js",
+      "sha256": "6fb44d4d6c531dab7da35ea2895691d39f50af75debf5fbdfd4132d600fe2d1d",
+      "bytes": 2631
+    },
+    {
+      "path": "dist/colegio/browser/chunk-L6COOD2A.js",
+      "sha256": "9bae4038087ff47021d3eda8401bc6da05ce9058c0f7968ef2aafa7dd9a68abe",
+      "bytes": 35941
+    },
+    {
+      "path": "dist/colegio/browser/chunk-M36TPPC4.js",
+      "sha256": "86cd6b01da63f8b5fb71454ff464a601f59e7f74a1f8aecf88e9b7aa048e7f10",
+      "bytes": 211
+    },
+    {
+      "path": "dist/colegio/browser/chunk-MMRWE6S5.js",
+      "sha256": "aefd536e624da9dabdaf436400e689c5a76e776f93754cc321670129e00cff37",
+      "bytes": 20600
+    },
+    {
+      "path": "dist/colegio/browser/chunk-NDCVH37R.js",
+      "sha256": "9667d909b96b1ba2f3d534cae564669b921fa51a21fcec6995fd205de30c3889",
+      "bytes": 576
+    },
+    {
+      "path": "dist/colegio/browser/chunk-QEHFCU2O.js",
+      "sha256": "4474a93666293bceb860b393e30e6ff9e5618574c255a5cf095d58eaf032bfab",
+      "bytes": 53980
+    },
+    {
+      "path": "dist/colegio/browser/chunk-QFUY6JOK.js",
+      "sha256": "e93f7436b53a71582ce15b5281dbe1b9b1fa8c278980c3ee3280eeb8cabc59a2",
+      "bytes": 279263
+    },
+    {
+      "path": "dist/colegio/browser/chunk-QMREBEGA.js",
+      "sha256": "aa4c69bde57330b7bbd155f93aed3ed683dd6f38f83ade9f01949fe481a86d48",
+      "bytes": 648
+    },
+    {
+      "path": "dist/colegio/browser/chunk-U52QO64J.js",
+      "sha256": "b37fcbe5ec51716d656bf7c625e213ce4498d656b726bd753837f15de244c74c",
+      "bytes": 46767
+    },
+    {
+      "path": "dist/colegio/browser/chunk-VFFHLI5Y.js",
+      "sha256": "ea51554374bd3fdb4ebe2f08c2781271ea2d01b0b5c0fe83ff870f6cdf3e9c19",
+      "bytes": 3681
+    },
+    {
+      "path": "dist/colegio/browser/chunk-WDXT43KX.js",
+      "sha256": "8607cf0cb79f8023235c3695dd04fbb081ff62f0b8d7a532a52a1e83e60e1f51",
+      "bytes": 87153
+    },
+    {
+      "path": "dist/colegio/browser/chunk-XFQNYM56.js",
+      "sha256": "d31c49bf408a436080a76d430c2ba9d31f37b16194b4cd855d0ac97dc5fdf871",
+      "bytes": 801
+    },
+    {
+      "path": "dist/colegio/browser/favicon.ico",
+      "sha256": "f9102be80297c0529207607be5277b4f90bca89d65988fa1771b91c7894e815f",
+      "bytes": 15086
+    },
+    {
+      "path": "dist/colegio/browser/index.html",
+      "sha256": "3f72f458c7cc9e50420f9308bbb1debeecd9d82ed084a98c2cb73b234b52953b",
+      "bytes": 3600
+    },
+    {
+      "path": "dist/colegio/browser/main-7VVE7RKX.js",
+      "sha256": "846debd42a8b7114e3f1f02a0f28d880cf0474bb1633550f6d6abd86149acb5b",
+      "bytes": 597273
+    },
+    {
+      "path": "dist/colegio/browser/polyfills-WV5QH7NU.js",
+      "sha256": "ed63123f0c2c297fb2feed28f5268b342fc2538ad5948b1ad0266420dc6af3ff",
+      "bytes": 40
+    },
+    {
+      "path": "dist/colegio/browser/styles-43Y4EWMB.css",
+      "sha256": "027c413b2f23840286b1cbeec2e419a5a25ed924e1a862c6e1b297109047e988",
+      "bytes": 15386
+    },
+    {
+      "path": "dist/colegio/prerendered-routes.json",
+      "sha256": "a79ddcc8a115190e9c19479ed36914741a7d1db74f0a1153529efc80725505fe",
+      "bytes": 18
+    },
+    {
+      "path": "dist/colegio/stats.json",
+      "sha256": "04830278cfac8cb3e049b581c42196479c3827cfb68e51d9a16c99efa9b60e25",
+      "bytes": 442660
+    }
+  ]
+}

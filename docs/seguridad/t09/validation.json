@@ -1,0 +1,100 @@
+{
+  "tested_implementation_sha": "bde5597ff42117bbfc5a04f896cec15890173193",
+  "base_sha": "b9d6b97877ef64c4cdc90c3e7f432dc0aeb457a5",
+  "source_tree": "20ad23aad1cc1abd489d72ac43b207427874fe95",
+  "package_json_git_blob": "de6cf47e910628eb5048a23f08ee49cae19f6ad8",
+  "package_lock_git_blob": "150c26f7919a9440e052914b0914d306138ec4cb",
+  "installation": {
+    "command": "npm ci",
+    "scripts_enabled": true,
+    "legacy_peer_deps": false,
+    "added_packages": 483,
+    "local_evidence_file": "npm-ci-after.log",
+    "sha256": "c7133a93a8726849c00d98c421dd013333278a3a806a9122024917b62ba9128f"
+  },
+  "full_suite": {
+    "command": "npm test -- --watch=false with T03_LIVE_FIXTURE containing synthetic fixture JSON",
+    "tests_passed": 158,
+    "tests_skipped": 0,
+    "files_passed": 12,
+    "backend_fixture_sha": "39266dfa8a0e7b9d45a7c5f3d9c39ba11319b315",
+    "backend_final_pom_and_production_sources_identical": true,
+    "local_evidence_file": "frontend-tests-live-final.log",
+    "sha256": "39040e6c6fb2e3cb5073e638bbba593002ccae28ac3b128df29448725d527d8c"
+  },
+  "real_stomp_probe": {
+    "client": "@stomp/stompjs 7.4.0 ESM",
+    "rounds": 2,
+    "steps": [
+      "connect",
+      "subscribe",
+      "SEND/ACK",
+      "deactivate",
+      "INACTIVE state"
+    ],
+    "backend_fixture_sha": "39266dfa8a0e7b9d45a7c5f3d9c39ba11319b315",
+    "script": "docs/seguridad/t09/stomp-probe.mjs",
+    "script_sha256": "cdfee7b78f8136628cd889a1b1c5d4246cc7a53c116db9a24c5b6fabf63561e6",
+    "local_evidence_file": "stomp-client-final.log",
+    "sha256": "85638db00b340e957bbcd77821bd9783c86e6f1115492f2cad59afdd5957e9e3"
+  },
+  "builds": [
+    {
+      "local_evidence_file": "frontend-build-production.log",
+      "sha256": "eb417876c0a0a5392561e25b9a3a35eb0e1ca4ea001ada6582098a10d1f4dd19",
+      "configuration": "production",
+      "implementation_sha": "bde5597ff42117bbfc5a04f896cec15890173193",
+      "result": "success"
+    },
+    {
+      "local_evidence_file": "frontend-build-colegio.log",
+      "sha256": "1df422053df4ab5ec7cdaa59ee74aa164b0189cd5f6620d57d0caa2d435ab046",
+      "configuration": "colegio",
+      "implementation_sha": "bde5597ff42117bbfc5a04f896cec15890173193",
+      "result": "success"
+    }
+  ],
+  "sca": {
+    "lock_final": {
+      "local_evidence_file": "osv-npm-after.json",
+      "sha256": "c59e6fb799abf0b5d0db5eb0f5c2613304c564d65a25db3aecd03cc729a3fe9a",
+      "packages_scanned": 566,
+      "unique_advisories": 0,
+      "component_advisory_pairs": 0
+    },
+    "complete_lock_sbom_final": {
+      "local_evidence_file": "osv-npm-complete-after.json",
+      "sha256": "8598c5b0ff38886c78421e9bdd9f2de66916410db4fa1fef566b173546fb086f",
+      "packages_scanned": 566,
+      "unique_advisories": 0,
+      "component_advisory_pairs": 0
+    },
+    "emitted_bundle_final": {
+      "local_evidence_file": "osv-bundle-final.json",
+      "sha256": "f97d1f115c29e59769c1478e70e7cda14642bef80aced5b327341cbd8d877656",
+      "packages_scanned": 13,
+      "unique_advisories": 0,
+      "component_advisory_pairs": 0
+    }
+  },
+  "npm_audit_final": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "local_evidence_file": "npm-audit-after.json",
+    "sha256": "70c90ecb365b19978fe3232abbd2b23ca26468ab8cee76af9ea6fe58eef40e6b"
+  },
+  "excluded_from_passing_counts": [
+    "156 passed plus 2 skipped without live fixture",
+    "forensic baseline installation with legacy-peer-deps",
+    "failed first update",
+    "failed wrong-endpoint STOMP attempt",
+    "two probe rounds not added to 158 tests"
+  ],
+  "status": "Frontend lock corrected in analyzed feeds; global VER-01 operational coverage remains pending"
+}

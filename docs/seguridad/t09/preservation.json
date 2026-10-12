@@ -1,0 +1,95 @@
+{
+  "previous_snapshot_files": 22,
+  "e2e_selenium_files": 16,
+  "versioned_previous_notes_verified": 5,
+  "files": [
+    {
+      "path": "Documentos/Seguridad/01-auditoria-seguridad.md",
+      "sha256": "1eff5d59f7a114dfee91cb557a0405c2f7247e43cd2926d2542172c0255e499b"
+    },
+    {
+      "path": "Documentos/Seguridad/02-01-configuracion-bootstrap.md",
+      "sha256": "549b0e93db555a9d2089058bde42593e0c8a4722a2b9f7911ab4ba04bd7504a4"
+    },
+    {
+      "path": "Documentos/Seguridad/02-05-cierre-integracion.md",
+      "sha256": "8a7532287c23ce0ab2260eb0a13f54281cedf5c0e3854dd0fbe2e1b8d9ebd9c8"
+    },
+    {
+      "path": "Documentos/Seguridad/02-06-cierre-integracion.md",
+      "sha256": "472af8a99706b6ac2892d583a63abc2dc82d45abd1635b78298af2b84da904f6"
+    },
+    {
+      "path": "Documentos/Seguridad/02-07a-cierre-integracion.md",
+      "sha256": "4c9c5a715973896b213b6e856f0fc78f9ce70f575e4f8c339e6bbc66fb934f3f"
+    },
+    {
+      "path": "Documentos/Seguridad/02-07b-cierre-integracion.md",
+      "sha256": "c55dc3edb8b3185cb26b01114bc8f7e289c4a99c2eaae07ba195939cb6841d4d"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/.gitignore",
+      "sha256": "57fbc652f07471dc71d42029df0286ba7fca9812d902e0debc70e51dff7b9cc9"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/pytest.ini",
+      "sha256": "b36405baa12b3db26cd092f84c48c366dc72c9d40e55569bb88600a3acc4292e"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/README.md",
+      "sha256": "3e4938ad895bd23141c0cba0d6199c61e8ae81b80ce21e7fd1d789e7334f0e8e"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/requirements.txt",
+      "sha256": "95129ed21ae84afab4443a79bb9ff26cd0bae494398f1ea0456f2c7f0b4bf0fc"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/.pytest_cache/.gitignore",
+      "sha256": "e7c6bb30148cf667606dcd63e7ca77acaa3cfb0c8303bf09e6419e1e1669dc6d"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/.pytest_cache/CACHEDIR.TAG",
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/.pytest_cache/README.md",
+      "sha256": "420e808d79a6c25d3cda0af33bc4782314a14949866682c68ce8149e89b66b70"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/.pytest_cache/v/cache/nodeids",
+      "sha256": "1e4f2174f2dd86f005578a47c11796be6e372d2899b75045b983eec47114ca8b"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/tests/conftest.py",
+      "sha256": "b71a4aa6fd32917fbbfac2daeec43c00b2b5a6e719879f0d097bf0860eb2c4bd"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/tests/support.py",
+      "sha256": "3b290c53006c1e2de815f96e51947603f58ab07c835a5e21abedd8e813f40378"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/tests/test_complete_system.py",
+      "sha256": "74b97389e487e1130ee7e34858eaac2ca3e143b0680febce8ac0d267f186b76e"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/tests/video_capture.py",
+      "sha256": "b406753628e7d481612bc9d5553ac7955653c451ae33d1971974f6f0d603a42c"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/tests/__pycache__/conftest.cpython-312-pytest-8.4.1.pyc",
+      "sha256": "e1e7cda4d0af94e9cce865b99f5c8411b969a45e1363bcd47473fdbfa3cd33fe"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/tests/__pycache__/support.cpython-312.pyc",
+      "sha256": "bd9ef3b316ec0b5672114432c9c031321d79563943aed000c0330bef37c48ba2"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/tests/__pycache__/test_complete_system.cpython-312-pytest-8.4.1.pyc",
+      "sha256": "2d8ef7290a3f97cf1b2fcc8ea67818ba289ab32338e9d1a65cf536591d132775"
+    },
+    {
+      "path": "ChemicalLab-Frontend/e2e-selenium/tests/__pycache__/video_capture.cpython-312.pyc",
+      "sha256": "068bfd3a8e0eaf6d16e68ccca529c21a3389bc92f2619ed78e1d63af67e7310c"
+    }
+  ]
+}
