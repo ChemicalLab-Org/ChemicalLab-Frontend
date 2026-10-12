@@ -1,3 +1,4 @@
+import { fileDownloadName } from '../../../shared/utils/safe-file.util';
 import {
   Component,
   OnDestroy,
@@ -137,6 +138,7 @@ export class StudentWhiteboardRecordComponent implements OnInit, OnDestroy {
   readonly userRole = 'Estudiante';
 
   private sessionId = 0;
+  private snapshotType = 'image/png';
   private snapshotObjectUrl: string | null = null;
 
   readonly session = signal<WhiteboardStudentSessionResponse | null>(null);
@@ -190,6 +192,7 @@ export class StudentWhiteboardRecordComponent implements OnInit, OnDestroy {
     this.whiteboardService.getSnapshot(this.sessionId).subscribe({
       next: (blob) => {
         this.revokeSnapshotUrl();
+        this.snapshotType = blob.type;
         this.snapshotObjectUrl = URL.createObjectURL(blob);
         this.snapshotUrl.set(this.snapshotObjectUrl);
         this.snapshotLoading.set(false);
@@ -205,7 +208,7 @@ export class StudentWhiteboardRecordComponent implements OnInit, OnDestroy {
   download(url: string, sessionName: string): void {
     const link = document.createElement('a');
     link.href = url;
-    link.download = `pizarra-${this.slug(sessionName)}.png`;
+    link.download = fileDownloadName(`pizarra-${this.slug(sessionName)}`, this.snapshotType);
     link.click();
   }
 

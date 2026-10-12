@@ -1,3 +1,4 @@
+import { fileDownloadName } from '../../../shared/utils/safe-file.util';
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -480,7 +481,7 @@ const LEGACY_CATEGORY_LABELS: Readonly<Record<string, string>> = {
               <div class="material-editor">
                 <div class="material-editor__block">
                   <h4 class="material-subheading">{{ hasFileMaterial(d) ? 'Reemplazar archivo' : 'Agregar archivo' }}</h4>
-                  <p class="form-hint">PDF, diapositivas (PPT/PPTX) o imágenes (PNG/JPG). Máximo 10 MB.</p>
+                  <p class="form-hint">PDF, PPT/PPTX sin cifrado ni contenido activo, o PNG/JPG. Máximo 10 MB. Los documentos se descargan; las imágenes permiten vista previa.</p>
                   <div class="material-upload">
                     <input type="file" class="input" #fileInput
                       accept=".pdf,.ppt,.pptx,.png,.jpg,.jpeg"
@@ -1328,7 +1329,7 @@ export class TeacherConceptsComponent {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = fileName;
+    anchor.download = fileDownloadName(fileName, blob.type);
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();

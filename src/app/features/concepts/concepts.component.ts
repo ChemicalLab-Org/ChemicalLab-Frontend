@@ -8,10 +8,11 @@ import {
   signal,
   ViewChild,
 } from '@angular/core';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { ConceptMaterialsService } from '../../core/services/concept-materials.service';
+import { fileDownloadName } from '../../shared/utils/safe-file.util';
 import { UsageMetricsService } from '../../core/services/usage-metrics.service';
 import { SidebarComponent, SidebarNavItem } from '../../shared/components/sidebar/sidebar.component';
 import { STUDENT_NAV_ITEMS } from '../../shared/components/sidebar/student-nav';
@@ -249,7 +250,7 @@ const LEGACY_CATEGORY_ORDER: string[] = [
                           @if (m.fileSize) {
                             <span class="material-card__meta">{{ formatSize(m.fileSize) }}</span>
                           }
-                          @if (m.previewAvailable) {
+                          @if (m.previewAvailable && isPreviewImage(m.contentType)) {
                             <div class="material-card__actions">
                               <button type="button" class="btn btn-primary btn-sm"
                                 [disabled]="downloadingId() === m.materialId" (click)="previewFile(m)">
@@ -262,11 +263,11 @@ const LEGACY_CATEGORY_ORDER: string[] = [
                             </div>
                           } @else {
                             <p class="material-card__hint">
-                              Este material contiene diapositivas. Puedes descargarlo para revisarlo.
+                              Descarga el documento para revisarlo.
                             </p>
                             <button type="button" class="btn btn-secondary btn-sm"
                               [disabled]="downloadingId() === m.materialId" (click)="downloadFile(m)">
-                              <span class="material-icons">download</span> Descargar diapositivas
+                              <span class="material-icons">download</span> Descargar documento
                             </button>
                           }
                         </div>
@@ -324,8 +325,7 @@ const LEGACY_CATEGORY_ORDER: string[] = [
                           </button>
                         </div>
                       </div>
-                      <iframe class="material-preview__frame" [src]="safeUrl"
-                        title="Vista previa del material"></iframe>
+                      <img class="material-preview__frame" [src]="safeUrl" alt="Vista previa del material">
                     </div>
                   }
                 </div>
@@ -463,7 +463,7 @@ const LEGACY_CATEGORY_ORDER: string[] = [
       </main>
     </div>
 
-    <!-- ════════ MODAL: vista amplia del PDF ════════ -->
+    <!-- ════════ MODAL: vista amplia de imagen ════════ -->
     @if (previewFullscreen()) {
       @if (previewSafeUrl(); as safeUrl) {
         <div class="pdf-modal" (click)="closeFullscreen()">
@@ -484,7 +484,7 @@ const LEGACY_CATEGORY_ORDER: string[] = [
                 </button>
               </div>
             </div>
-            <iframe class="pdf-modal__frame" [src]="safeUrl" title="Vista amplia del material"></iframe>
+            <img class="pdf-modal__frame" [src]="safeUrl" alt="Vista amplia del material">
           </div>
         </div>
       }
@@ -495,7 +495,7 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly studentConceptsService = inject(StudentConceptsService);
   private readonly materialsService = inject(ConceptMaterialsService);
-  private readonly sanitizer = inject(DomSanitizer);
+
   private readonly router = inject(Router);
   private readonly usageMetrics = inject(UsageMetricsService);
 
@@ -507,8 +507,8 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   readonly activeCategory = signal<ConceptCategory | null>(null);
   readonly selectedId = signal<number | null>(null);
 
-  // Vista previa de materiales (PDF/imágenes) y estado de descarga.
-  readonly previewSafeUrl = signal<SafeResourceUrl | null>(null);
+  // Vista previa de materiales (imágenes) y estado de descarga.
+  readonly previewSafeUrl = signal<string | null>(null);
   readonly previewMaterial = signal<ConceptMaterialResponse | null>(null);
   readonly previewFullscreen = signal(false);
   readonly previewLoading = signal(false);
@@ -517,6 +517,7 @@ export class ConceptsComponent implements OnInit, OnDestroy {
 
   // URL de objeto activa, necesaria para liberarla al cerrar/cambiar de contenido.
   private currentObjectUrl: string | null = null;
+  private previewRequest = 0;
 
   // Referencia al contenedor del visor para desplazar la página hasta él al previsualizar.
   @ViewChild('previewSection') private previewSection?: ElementRef<HTMLElement>;
@@ -628,26 +629,37 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   // Materiales de apoyo
   // ===========================================================================
 
-  /** Previsualiza un PDF o imagen dentro del sistema usando un blob autenticado. */
+  /** Previsualiza una imagen dentro del sistema usando un blob autenticado. */
   previewFile(material: ConceptMaterialResponse): void {
     const concept = this.selectedConcept();
     if (concept === null || material.type !== 'FILE') {
       return;
     }
+    if (!material.previewAvailable || !this.isPreviewImage(material.contentType)) {
+      this.downloadFile(material);
+      return;
+    }
     this.clearPreview();
     this.previewLoading.set(true);
+    const request = this.previewRequest;
     this.downloadingId.set(material.materialId);
     this.materialsService.downloadMaterial(concept.id, material.materialId).subscribe({
       next: (blob) => {
+        if (request !== this.previewRequest) return;
         this.downloadingId.set(null);
         this.previewLoading.set(false);
+        if (!this.isPreviewImage(blob.type)) {
+          this.previewError.set('La vista previa solo admite imágenes PNG/JPG validadas.');
+          return;
+        }
         const url = URL.createObjectURL(blob);
         this.currentObjectUrl = url;
-        this.previewSafeUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(url));
+        this.previewSafeUrl.set(url);
         this.previewMaterial.set(material);
         this.scrollToPreview();
       },
       error: () => {
+        if (request !== this.previewRequest) return;
         this.downloadingId.set(null);
         this.previewLoading.set(false);
         this.previewError.set('No se pudo cargar la vista previa. Intenta descargar el archivo.');
@@ -675,7 +687,7 @@ export class ConceptsComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** Abre el visor del PDF a pantalla completa dentro del sistema. */
+  /** Abre el visor de imagen a pantalla completa dentro del sistema. */
   openFullscreen(): void {
     if (this.previewSafeUrl() !== null) {
       this.previewFullscreen.set(true);
@@ -691,7 +703,7 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Desplaza la página suavemente hasta el visor del PDF. Se espera un ciclo para que
+   * Desplaza la página suavemente hasta el visor de imagen. Se espera un ciclo para que
    * Angular renderice el contenedor (`@if` recién activado) antes de hacer scroll.
    */
   private scrollToPreview(): void {
@@ -704,6 +716,7 @@ export class ConceptsComponent implements OnInit, OnDestroy {
   }
 
   private clearPreview(): void {
+    this.previewRequest++;
     if (this.currentObjectUrl !== null) {
       URL.revokeObjectURL(this.currentObjectUrl);
       this.currentObjectUrl = null;
@@ -720,11 +733,15 @@ export class ConceptsComponent implements OnInit, OnDestroy {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = fileName;
+    anchor.download = fileDownloadName(fileName, blob.type);
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  }
+
+  isPreviewImage(type: string | null | undefined): boolean {
+    return type === 'image/png' || type === 'image/jpeg';
   }
 
   materialCount(concept: StudentConceptContentResponse): number {

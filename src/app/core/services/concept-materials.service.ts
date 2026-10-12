@@ -16,7 +16,7 @@ import {
  *   la usan tanto el docente como el estudiante: el backend valida el acceso por rol.
  *
  * El token JWT lo agrega el `authInterceptor`; aquí no se manipula. Para la descarga se
- * pide el archivo como `blob` autenticado y el componente crea un object URL seguro.
+ * pide el archivo como `blob` autenticado y el componente limita la vista previa a imágenes PNG/JPG y usa un elemento img.
  */
 @Injectable({ providedIn: 'root' })
 export class ConceptMaterialsService {
@@ -60,7 +60,7 @@ export class ConceptMaterialsService {
 
   /**
    * Descarga el archivo de un material como blob autenticado. Se usa tanto para
-   * previsualizar PDF/imágenes (creando un object URL) como para descargar diapositivas.
+   * previsualizar imágenes validadas; PDF/PPT/PPTX se descargan como adjuntos.
    */
   downloadMaterial(conceptId: number, materialId: number): Observable<Blob> {
     return this.http.get(
