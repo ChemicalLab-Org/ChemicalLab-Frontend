@@ -607,6 +607,13 @@
   scroll-margin-top: var(--space-4);
 }
 
+.material-preview__frame {
+  display: block;
+  width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+}
+
 .material-preview__name {
   display: flex;
   align-items: center;
@@ -681,6 +688,8 @@
   &__frame {
     flex: 1;
     width: 100%;
+    min-height: 0;
+    object-fit: contain;
     border: 0;
   }
 }

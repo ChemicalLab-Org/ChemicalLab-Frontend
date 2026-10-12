@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
+import { requireSnapshotImage } from '../../shared/utils/safe-file.util';
 import { environment } from '../../../environments/environment';
 import {
   WhiteboardBoardStateResponse,
@@ -49,7 +50,7 @@ export class StudentWhiteboardService {
 
   /** Descarga la captura final de una sesión cerrada como imagen (blob) para mostrarla/guardarla. */
   getSnapshot(sessionId: number): Observable<Blob> {
-    return this.http.get(`${this.baseUrl}/${sessionId}/snapshot`, { responseType: 'blob' });
+    return this.http.get(`${this.baseUrl}/${sessionId}/snapshot`, { responseType: 'blob' }).pipe(map(requireSnapshotImage));
   }
 
   /**
