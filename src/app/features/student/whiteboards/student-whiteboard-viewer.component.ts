@@ -776,6 +776,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private readonly confirmedOwners = new Map<string, number | null>();
   readonly boardStateReady = signal<boolean>(false);
   private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
+  private remoteQueueOverflow = false;
   /** Temporizador de espera de la conexión en vivo; si expira sin conectar, se marca el fallo. */
   private connectionTimer: ReturnType<typeof setTimeout> | null = null;
   /**
@@ -943,6 +944,10 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
     this.realtime.resyncRequests.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(reason => this.resynchronize(reason));
+    this.realtime.rejectedOperations.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
+      this.reconciliation.acknowledge(id);
+      this.resynchronize('operation');
+    });
     this.realtime.accessLost.pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.boardStateReady.set(false);
@@ -1054,9 +1059,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   /** Carga y reproduce el estado actual del lienzo (trazos + textos) de la sesión en vivo. */
-  private resynchronize(reason: 'connected' | 'rejected' | 'gap' = 'connected', queued: WhiteboardDrawEventResponse[] = []): void {
+  private resynchronize(reason: 'connected' | 'rejected' | 'gap' | 'operation' = 'connected', queued: WhiteboardDrawEventResponse[] = []): void {
     this.boardStateReady.set(false);
-    this.queuedRemoteDrawEvents = queued;
+    if (reason === 'connected') { this.remoteQueueOverflow = false; this.queuedRemoteDrawEvents = []; }
+    this.queuedRemoteDrawEvents = [...this.queuedRemoteDrawEvents, ...queued].slice(-512);
+    if (reason === 'operation') { this.loadBoardState(); return; }
     if (reason !== 'gap') this.reconciliation.discardPending();
     this.cancelText();
     this.cancelShapePreview();
@@ -1074,10 +1081,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
         this.appliedRevision = state.revision ?? 0;
         this.reconciliation.reset({ v: 1, strokes: [], texts: [], shapes: [] });
         this.confirmedOwners.clear();
-        this.boardStrokes = [];
-        this.textItems.set([]);
-        this.shapeItems.set([]);
-        this.clearCanvas();
+        // renderReconciledState retains any gesture started after the rejected operation.
         if (state.stateJson === null || state.stateJson.trim() === '') {
           this.finishBoardStateLoad();
           return;
@@ -1147,6 +1151,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   private finishBoardStateLoad(): void {
+    if (this.remoteQueueOverflow) {
+      this.boardStateReady.set(false);
+      this.showBanner('Demasiadas actualizaciones pendientes. Reintenta la conexión para recuperar el estado completo.', 'warning');
+      return;
+    }
     this.renderReconciledState();
     this.boardStateReady.set(true);
     const queued = this.queuedRemoteDrawEvents.sort((a, b) => (a.revision ?? 0) - (b.revision ?? 0));
@@ -2409,6 +2418,11 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   private onRemoteDraw(event: WhiteboardDrawEventResponse): void {
     if (!this.boardStateReady()) {
+      if (this.queuedRemoteDrawEvents.length >= 512) {
+        this.remoteQueueOverflow = true;
+        this.showBanner('Demasiadas actualizaciones pendientes. Reintenta la conexión para recuperar el estado completo.', 'warning');
+        return;
+      }
       this.queuedRemoteDrawEvents.push(event);
       return;
     }

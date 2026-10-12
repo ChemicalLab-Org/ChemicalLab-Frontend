@@ -262,6 +262,38 @@ describe.each(['teacher', 'student'] as const)('T03 verified state reconciliatio
     http.expectOne(`${environment.apiUrl}/whiteboards/${role}/12/state`).flush({}, { status: 503, statusText: 'Unavailable' });
     expect(component.boardStateReady()).toBe(false); expect(component.canDraw()).toBe(false);
   });
+  it.each(['TEXT', 'SHAPE', 'STROKE'])('recovers a rejected %s operation while preserving later intentions and arrivals', kind => {
+    component.boardStateReady.set(true); component.onRemoteDraw(objectEvent(kind, 1, 1));
+    const first = localEdit(kind, 10), later = localEdit(kind, 30);
+    component.reconciliation.acknowledge(first.clientEventId);
+    component.resynchronize('operation');
+    component.onRemoteDraw(objectEvent(kind, 20, 2));
+    http.expectOne(`${environment.apiUrl}/whiteboards/${role}/12/state`).flush({ revision: 1, stateJson: JSON.stringify(snapshot(kind, 1, 1)) });
+    expect(visibleX(kind)).toBe(30); expect(component.reconciliation.pendingCount).toBe(1);
+    component.onRemoteDraw({ ...objectEvent(kind, 30, 3), ...later, revision: 3 });
+    expect(visibleX(kind)).toBe(30); expect(component.reconciliation.pendingCount).toBe(0);
+  });
+  it.each(['TEXT', 'SHAPE'])('preserves an unsent %s drag during a rejection snapshot', kind => {
+    component.boardStateReady.set(true); component.tool.set('SELECT'); component.onRemoteDraw(objectEvent(kind, 1, 1));
+    const first = localEdit(kind, 10);
+    const pointer = { target: document.createElement('div'), pointerId: 1, clientX: 0, clientY: 0, preventDefault: vi.fn(), stopPropagation: vi.fn() };
+    if (kind === 'TEXT') { component.onTextItemPointerDown(visible(kind)[0], pointer); component.onTextItemPointerMove({ ...pointer, clientX: 20 }); }
+    else { component.onShapePointerDown(visible(kind)[0], pointer); component.onShapePointerMove({ ...pointer, clientX: 20 }); }
+    component.reconciliation.acknowledge(first.clientEventId); component.resynchronize('operation');
+    http.expectOne(`${environment.apiUrl}/whiteboards/${role}/12/state`).flush({ revision: 1, stateJson: JSON.stringify(snapshot(kind, 1, 1)) });
+    expect(visibleX(kind)).toBe(30);
+    if (kind === 'TEXT') component.onTextItemPointerUp(pointer); else component.onShapePointerUp(pointer);
+    expect(sent.at(-1).points[0].x).toBe(30);
+  });
+  it('bounds remote events while recovery is blocked and offers reconnection', () => {
+    component.boardStateReady.set(false);
+    for (let i = 0; i < 513; i++) component.onRemoteDraw(objectEvent('TEXT', i, i + 1));
+    expect(component.queuedRemoteDrawEvents).toHaveLength(512); expect(component.remoteQueueOverflow).toBe(true);
+    component.finishBoardStateLoad(); expect(component.boardStateReady()).toBe(false);
+    component.resynchronize('connected');
+    http.expectOne(`${environment.apiUrl}/whiteboards/${role}/12/state`).flush({ revision: 513, stateJson: JSON.stringify(snapshot('TEXT', 512, 513)) });
+    expect(component.boardStateReady()).toBe(true); expect(component.remoteQueueOverflow).toBe(false);
+  });
   it('fetches state on a revision gap instead of applying out of order edits', () => {
     component.boardStateReady.set(true); component.appliedRevision = 2;
     component.onRemoteDraw({ revision: 4, eventType: 'CLEAR' });

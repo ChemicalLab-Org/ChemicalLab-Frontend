@@ -28,6 +28,9 @@ export class WhiteboardRealtimeConnection {
   private readonly errors$ = new Subject<string>();
   private readonly resync$ = new Subject<'connected' | 'rejected'>();
   private readonly accessLost$ = new Subject<void>();
+  private readonly rejectedOperations$ = new Subject<string>();
+  private readonly pending = new Map<string, ReturnType<typeof setTimeout>>();
+  readonly rejectedOperations = this.rejectedOperations$.asObservable();
   readonly drawEvents = this.drawEvents$.asObservable();
   readonly controlEvents = this.controlEvents$.asObservable();
   readonly errors = this.errors$.asObservable();
@@ -66,6 +69,11 @@ export class WhiteboardRealtimeConnection {
       },
       onWebSocketClose: (event: CloseEvent) => {
         if (this.client !== client) return;
+        if (this.pending.size) { this.clearPending(); this.resync$.next('rejected'); }
+        if (event.code === 4429) {
+          this.failure.set('network'); this.connectionState.set('connecting');
+          this.errors$.next('Se alcanzó el límite de conexiones o tráfico. Espera; se reintentará la conexión.'); return;
+        }
         if (event.code === 4001) { this.invalidSession(attemptToken); return; }
         if (event.code === 4003) {
           this.stop('access');
@@ -106,14 +114,34 @@ export class WhiteboardRealtimeConnection {
 
   reconnect(sessionId: number): void { this.disconnect(); this.connect(sessionId); }
   sendDraw(event: WhiteboardDrawEventRequest): void {
-    if (!this.client?.connected || this.sessionId === null) return;
-    this.client.publish({ destination: `/app/whiteboards/${this.sessionId}/draw`, body: JSON.stringify(event) });
+    const id = event.clientEventId;
+    if (!this.client?.connected || this.sessionId === null || this.pending.size >= 128) {
+      this.errors$.next('La acción no se envió. Espera la conexión o la confirmación de las acciones pendientes.');
+      if (id) this.rejectedOperations$.next(id);
+      return;
+    }
+    if (id) {
+      this.settle(id);
+      this.pending.set(id, setTimeout(() => {
+        this.settle(id);
+        this.errors$.next('La acción no recibió confirmación. Se recuperará el estado del servidor.');
+        this.rejectedOperations$.next(id);
+      }, 10000));
+    }
+    try {
+      this.client.publish({ destination: `/app/whiteboards/${this.sessionId}/draw`,
+        headers: id ? { 'client-event-id': id } : {}, body: JSON.stringify(event) });
+    } catch {
+      if (id) { this.settle(id); this.rejectedOperations$.next(id); }
+      this.errors$.next('No se pudo enviar la acción. Se recuperará el estado del servidor.');
+    }
   }
   sendPresence(): void {
     if (!this.client?.connected || this.sessionId === null) return;
     this.client.publish({ destination: `/app/whiteboards/${this.sessionId}/presence`, body: '' });
   }
   disconnect(): void {
+    this.clearPending();
     const previous = this.client;
     this.client = null;
     this.sessionId = null;
@@ -132,12 +160,21 @@ export class WhiteboardRealtimeConnection {
     let payload: WhiteboardTopicMessage;
     try { payload = JSON.parse(message.body) as WhiteboardTopicMessage; } catch { return; }
     if (isWhiteboardControlEvent(payload)) this.controlEvents$.next(payload);
-    else this.drawEvents$.next(payload);
+    else { if (payload.clientEventId) this.settle(payload.clientEventId); this.drawEvents$.next(payload); }
   }
+  private settle(id: string): void {
+    const timer = this.pending.get(id); if (timer) clearTimeout(timer); this.pending.delete(id);
+  }
+  private clearPending(): void { for (const id of this.pending.keys()) this.settle(id); }
   private handleError(message: IMessage): void {
     let error = 'La pizarra rechazó la última acción. Se recuperará el estado guardado.';
-    try { error = (JSON.parse(message.body) as { error?: string }).error ?? error; } catch { /* generic error */ }
+    let id: string | undefined;
+    try {
+      const payload = JSON.parse(message.body) as { error?: string; clientEventId?: string };
+      error = payload.error ?? error; id = payload.clientEventId;
+    } catch { /* generic error */ }
     this.errors$.next(error);
-    this.resync$.next('rejected');
+    if (id) { this.settle(id); this.rejectedOperations$.next(id); }
+    else { this.clearPending(); this.resync$.next('rejected'); }
   }
 }
