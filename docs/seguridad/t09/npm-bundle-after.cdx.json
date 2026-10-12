@@ -1,0 +1,421 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "T09 inventory adapter",
+          "version": "1"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "@angular/common",
+      "version": "21.2.25",
+      "purl": "pkg:npm/%40angular/common@21.2.25",
+      "bom-ref": "pkg:npm/%40angular/common@21.2.25#node_modules/@angular/common",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/@angular/common"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "32217"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "d68c52ac5a8cc8917ac585c10eb7226527b703aec4e5f798417866c47dddd212ded3058cfe91594ef0af4a703ae701e3f0d4e89ee23bfc73013f044a75d1e81b"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@angular/core",
+      "version": "21.2.25",
+      "purl": "pkg:npm/%40angular/core@21.2.25",
+      "bom-ref": "pkg:npm/%40angular/core@21.2.25#node_modules/@angular/core",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/@angular/core"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "126234"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "724bbb117d228133e7baa116675362418e0f9f5836c41963412935f9b5d12a7b9d2626422bc7b5bb6bf46f23735ae2b099dcfb90a5e3cfbd68db6e07aed71c54"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@angular/forms",
+      "version": "21.2.25",
+      "purl": "pkg:npm/%40angular/forms@21.2.25",
+      "bom-ref": "pkg:npm/%40angular/forms@21.2.25#node_modules/@angular/forms",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/@angular/forms"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "46250"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "110003a3ae3f05a08a3b5b86710c877185b5cb627040c39f59052d781b2a14e0ccc284502bde951f92dfffcbd4c2f57b82f16b940e058555e3b2fd8a55d7cfbb"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@angular/platform-browser",
+      "version": "21.2.25",
+      "purl": "pkg:npm/%40angular/platform-browser@21.2.25",
+      "bom-ref": "pkg:npm/%40angular/platform-browser@21.2.25#node_modules/@angular/platform-browser",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/@angular/platform-browser"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "11599"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "85081e29988ab78d8ffa371ff63ee8ddcd4648ec0e5eb0185f68570ace00d3efc04359de010db46e38d4020cf57c60b83f76cd76eaf0d592cb84c03e64128fb6"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@angular/router",
+      "version": "21.2.25",
+      "purl": "pkg:npm/%40angular/router@21.2.25",
+      "bom-ref": "pkg:npm/%40angular/router@21.2.25#node_modules/@angular/router",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/@angular/router"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "73930"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "f39670242044a5a5c199eceeb192e5816d89cc4101cb37ab9564f7e08e882bf64de00286f26d81fef95b4e42a61eecc23865b1d4bef116d3e0fd44641862b048"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "@stomp/stompjs",
+      "version": "7.4.0",
+      "purl": "pkg:npm/%40stomp/stompjs@7.4.0",
+      "bom-ref": "pkg:npm/%40stomp/stompjs@7.4.0#node_modules/@stomp/stompjs",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/@stomp/stompjs"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "19986"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "252c93db7d204f783cbfd30f2dbfceba4378e8cfa89a4511efd8b183a2f7d5e9b8d51687b9de83a814e2a2878feeba5c2b2cca929819ef61c352316a18a609be"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "inherits",
+      "version": "2.0.4",
+      "purl": "pkg:npm/inherits@2.0.4",
+      "bom-ref": "pkg:npm/inherits@2.0.4#node_modules/inherits",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/inherits"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "344"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "93fbc6697e3f6256b75b3c8c0af4d039761e207bea38ab67a8176ecd31e9ce9419cc0b2428c859d8af849c189233dcc64a820578ca572b16b8758799210a9ec1"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "querystringify",
+      "version": "2.2.0",
+      "purl": "pkg:npm/querystringify@2.2.0",
+      "bom-ref": "pkg:npm/querystringify@2.2.0#node_modules/querystringify",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/querystringify"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "637"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "148aa08f6114bd36bb479d2ed2b1acc937edce3626bff6b784edf8e5b64daea69b36a8ed8220cc826a389a452377e9f3539a05ddd0a52aa1483d42b26d4caaa1"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "requires-port",
+      "version": "1.0.0",
+      "purl": "pkg:npm/requires-port@1.0.0",
+      "bom-ref": "pkg:npm/requires-port@1.0.0#node_modules/requires-port",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/requires-port"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "263"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "2a280e087728714dd7383271b2ef22fe3f13f6dcd3e1a74789e730391450d19645729eda8705ee454d66fb2b8ef740b9654c867867e87070c8d783372f7c8301"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "rxjs",
+      "version": "7.8.2",
+      "purl": "pkg:npm/rxjs@7.8.2",
+      "bom-ref": "pkg:npm/rxjs@7.8.2#node_modules/rxjs",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/rxjs"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "18764"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "76129ff74dd4fcf41963a6e834db4019d59b1bce5601b8d3ff5c58a19202ec5018d3259aa4e05056c56b0e5e7c5bcebffded55a4c341b5157831a5df74cc9214"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "sockjs-client",
+      "version": "1.6.1",
+      "purl": "pkg:npm/sockjs-client@1.6.1",
+      "bom-ref": "pkg:npm/sockjs-client@1.6.1#node_modules/sockjs-client",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/sockjs-client"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "42751"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "da0d2d8ce47e7d1b346a6c4434b8bfab94e2253a98f965c53b36f95305e77652ba4cedd4fe68ab6739e9c7ac37e0754ca1cde0edc636e320bf64c2189c395f93"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "tslib",
+      "version": "2.8.1",
+      "purl": "pkg:npm/tslib@2.8.1",
+      "bom-ref": "pkg:npm/tslib@2.8.1#node_modules/tslib",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/tslib"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "1905"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "a0916ef781d06fe29576e49440bef09e99aa9df98bb0e03f9c087a6fa107d30084a0ad3f98f79753a737c0a0d5f373243ae1cf447b525ca294f7d2016b34bfdb"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "url-parse",
+      "version": "1.5.10",
+      "purl": "pkg:npm/url-parse@1.5.10",
+      "bom-ref": "pkg:npm/url-parse@1.5.10#node_modules/url-parse",
+      "properties": [
+        {
+          "name": "t09:lock-path",
+          "value": "node_modules/url-parse"
+        },
+        {
+          "name": "t09:dev",
+          "value": "false"
+        },
+        {
+          "name": "t09:optional",
+          "value": "false"
+        },
+        {
+          "name": "t09:bytes-emitted",
+          "value": "5071"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "5b2a5c7e24617de50ff6fbc5d23eabc3427786b5abc3a899bf7fb6da1ea244c27ff33d538fa5df2cfe03b148b1e4c84c3e75e98870e82b2a19fdb74293004289"
+        }
+      ]
+    }
+  ]
+}

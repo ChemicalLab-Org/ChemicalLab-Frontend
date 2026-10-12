@@ -1,0 +1,52 @@
+{
+  "analysis_date": "2026-10-12",
+  "timezone": "America/Lima",
+  "observed_environment": "local Windows; no deployment inspected",
+  "jdk": "Oracle 17.0.12",
+  "maven": "3.9.15",
+  "maven_wrapper": "3.3.4",
+  "node": "24.13.0",
+  "npm": "11.6.2",
+  "python": "3.14.3",
+  "postgresql": "18 disposable loopback fixture",
+  "osv_scanner": {
+    "version": "2.6.0",
+    "sha256": "e0ed7644118b717b028c249ee9d3515024e55e8510747ca08906eb96765354d6",
+    "checksum_source": "https://github.com/google/osv-scanner/releases/tag/v2.6.0",
+    "network_feed": "online OSV",
+    "suppressions": false
+  },
+  "sbom_generators": {
+    "maven": "org.cyclonedx:cyclonedx-maven-plugin:2.9.3, includeTestScope=true",
+    "npm_installed": "npm 11.6.2 sbom CycloneDX 1.5",
+    "lock_plugins_bundle_jar": "versioned Python standard-library adapter, CycloneDX 1.6"
+  },
+  "sbom_validation": {
+    "schema_versions": [
+      "CycloneDX 1.5",
+      "CycloneDX 1.6"
+    ],
+    "sboms_validated": 13,
+    "checks": [
+      "JSON Schema",
+      "unique component references",
+      "resolved dependency references"
+    ],
+    "local_evidence_file": "sbom-validation.log",
+    "sha256": "a4741145912d09b5dd683d582944b6c30f99d052f37fbf90ece870e83c8878c2"
+  },
+  "auxiliary_maven_tools": "dependency/help/CycloneDX goals used for inventory, not asserted to be a complete audit of global Maven cache",
+  "image": {
+    "dockerfile_build_tag": "eclipse-temurin:17-jdk",
+    "dockerfile_runtime_tag": "eclipse-temurin:17-jre",
+    "digest": null,
+    "scan": "not performed: Docker daemon unavailable"
+  },
+  "limits": [
+    "No real deployment, school DB or provider inspected",
+    "JDK/Node local patches require operational upgrade and revalidation",
+    "No exhaustive JDK/global npm CLI/OS image CVE attribution",
+    "Official JDBC and Jetty advisories supplemented feed delays",
+    "No risk acceptance or VER-01 closure"
+  ]
+}
