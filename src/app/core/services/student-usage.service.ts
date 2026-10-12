@@ -21,8 +21,8 @@ export class StudentUsageService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/admin/student-usage-records`;
 
-  getRecords(filters: StudentUsageFilters): Observable<StudentUsageRecordsResponse> {
-    let params = new HttpParams();
+  getRecords(filters: StudentUsageFilters,page=0,size=25): Observable<StudentUsageRecordsResponse> {
+    let params = new HttpParams().set("page",page).set("size",size);
     if (filters.role) params = params.set('role', filters.role);
     if (filters.search.trim()) params = params.set('search', filters.search.trim());
     if (filters.grade) params = params.set('grade', filters.grade);
@@ -34,7 +34,7 @@ export class StudentUsageService {
     return this.http.get<StudentUsageRecordsResponse>(this.baseUrl, { params });
   }
 
-  getDetail(userId: number): Observable<StudentUsageDetailResponse> {
-    return this.http.get<StudentUsageDetailResponse>(`${this.baseUrl}/${userId}`);
+  getDetail(userId: number,page=0): Observable<StudentUsageDetailResponse> {
+    return this.http.get<StudentUsageDetailResponse>(`${this.baseUrl}/${userId}`,{params:{page,size:20}});
   }
 }

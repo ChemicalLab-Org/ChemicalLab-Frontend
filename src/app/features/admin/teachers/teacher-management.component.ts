@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { passwordPolicyValidator, PASSWORD_GUIDANCE } from "../../../shared/utils/password-policy";
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -36,7 +37,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 @Component({
   selector: 'app-teacher-management',
   standalone: true,
-  imports: [ReactiveFormsModule, SidebarComponent],
+  imports: [PaginationComponent,ReactiveFormsModule, SidebarComponent],
   styleUrls: ['./teacher-management.component.scss'],
   template: `
     <div class="layout">
@@ -90,6 +91,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
         </div>
 
         <!-- Estados de carga / error / vacío / tabla -->
+        <app-pagination [page]="page()" [totalPages]="totalPages()" [total]="total()" [loading]="loading()" (pageChange)="changePage($event)" />
         @if (loading()) {
           <div class="loading-state">
             <div class="loading-state__spinner"></div>
@@ -179,7 +181,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 
           <div class="table-summary">
             Mostrando <strong>{{ filteredTeachers().length }}</strong> de
-            <strong>{{ teachers().length }}</strong> docentes
+            <strong>{{ total() }}</strong> docentes
           </div>
         }
       </main>
@@ -386,6 +388,8 @@ export class TeacherManagementComponent {
   // Estado de datos
   readonly teachers = signal<TeacherResponse[]>([]);
   readonly loading = signal<boolean>(false);
+  readonly page=signal(0);readonly totalPages=signal(0);readonly total=signal(0);
+  private requestVersion=0;
   readonly error = signal<string | null>(null);
   readonly successMessage = signal<string | null>(null);
 
@@ -441,35 +445,25 @@ export class TeacherManagementComponent {
   readonly userName = computed<string>(() => this.currentUser()?.username ?? 'Administrador');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
-  readonly filteredTeachers = computed<TeacherResponse[]>(() => {
-    const term = this.searchTerm().trim().toLowerCase();
-    const status = this.statusFilter();
-
-    return this.teachers().filter((t) => {
-      const matchesTerm =
-        term === '' ||
-        `${t.names} ${t.lastNames}`.toLowerCase().includes(term) ||
-        t.username.toLowerCase().includes(term) ||
-        t.email.toLowerCase().includes(term);
-      const matchesStatus =
-        status === 'all' || (status === 'active' ? t.active : !t.active);
-      return matchesTerm && matchesStatus;
-    });
-  });
+  readonly filteredTeachers = computed(() => this.teachers());
 
   constructor() {
     this.loadTeachers();
   }
 
+  changePage(page:number):void{this.page.set(page);this.loadTeachers();}
   loadTeachers(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.userManagementService.listTeachers().subscribe({
+    const request=++this.requestVersion;
+    this.userManagementService.listTeachers(this.page(),this.searchTerm(),this.statusFilter()).subscribe({
       next: (teachers) => {
-        this.teachers.set(teachers);
+        if(request!==this.requestVersion)return;
+        this.teachers.set(teachers.content);this.total.set(teachers.totalElements);this.totalPages.set(teachers.totalPages);
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if(request!==this.requestVersion)return;
         this.error.set(this.extractError(err, 'Ocurrió un error al cargar los docentes.'));
         this.loading.set(false);
       },
@@ -477,11 +471,11 @@ export class TeacherManagementComponent {
   }
 
   onSearch(event: Event): void {
-    this.searchTerm.set((event.target as HTMLInputElement).value);
+    this.searchTerm.set((event.target as HTMLInputElement).value);this.page.set(0);this.loadTeachers();
   }
 
   onStatusFilter(event: Event): void {
-    this.statusFilter.set((event.target as HTMLSelectElement).value as StatusFilter);
+    this.statusFilter.set((event.target as HTMLSelectElement).value as StatusFilter);this.page.set(0);this.loadTeachers();
   }
 
   onPersonNameInput(event: Event, controlName: 'names' | 'lastNames'): void {

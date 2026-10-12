@@ -13,3 +13,5 @@ export * from './supervision.models';
 export * from './usage-metrics.models';
 export * from './student-usage.models';
 export * from './whiteboard.models';
+
+export * from './query-page.models';

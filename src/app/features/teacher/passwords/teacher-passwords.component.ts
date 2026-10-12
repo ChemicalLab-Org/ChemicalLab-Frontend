@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { passwordPolicyValidator, PASSWORD_GUIDANCE } from "../../../shared/utils/password-policy";
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -27,7 +28,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 @Component({
   selector: 'app-teacher-passwords',
   standalone: true,
-  imports: [ReactiveFormsModule, SidebarComponent],
+  imports: [PaginationComponent,ReactiveFormsModule, SidebarComponent],
   styleUrls: ['./teacher-passwords.component.scss'],
   template: `
     <div class="layout">
@@ -80,6 +81,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
         </div>
 
         <!-- Estados de carga / error / vacío / tabla -->
+        <app-pagination [page]="page()" [totalPages]="totalPages()" [total]="total()" [loading]="loading()" (pageChange)="changePage($event)" />
         @if (loading()) {
           <div class="loading-state">
             <div class="loading-state__spinner"></div>
@@ -161,7 +163,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 
           <div class="table-summary">
             Mostrando <strong>{{ filteredStudents().length }}</strong> de
-            <strong>{{ students().length }}</strong> estudiantes
+            <strong>{{ total() }}</strong> estudiantes
           </div>
         }
       </main>
@@ -259,6 +261,8 @@ export class TeacherPasswordsComponent {
   // Estado de datos
   readonly students = signal<StudentResponse[]>([]);
   readonly loading = signal<boolean>(false);
+  readonly page=signal(0);readonly totalPages=signal(0);readonly total=signal(0);
+  private requestVersion=0;
   readonly error = signal<string | null>(null);
   readonly successMessage = signal<string | null>(null);
 
@@ -284,25 +288,13 @@ export class TeacherPasswordsComponent {
   readonly resetRemaining = computed(() => this.retry.remaining(this.resetTarget() === null ? null
     : authRetryKey('PATCH', `/users/teachers/${this.teacherUserId()}/students/${this.resetTarget()!.id}/reset-password`)));
 
-  readonly filteredStudents = computed<StudentResponse[]>(() => {
-    const term = this.searchTerm().trim().toLowerCase();
-    const status = this.statusFilter();
-
-    return this.students().filter((s) => {
-      const matchesTerm =
-        term === '' ||
-        `${s.names} ${s.lastNames}`.toLowerCase().includes(term) ||
-        s.studentCode.toLowerCase().includes(term);
-      const matchesStatus =
-        status === 'all' || (status === 'active' ? s.active : !s.active);
-      return matchesTerm && matchesStatus;
-    });
-  });
+  readonly filteredStudents = computed(() => this.students());
 
   constructor() {
     this.loadStudents();
   }
 
+  changePage(page:number):void{this.page.set(page);this.loadStudents();}
   loadStudents(): void {
     const teacherId = this.teacherUserId();
     if (teacherId === null) {
@@ -312,12 +304,15 @@ export class TeacherPasswordsComponent {
 
     this.loading.set(true);
     this.error.set(null);
-    this.userManagementService.listStudentsByTeacher(teacherId).subscribe({
+    const request=++this.requestVersion;
+    this.userManagementService.listStudentsByTeacher(teacherId,this.page(),this.searchTerm(),'','',this.statusFilter()).subscribe({
       next: (students) => {
-        this.students.set(students);
+        if(request!==this.requestVersion)return;
+        this.students.set(students.content);this.total.set(students.totalElements);this.totalPages.set(students.totalPages);
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if(request!==this.requestVersion)return;
         this.error.set(this.extractError(err, 'Ocurrió un error al cargar los estudiantes.'));
         this.loading.set(false);
       },
@@ -325,11 +320,11 @@ export class TeacherPasswordsComponent {
   }
 
   onSearch(event: Event): void {
-    this.searchTerm.set((event.target as HTMLInputElement).value);
+    this.searchTerm.set((event.target as HTMLInputElement).value);this.page.set(0);this.loadStudents();
   }
 
   onStatusFilter(event: Event): void {
-    this.statusFilter.set((event.target as HTMLSelectElement).value as StatusFilter);
+    this.statusFilter.set((event.target as HTMLSelectElement).value as StatusFilter);this.page.set(0);this.loadStudents();
   }
 
   openReset(student: StudentResponse): void {

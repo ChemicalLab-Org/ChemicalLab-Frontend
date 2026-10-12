@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -56,7 +57,7 @@ interface RoleOption {
 @Component({
   selector: 'app-admin-users',
   standalone: true,
-  imports: [ReactiveFormsModule, SidebarComponent],
+  imports: [PaginationComponent,ReactiveFormsModule, SidebarComponent],
   styleUrls: ['./admin-users.component.scss'],
   template: `
     <div class="layout">
@@ -126,12 +127,13 @@ interface RoleOption {
             <input
               class="input"
               type="search"
-              placeholder="Buscar por nombre, usuario, código, correo o rol…"
+              maxlength="100" placeholder="Buscar por nombre, usuario, código, correo o rol…"
               [value]="searchTerm()"
               (input)="onSearch($event)"
             />
           </div>
 
+          <app-pagination [page]="page()" [totalPages]="totalPages()" [total]="totalUsers()" [loading]="loading()" (pageChange)="changePage($event)" />
           @if (loading()) {
             <div class="loading-state">
               <div class="loading-state__spinner"></div>
@@ -147,8 +149,8 @@ interface RoleOption {
           } @else if (users().length === 0) {
             <div class="empty-state">
               <div class="empty-state__icon"><span class="material-icons">group</span></div>
-              <h2 class="empty-state__title">No hay usuarios registrados.</h2>
-              <p class="empty-state__desc">Crea el primer usuario para comenzar.</p>
+              <h2 class="empty-state__title">No hay usuarios con los filtros seleccionados.</h2>
+              <p class="empty-state__desc">Cambia la búsqueda o los filtros para ver otros usuarios.</p>
             </div>
           } @else {
             <div class="table-container">
@@ -255,7 +257,7 @@ interface RoleOption {
 
             <div class="table-summary">
               Mostrando <strong>{{ filteredUsers().length }}</strong> de
-              <strong>{{ users().length }}</strong> usuarios
+              <strong>{{ totalUsers() }}</strong> usuarios
             </div>
           }
         </section>
@@ -456,15 +458,21 @@ interface RoleOption {
                 </div>
                 <div class="form-group form-group--full">
                   <label class="form-label" for="teacherUserId">Docente responsable</label>
+                  <input class="input" type="search" maxlength="100" aria-label="Buscar docente responsable" placeholder="Buscar docente" [value]="teacherSearch()" (input)="searchTeachers($event)" />
+                  <div><button type="button" (click)="changeTeacherPage(-1)" [disabled]="teacherPage()===0">Anteriores docentes</button>
+                  <button type="button" (click)="changeTeacherPage(1)" [disabled]="teacherPage()+1>=teacherPages()">Más docentes</button></div>
                   <select id="teacherUserId" class="select" formControlName="teacherUserId"
                     [class.input-error]="isInvalid('teacherUserId')">
                     <option [ngValue]="null" disabled>Selecciona un docente…</option>
+                      @if (form.controls['teacherUserId'].value && !hasSelectedTeacher()) {
+                        <option [ngValue]="form.controls['teacherUserId'].value">Docente seleccionado · {{ form.controls['teacherUserId'].value }}</option>
+                      }
                     @for (t of teacherOptions(); track t.userId) {
                       <option [ngValue]="t.userId">{{ t.fullName }} ({{ t.username }})</option>
                     }
                   </select>
                   @if (teacherOptions().length === 0) {
-                    <span class="form-hint">No hay docentes activos. Crea o activa un docente primero.</span>
+                      <span class="form-hint">No hay docentes con esta búsqueda. Cambia el texto para buscar otros.</span>
                   } @else if (isInvalid('teacherUserId')) {
                     <span class="form-error">Selecciona un docente responsable activo.</span>
                   }
@@ -638,6 +646,14 @@ export class AdminUsersComponent {
   // Filtros y búsqueda
   readonly activeFilter = signal<UserFilter>('all');
   readonly searchTerm = signal<string>('');
+  readonly page=signal(0);
+  readonly totalPages=signal(0);
+  readonly totalUsers=signal(0);
+  readonly teacherPage=signal(0);
+  readonly teacherPages=signal(0);
+  readonly teacherSearch=signal('');
+  private usersRequest=0;
+  private teacherRequest=0;
 
   // Acciones
   readonly busyUserId = signal<number | null>(null);
@@ -700,31 +716,7 @@ export class AdminUsersComponent {
     ];
   });
 
-  readonly filteredUsers = computed<AdminUser[]>(() => {
-    const term = this.searchTerm().trim().toLowerCase();
-    const filter = this.activeFilter();
-
-    return this.users().filter((u) => {
-      const matchesFilter =
-        filter === 'all'
-          ? true
-          : filter === 'active'
-            ? u.active
-            : filter === 'inactive'
-              ? !u.active
-              : u.role === filter;
-
-      const matchesTerm =
-        term === '' ||
-        u.fullName.toLowerCase().includes(term) ||
-        u.username.toLowerCase().includes(term) ||
-        (u.code ?? '').toLowerCase().includes(term) ||
-        (u.email ?? '').toLowerCase().includes(term) ||
-        this.roleLabel(u.role).toLowerCase().includes(term);
-
-      return matchesFilter && matchesTerm;
-    });
-  });
+  readonly filteredUsers = computed(() => this.users());
 
   readonly hasActivity = computed<boolean>(() => {
     const a = this.activity();
@@ -751,13 +743,16 @@ export class AdminUsersComponent {
   private loadUsers(): void {
     this.loading.set(true);
     this.error.set(null);
-    this.adminService.listUsers().subscribe({
-      next: (users) => {
-        this.users.set(users);
+    const request=++this.usersRequest;
+    this.adminService.listUsers(this.page(),25,this.searchTerm(),this.activeFilter()).subscribe({
+      next: (response) => {
+        if(request!==this.usersRequest)return;
+        this.users.set(response.content);this.totalUsers.set(response.totalElements);this.totalPages.set(response.totalPages);
         this.loading.set(false);
       },
       error: (err: unknown) => {
-        this.error.set(this.extractError(err, 'Ocurrió un error al cargar los usuarios.'));
+        if(request!==this.usersRequest)return;
+        this.users.set([]);this.error.set(this.extractError(err, 'Ocurrió un error al cargar los usuarios.'));
         this.loading.set(false);
       },
     });
@@ -786,20 +781,25 @@ export class AdminUsersComponent {
   }
 
   private loadTeacherOptions(): void {
-    this.adminService.getTeacherOptions().subscribe({
-      next: (options) => this.teacherOptions.set(options),
-      error: () => this.teacherOptions.set([]),
+    const request=++this.teacherRequest;
+    this.adminService.getTeacherOptions(this.teacherPage(),this.teacherSearch(),this.form.get('teacherUserId')?.value).subscribe({
+      next: (options) => { if(request!==this.teacherRequest)return;this.teacherOptions.set(options.content);this.teacherPages.set(options.totalPages); },
+      error: () => {if(request===this.teacherRequest)this.teacherOptions.set([]);},
     });
   }
+  hasSelectedTeacher():boolean {return this.teacherOptions().some(t=>t.userId===this.form.controls['teacherUserId'].value);}
 
   // ===================== Filtros / búsqueda =====================
 
   setFilter(filter: UserFilter): void {
-    this.activeFilter.set(filter);
+    this.activeFilter.set(filter);this.page.set(0);this.loadUsers();
   }
 
+  changePage(page:number):void { this.page.set(page);this.loadUsers(); }
+  searchTeachers(event:Event):void {this.teacherSearch.set((event.target as HTMLInputElement).value);this.teacherPage.set(0);this.loadTeacherOptions();}
+  changeTeacherPage(delta:number):void {this.teacherPage.update(p=>p+delta);this.loadTeacherOptions();}
   onSearch(event: Event): void {
-    this.searchTerm.set((event.target as HTMLInputElement).value);
+    this.searchTerm.set((event.target as HTMLInputElement).value);this.page.set(0);this.loadUsers();
   }
 
   /** Normaliza la sección a una sola letra en mayúscula mientras el usuario escribe. */
@@ -823,6 +823,7 @@ export class AdminUsersComponent {
   // ===================== Crear / editar usuario =====================
 
   openCreate(): void {
+    this.teacherPage.set(0);this.teacherSearch.set('');
     this.formMode.set('create');
     this.editingUser.set(null);
     this.selectedRole.set('DOCENTE');
@@ -844,6 +845,7 @@ export class AdminUsersComponent {
   }
 
   openEdit(user: AdminUser): void {
+    this.teacherPage.set(0);this.teacherSearch.set('');
     this.formMode.set('edit');
     this.editingUser.set(user);
     this.selectedRole.set(user.role);

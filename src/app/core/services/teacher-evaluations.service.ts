@@ -161,9 +161,9 @@ export class TeacherEvaluationsService {
    * pestaña, intentos de salida, herramientas consultadas) y línea de tiempo de eventos.
    * Solo de intentos de evaluaciones propias; no incluye respuestas ni claves.
    */
-  getAttemptTraceability(attemptId: number): Observable<AttemptTraceabilityResponse> {
+  getAttemptTraceability(attemptId: number,page=0): Observable<AttemptTraceabilityResponse> {
     return this.http.get<AttemptTraceabilityResponse>(
-      `${this.baseUrl}/attempts/${attemptId}/traceability`
+      `${this.baseUrl}/attempts/${attemptId}/traceability`, {params:{page,size:25}}
     );
   }
 

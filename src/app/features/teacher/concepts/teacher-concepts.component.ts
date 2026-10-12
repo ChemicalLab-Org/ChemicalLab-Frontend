@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { fileDownloadName } from '../../../shared/utils/safe-file.util';
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -51,7 +52,7 @@ const LEGACY_CATEGORY_LABELS: Readonly<Record<string, string>> = {
 @Component({
   selector: 'app-teacher-concepts',
   standalone: true,
-  imports: [ReactiveFormsModule, SidebarComponent],
+  imports: [PaginationComponent,ReactiveFormsModule, SidebarComponent],
   styleUrls: ['./teacher-concepts.component.scss'],
   template: `
     <div class="layout">
@@ -444,6 +445,10 @@ const LEGACY_CATEGORY_LABELS: Readonly<Record<string, string>> = {
 
             <section class="detail__section">
               <h3 class="detail__heading">Materiales de apoyo</h3>
+              @if (d.materialsPage; as mp) {
+                <app-pagination [page]="mp.number" [totalPages]="mp.totalPages" [total]="mp.totalElements" [loading]="materialsLoading()" (pageChange)="changeMaterialsPage($event)" />
+              }
+              @if (materialsPageError()) {<p role="alert">{{ materialsPageError() }}</p>}
 
               @if (d.materials.length === 0) {
                 <p class="detail__text detail__text--muted">Este contenido aún no tiene materiales de apoyo.</p>
@@ -735,6 +740,20 @@ export class TeacherConceptsComponent {
 
   // Detalle
   readonly detailConcept = signal<ConceptContentResponse | null>(null);
+  readonly materialsLoading=signal(false);
+  readonly materialsPageError=signal<string|null>(null);
+  private materialsRequest=0;
+  changeMaterialsPage(page:number):void {
+    const concept=this.detailConcept();if(!concept)return;
+    const request=++this.materialsRequest;this.materialsLoading.set(true);this.materialsPageError.set(null);
+    this.materialsService.listMaterials(concept.id,page).subscribe({
+      next:mp=>{if(request!==this.materialsRequest)return;
+        if(this.detailConcept()?.id===concept.id)this.detailConcept.set({...concept,materials:mp.content,materialsPage:mp});
+        this.materialsLoading.set(false);},
+      error:()=>{if(request!==this.materialsRequest)return;this.materialsLoading.set(false);this.materialsPageError.set('No se pudieron cargar los materiales. Inténtalo de nuevo.');}
+    });
+  }
+
 
   // Asignación
   readonly assignTarget = signal<ConceptContentResponse | null>(null);
@@ -870,10 +889,10 @@ export class TeacherConceptsComponent {
     if (teacherId === null) {
       return;
     }
-    this.userManagementService.listStudentsByTeacher(teacherId).subscribe({
+    this.userManagementService.studentSummary(teacherId).subscribe({
       next: (students) => {
-        this.studentGrades.set([...new Set(students.map((s) => s.grade))].sort());
-        this.studentSections.set([...new Set(students.map((s) => s.section))].sort());
+        this.studentGrades.set([...new Set(students.groups.map((s) => s.grade))].sort());
+        this.studentSections.set([...new Set(students.groups.map((s) => s.section))].sort());
       },
       // Si falla, se usan las opciones por defecto; no es un error bloqueante.
       error: () => {

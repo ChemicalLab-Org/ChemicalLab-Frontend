@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { passwordPolicyValidator, PASSWORD_GUIDANCE } from "../../../shared/utils/password-policy";
 import { Component, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -36,7 +37,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 @Component({
   selector: 'app-teacher-students',
   standalone: true,
-  imports: [ReactiveFormsModule, SidebarComponent],
+  imports: [PaginationComponent,ReactiveFormsModule, SidebarComponent],
   styleUrls: ['./teacher-students.component.scss'],
   template: `
     <div class="layout">
@@ -104,6 +105,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
         </div>
 
         <!-- Estados de carga / error / vacío / tabla -->
+        <app-pagination [page]="page()" [totalPages]="totalPages()" [total]="total()" [loading]="loading()" (pageChange)="changePage($event)" />
         @if (loading()) {
           <div class="loading-state">
             <div class="loading-state__spinner"></div>
@@ -195,7 +197,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 
           <div class="table-summary">
             Mostrando <strong>{{ filteredStudents().length }}</strong> de
-            <strong>{{ students().length }}</strong> estudiantes
+            <strong>{{ total() }}</strong> estudiantes
           </div>
         }
       </main>
@@ -368,6 +370,8 @@ export class TeacherStudentsComponent {
   // Estado de datos
   readonly students = signal<StudentResponse[]>([]);
   readonly loading = signal<boolean>(false);
+  readonly page=signal(0);readonly totalPages=signal(0);readonly total=signal(0);
+  private requestVersion=0;
   readonly error = signal<string | null>(null);
   readonly successMessage = signal<string | null>(null);
 
@@ -419,35 +423,21 @@ export class TeacherStudentsComponent {
 
   // Opciones de filtro derivadas de los datos
   readonly grades = computed<string[]>(() =>
-    [...new Set(this.students().map((s) => s.grade))].sort()
+    [...new Set(this.groups().map((s) => s.grade))].sort()
   );
   readonly sections = computed<string[]>(() =>
-    [...new Set(this.students().map((s) => s.section))].sort()
+    [...new Set(this.groups().map((s) => s.section))].sort()
   );
 
-  readonly filteredStudents = computed<StudentResponse[]>(() => {
-    const term = this.searchTerm().trim().toLowerCase();
-    const grade = this.gradeFilter();
-    const section = this.sectionFilter();
-    const status = this.statusFilter();
+  readonly filteredStudents = computed(() => this.students());
 
-    return this.students().filter((s) => {
-      const matchesTerm =
-        term === '' ||
-        `${s.names} ${s.lastNames}`.toLowerCase().includes(term) ||
-        s.studentCode.toLowerCase().includes(term);
-      const matchesGrade = grade === '' || s.grade === grade;
-      const matchesSection = section === '' || s.section === section;
-      const matchesStatus =
-        status === 'all' || (status === 'active' ? s.active : !s.active);
-      return matchesTerm && matchesGrade && matchesSection && matchesStatus;
-    });
-  });
-
+  readonly groups=signal<{grade:string;section:string}[]>([]);
   constructor() {
+    const id=this.teacherUserId();if(id!==null)this.userManagementService.studentSummary(id).subscribe({next:r=>this.groups.set(r.groups)});
     this.loadStudents();
   }
 
+  changePage(page:number):void{this.page.set(page);this.loadStudents();}
   loadStudents(): void {
     const teacherId = this.teacherUserId();
     if (teacherId === null) {
@@ -457,12 +447,15 @@ export class TeacherStudentsComponent {
 
     this.loading.set(true);
     this.error.set(null);
-    this.userManagementService.listStudentsByTeacher(teacherId).subscribe({
+    const request=++this.requestVersion;
+    this.userManagementService.listStudentsByTeacher(teacherId,this.page(),this.searchTerm(),this.gradeFilter(),this.sectionFilter(),this.statusFilter()).subscribe({
       next: (students) => {
-        this.students.set(students);
+        if(request!==this.requestVersion)return;
+        this.students.set(students.content);this.total.set(students.totalElements);this.totalPages.set(students.totalPages);
         this.loading.set(false);
       },
       error: (err: unknown) => {
+        if(request!==this.requestVersion)return;
         this.error.set(this.extractError(err, 'Ocurrió un error al cargar los estudiantes.'));
         this.loading.set(false);
       },
@@ -470,19 +463,19 @@ export class TeacherStudentsComponent {
   }
 
   onSearch(event: Event): void {
-    this.searchTerm.set((event.target as HTMLInputElement).value);
+    this.searchTerm.set((event.target as HTMLInputElement).value);this.page.set(0);this.loadStudents();
   }
 
   onGradeFilter(event: Event): void {
-    this.gradeFilter.set((event.target as HTMLSelectElement).value);
+    this.gradeFilter.set((event.target as HTMLSelectElement).value);this.page.set(0);this.loadStudents();
   }
 
   onSectionFilter(event: Event): void {
-    this.sectionFilter.set((event.target as HTMLSelectElement).value);
+    this.sectionFilter.set((event.target as HTMLSelectElement).value);this.page.set(0);this.loadStudents();
   }
 
   onStatusFilter(event: Event): void {
-    this.statusFilter.set((event.target as HTMLSelectElement).value as StatusFilter);
+    this.statusFilter.set((event.target as HTMLSelectElement).value as StatusFilter);this.page.set(0);this.loadStudents();
   }
 
   onPersonNameInput(event: Event, controlName: 'names' | 'lastNames'): void {

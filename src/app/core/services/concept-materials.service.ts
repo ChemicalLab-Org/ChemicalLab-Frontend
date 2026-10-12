@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  QueryPage,
   ConceptMaterialResponse,
   CreateMaterialLinkRequest,
 } from '../../shared/models';
@@ -22,6 +23,10 @@ import {
 export class ConceptMaterialsService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/concepts`;
+
+  listMaterials(conceptId:number,page=0):Observable<QueryPage<ConceptMaterialResponse>> {
+    return this.http.get<QueryPage<ConceptMaterialResponse>>(`${this.baseUrl}/${conceptId}/materials`,{params:{page,size:25}});
+  }
 
   /** Sube o reemplaza el archivo de apoyo de un contenido del docente. */
   uploadFile(

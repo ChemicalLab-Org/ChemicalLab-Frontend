@@ -1,3 +1,4 @@
+import { QueryPage } from './query-page.models';
 /**
  * Modelos de los contenidos conceptuales de química.
  * Reflejan los DTOs del backend (ConceptContentResponse, CreateConceptContentRequest,
@@ -66,6 +67,7 @@ export interface ConceptContentResponse {
   readonly createdByTeacherName: string;
   readonly assignments: ConceptAssignmentResponse[];
   readonly materials: ConceptMaterialResponse[];
+  readonly materialsPage?: QueryPage<ConceptMaterialResponse>;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -103,4 +105,5 @@ export interface StudentConceptContentResponse {
   readonly examples: string[];
   readonly suggestedActivity: string | null;
   readonly materials: ConceptMaterialResponse[];
+  readonly materialsPage?: QueryPage<ConceptMaterialResponse>;
 }

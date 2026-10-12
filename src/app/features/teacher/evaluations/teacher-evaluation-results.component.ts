@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -41,7 +42,7 @@ interface SectionFilterOption {
 @Component({
   selector: 'app-teacher-evaluation-results',
   standalone: true,
-  imports: [SidebarComponent],
+  imports: [PaginationComponent,SidebarComponent],
   styleUrls: ['./teacher-evaluation-results.component.scss'],
   template: `
     <div class="layout">
@@ -332,6 +333,7 @@ interface SectionFilterOption {
                     </div>
                   }
 
+                  <app-pagination [page]="tracePage()" [totalPages]="tr.eventsPage.totalPages" [total]="tr.totalEvents" [loading]="traceLoading()" (pageChange)="changeTracePage($event)" />
                   @if (tr.events.length > 0) {
                     <ul class="timeline">
                       @for (e of tr.events; track e.id) {
@@ -847,21 +849,27 @@ export class TeacherEvaluationResultsComponent implements OnInit {
         this.detailLoading.set(false);
       },
     });
-    this.loadTraceability();
+    this.tracePage.set(0);this.loadTraceability();
   }
 
   /** Carga la trazabilidad del intento abierto. Su error no bloquea el detalle de respuestas. */
+  readonly tracePage=signal(0);
+  private traceRequest=0;
+  changeTracePage(page:number):void {this.tracePage.set(page);this.loadTraceability();}
   private loadTraceability(): void {
     if (this.detailAttemptId === null) return;
     this.traceability.set(null);
     this.traceLoading.set(true);
     this.traceError.set(false);
-    this.service.getAttemptTraceability(this.detailAttemptId).subscribe({
+    const request=++this.traceRequest;
+    this.service.getAttemptTraceability(this.detailAttemptId,this.tracePage()).subscribe({
       next: (t) => {
+        if(request!==this.traceRequest)return;
         this.traceability.set(t);
         this.traceLoading.set(false);
       },
       error: () => {
+        if(request!==this.traceRequest)return;
         this.traceError.set(true);
         this.traceLoading.set(false);
       },
@@ -872,6 +880,7 @@ export class TeacherEvaluationResultsComponent implements OnInit {
     this.detailOpen.set(false);
     this.detail.set(null);
     this.detailAttemptId = null;
+    this.traceRequest++;
     this.traceability.set(null);
     this.traceError.set(false);
   }

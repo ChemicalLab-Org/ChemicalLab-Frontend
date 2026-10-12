@@ -1,3 +1,4 @@
+import { QueryPage } from '../../shared/models/query-page.models';
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
@@ -26,8 +27,8 @@ export class TeacherWhiteboardService {
   private readonly baseUrl = `${environment.apiUrl}/whiteboards/teacher`;
 
   /** Lista las sesiones de pizarra del docente autenticado (activas, pausadas, cerradas). */
-  listSessions(): Observable<WhiteboardSessionResponse[]> {
-    return this.http.get<WhiteboardSessionResponse[]>(this.baseUrl);
+  listSessions(page=0): Observable<QueryPage<WhiteboardSessionResponse>> {
+    return this.http.get<QueryPage<WhiteboardSessionResponse>>(this.baseUrl,{params:{page,size:25}});
   }
 
   /** Crea una nueva sesión (nombre, grado, sección, descripción opcional). Nace ACTIVE. */

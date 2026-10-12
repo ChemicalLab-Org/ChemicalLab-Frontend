@@ -54,6 +54,18 @@ describe('T06 authenticated file delivery', () => {
     expect(fixture.nativeElement.querySelector('img.pdf-modal__frame')).not.toBeNull();
     fixture.componentInstance.closePreview(); fixture.detectChanges(); expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:fictitious');
   });
+  it('reads later material pages and keeps historical totals and download metadata',()=>{
+    fixture.componentInstance.concepts.set([{...concept,materialsPage:{content:[pdf,image],number:0,size:25,totalElements:55,totalPages:3}}]);
+    fixture.detectChanges();
+    const next=Array.from(fixture.nativeElement.querySelectorAll('app-pagination button') as NodeListOf<HTMLButtonElement>).find(b=>b.textContent?.includes('Siguiente'))!;
+    next.click();
+    http.expectOne(r=>r.url===`${environment.apiUrl}/concepts/10/materials`&&r.params.get('page')==='1')
+      .flush({content:[{...pdf,materialId:26,title:'Historical page two'}],number:1,size:25,totalElements:55,totalPages:3});
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Página 2 de 3 · 55 registros');
+    expect(fixture.componentInstance.selectedConcept()?.materials[0].materialId).toBe(26);
+  });
+
   it('does not promote a document response into a preview from image metadata', () => {
     fixture.componentInstance.previewFile(image); respond(8,'application/pdf'); fixture.detectChanges();
     expect(URL.createObjectURL).not.toHaveBeenCalled(); expect(fixture.componentInstance.previewError()).toContain('PNG/JPG');

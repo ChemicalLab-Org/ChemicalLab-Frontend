@@ -213,8 +213,8 @@ export class TeacherDashboardComponent {
       return;
     }
 
-    this.userManagementService.listStudentsByTeacher(teacherUserId).subscribe({
-      next: (students) => this.studentCount.set(students.length),
+    this.userManagementService.studentSummary(teacherUserId).subscribe({
+      next: (students) => this.studentCount.set(students.total),
       error: (err: unknown) => {
         // Si falla, la métrica se mantiene en 0 y dejamos registro controlado en consola.
         const status = err instanceof HttpErrorResponse ? err.status : 'desconocido';

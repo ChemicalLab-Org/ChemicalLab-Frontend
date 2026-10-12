@@ -1,3 +1,4 @@
+import { PaginationComponent } from '../../../shared/components/pagination/pagination.component';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -40,7 +41,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
 @Component({
   selector: 'app-academic-supervision',
   standalone: true,
-  imports: [FormsModule, SidebarComponent],
+  imports: [PaginationComponent,FormsModule, SidebarComponent],
   styleUrls: ['./academic-supervision.component.scss'],
   template: `
     <div class="layout">
@@ -140,6 +141,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
 
         <!-- ================= CONTENIDOS ================= -->
         @if (activeTab() === 'contenidos') {
+          <app-pagination [page]="conceptsPage()" [totalPages]="conceptsPages()" [total]="conceptsTotal()" [loading]="conceptsLoading()" (pageChange)="pageConcepts($event)" />
           @if (conceptsLoading()) {
             <div class="state state--loading"><span class="material-icons spin">progress_activity</span><p>Cargando contenidos…</p></div>
           } @else if (conceptsError()) {
@@ -148,7 +150,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               <p>{{ conceptsError() }}</p>
               <button type="button" class="btn btn--primary" (click)="loadConcepts()">Reintentar</button>
             </div>
-          } @else if (concepts().length === 0) {
+          } @else if (concepts().length === 0 && !hasConceptFilters() && conceptsPage()===0) {
             <div class="state state--empty"><span class="material-icons">inbox</span><p>No hay contenidos registrados.</p></div>
           } @else {
             <section class="filters">
@@ -159,12 +161,12 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
                   type="text"
                   placeholder="Título o docente creador…"
                   [ngModel]="conceptSearch()"
-                  (ngModelChange)="conceptSearch.set($event)"
+                  (ngModelChange)="conceptSearch.set($event);filterConcepts()"
                 />
               </div>
               <div class="field">
                 <label class="field__label">Estado</label>
-                <select class="field__control" [ngModel]="conceptStatus()" (ngModelChange)="conceptStatus.set($event)">
+                <select class="field__control" [ngModel]="conceptStatus()" (ngModelChange)="conceptStatus.set($event);filterConcepts()">
                   <option value="">Todos</option>
                   @for (s of statusOptions; track s) {
                     <option [value]="s">{{ statusLabel(s) }}</option>
@@ -173,7 +175,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               </div>
               <div class="field">
                 <label class="field__label">Categoría</label>
-                <select class="field__control" [ngModel]="conceptCategory()" (ngModelChange)="conceptCategory.set($event)">
+                <select class="field__control" [ngModel]="conceptCategory()" (ngModelChange)="conceptCategory.set($event);filterConcepts()">
                   <option value="">Todas</option>
                   @for (c of conceptCategoryOptions(); track c) {
                     <option [value]="c">{{ categoryLabel(c) }}</option>
@@ -182,7 +184,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               </div>
               <div class="field">
                 <label class="field__label">Grado / sección</label>
-                <select class="field__control" [ngModel]="conceptSection()" (ngModelChange)="conceptSection.set($event)">
+                <select class="field__control" [ngModel]="conceptSection()" (ngModelChange)="conceptSection.set($event);filterConcepts()">
                   <option value="">Todas</option>
                   @for (s of conceptSectionOptions(); track s) {
                     <option [value]="s">{{ s }}</option>
@@ -224,7 +226,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
                         <td><span class="badge badge-neutral">{{ categoryLabel(c.category) }}</span></td>
                         <td><span class="badge" [class]="statusBadgeClass(c.status)">{{ statusLabel(c.status) }}</span></td>
                         <td>{{ materialsLabel(c) }}</td>
-                        <td>{{ sectionsLabel(c.sections) }}</td>
+                        <td>{{ sectionsLabel(c.sections) }} · {{ c.assignmentCount }} asignaciones</td>
                         <td class="mono">{{ formatDate(c.createdAt) }}</td>
                       </tr>
                     }
@@ -237,6 +239,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
 
         <!-- ================= EVALUACIONES ================= -->
         @if (activeTab() === 'evaluaciones') {
+          <app-pagination [page]="evaluationsPage()" [totalPages]="evaluationsPages()" [total]="evaluationsTotal()" [loading]="evaluationsLoading()" (pageChange)="pageEvaluations($event)" />
           @if (evaluationsLoading()) {
             <div class="state state--loading"><span class="material-icons spin">progress_activity</span><p>Cargando evaluaciones…</p></div>
           } @else if (evaluationsError()) {
@@ -245,7 +248,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               <p>{{ evaluationsError() }}</p>
               <button type="button" class="btn btn--primary" (click)="loadEvaluations()">Reintentar</button>
             </div>
-          } @else if (evaluations().length === 0) {
+          } @else if (evaluations().length === 0 && !hasEvalFilters() && evaluationsPage()===0) {
             <div class="state state--empty"><span class="material-icons">inbox</span><p>No hay evaluaciones registradas.</p></div>
           } @else {
             <p class="note">
@@ -261,12 +264,12 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
                   type="text"
                   placeholder="Título o docente creador…"
                   [ngModel]="evalSearch()"
-                  (ngModelChange)="evalSearch.set($event)"
+                  (ngModelChange)="evalSearch.set($event);filterEvaluations()"
                 />
               </div>
               <div class="field">
                 <label class="field__label">Estado</label>
-                <select class="field__control" [ngModel]="evalStatus()" (ngModelChange)="evalStatus.set($event)">
+                <select class="field__control" [ngModel]="evalStatus()" (ngModelChange)="evalStatus.set($event);filterEvaluations()">
                   <option value="">Todos</option>
                   @for (s of statusOptions; track s) {
                     <option [value]="s">{{ statusLabel(s) }}</option>
@@ -275,7 +278,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               </div>
               <div class="field">
                 <label class="field__label">Grado / sección</label>
-                <select class="field__control" [ngModel]="evalSection()" (ngModelChange)="evalSection.set($event)">
+                <select class="field__control" [ngModel]="evalSection()" (ngModelChange)="evalSection.set($event);filterEvaluations()">
                   <option value="">Todas</option>
                   @for (s of evalSectionOptions(); track s) {
                     <option [value]="s">{{ s }}</option>
@@ -284,7 +287,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               </div>
               <div class="field field--check">
                 <label class="check">
-                  <input type="checkbox" [ngModel]="evalWithAttempts()" (ngModelChange)="evalWithAttempts.set($event)" />
+                  <input type="checkbox" [ngModel]="evalWithAttempts()" (ngModelChange)="evalWithAttempts.set($event);filterEvaluations()" />
                   Solo con intentos enviados
                 </label>
               </div>
@@ -321,7 +324,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
                         <td class="strong">{{ e.title }}</td>
                         <td>{{ e.createdByTeacher ?? '—' }}</td>
                         <td><span class="badge" [class]="statusBadgeClass(e.status)">{{ statusLabel(e.status) }}</span></td>
-                        <td>{{ sectionsLabel(e.sections) }}</td>
+                        <td>{{ sectionsLabel(e.sections) }} · {{ e.assignmentCount }} asignaciones</td>
                         <td class="num">{{ e.questionCount }}</td>
                         <td class="num">{{ e.submittedAttempts }}</td>
                         <td class="mono">{{ formatDate(e.createdAt) }}</td>
@@ -336,6 +339,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
 
         <!-- ================= ASIGNACIONES ================= -->
         @if (activeTab() === 'asignaciones') {
+          <app-pagination [page]="assignmentsPage()" [totalPages]="assignmentsPages()" [total]="assignmentsTotal()" [loading]="assignmentsLoading()" (pageChange)="pageAssignments($event)" />
           @if (assignmentsLoading()) {
             <div class="state state--loading"><span class="material-icons spin">progress_activity</span><p>Cargando asignaciones…</p></div>
           } @else if (assignmentsError()) {
@@ -344,7 +348,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               <p>{{ assignmentsError() }}</p>
               <button type="button" class="btn btn--primary" (click)="loadAssignments()">Reintentar</button>
             </div>
-          } @else if (assignments().length === 0) {
+          } @else if (assignments().length === 0 && !hasAssignFilters() && assignmentsPage()===0) {
             <div class="state state--empty"><span class="material-icons">inbox</span><p>No hay asignaciones registradas.</p></div>
           } @else {
             <section class="filters">
@@ -355,12 +359,12 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
                   type="text"
                   placeholder="Título o docente responsable…"
                   [ngModel]="assignSearch()"
-                  (ngModelChange)="assignSearch.set($event)"
+                  (ngModelChange)="assignSearch.set($event);filterAssignments()"
                 />
               </div>
               <div class="field">
                 <label class="field__label">Tipo</label>
-                <select class="field__control" [ngModel]="assignType()" (ngModelChange)="assignType.set($event)">
+                <select class="field__control" [ngModel]="assignType()" (ngModelChange)="assignType.set($event);filterAssignments()">
                   <option value="">Todos</option>
                   <option value="CONTENIDO">Contenido</option>
                   <option value="EVALUACION">Evaluación</option>
@@ -368,7 +372,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               </div>
               <div class="field">
                 <label class="field__label">Grado</label>
-                <select class="field__control" [ngModel]="assignGrade()" (ngModelChange)="assignGrade.set($event)">
+                <select class="field__control" [ngModel]="assignGrade()" (ngModelChange)="assignGrade.set($event);filterAssignments()">
                   <option value="">Todos</option>
                   @for (g of assignGradeOptions(); track g) {
                     <option [value]="g">{{ g }}</option>
@@ -377,7 +381,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               </div>
               <div class="field">
                 <label class="field__label">Sección</label>
-                <select class="field__control" [ngModel]="assignSection()" (ngModelChange)="assignSection.set($event)">
+                <select class="field__control" [ngModel]="assignSection()" (ngModelChange)="assignSection.set($event);filterAssignments()">
                   <option value="">Todas</option>
                   @for (s of assignSectionOptions(); track s) {
                     <option [value]="s">{{ s }}</option>
@@ -386,7 +390,7 @@ const CATEGORY_LABELS: Record<ConceptCategory, string> = {
               </div>
               <div class="field">
                 <label class="field__label">Estado</label>
-                <select class="field__control" [ngModel]="assignActive()" (ngModelChange)="assignActive.set($event)">
+                <select class="field__control" [ngModel]="assignActive()" (ngModelChange)="assignActive.set($event);filterAssignments()">
                   <option value="">Todos</option>
                   <option value="true">Activa</option>
                   <option value="false">Inactiva</option>
@@ -569,6 +573,7 @@ export class AcademicSupervisionComponent implements OnInit {
   readonly userName = computed<string>(() => this.storedUser()?.username ?? 'Administrador');
   readonly userInitials = computed<string>(() => buildInitials(this.userName()));
 
+  readonly options=signal<{categories:string[];groups:{grade:string;section:string}[];activeConceptGroups:{grade:string;section:string}[];activeEvaluationGroups:{grade:string;section:string}[]}|null>(null);
   readonly activeTab = signal<SupervisionTab>('resumen');
 
   // Resumen
@@ -581,18 +586,21 @@ export class AcademicSupervisionComponent implements OnInit {
   readonly conceptsLoading = signal<boolean>(false);
   readonly conceptsError = signal<string | null>(null);
   private conceptsLoaded = false;
+  readonly conceptsPage=signal(0);readonly conceptsPages=signal(0);readonly conceptsTotal=signal(0);private conceptsRequest=0;
 
   // Evaluaciones
   readonly evaluations = signal<SupervisionEvaluation[]>([]);
   readonly evaluationsLoading = signal<boolean>(false);
   readonly evaluationsError = signal<string | null>(null);
   private evaluationsLoaded = false;
+  readonly evaluationsPage=signal(0);readonly evaluationsPages=signal(0);readonly evaluationsTotal=signal(0);private evaluationsRequest=0;
 
   // Asignaciones
   readonly assignments = signal<SupervisionAssignment[]>([]);
   readonly assignmentsLoading = signal<boolean>(false);
   readonly assignmentsError = signal<string | null>(null);
   private assignmentsLoaded = false;
+  readonly assignmentsPage=signal(0);readonly assignmentsPages=signal(0);readonly assignmentsTotal=signal(0);private assignmentsRequest=0;
 
   // Actividad
   readonly activity = signal<AdminActivity | null>(null);
@@ -622,29 +630,11 @@ export class AcademicSupervisionComponent implements OnInit {
   readonly conceptCategory = signal<string>('');
   readonly conceptSection = signal<string>('');
 
-  readonly conceptCategoryOptions = computed<ConceptCategory[]>(() => {
-    const set = new Set<ConceptCategory>();
-    this.concepts().forEach((c) => set.add(c.category));
-    return Array.from(set).sort((a, b) => this.categoryLabel(a).localeCompare(this.categoryLabel(b)));
-  });
+  readonly conceptCategoryOptions=computed(() => this.options()?.categories ?? []);
 
-  readonly conceptSectionOptions = computed<string[]>(() =>
-    this.sectionOptionsFrom(this.concepts().flatMap((c) => c.sections))
-  );
+  readonly conceptSectionOptions=computed(() => (this.options()?.activeConceptGroups??[]).map(g=>`${g.grade} ${g.section}`));
 
-  readonly filteredConcepts = computed<SupervisionConcept[]>(() => {
-    const term = this.conceptSearch();
-    const status = this.conceptStatus();
-    const category = this.conceptCategory();
-    const section = this.conceptSection();
-    return this.concepts().filter((c) => {
-      if (!this.textIncludes(term, c.title, c.createdByTeacher)) return false;
-      if (status && c.status !== status) return false;
-      if (category && c.category !== category) return false;
-      if (section && !this.activeSectionKeys(c.sections).includes(section)) return false;
-      return true;
-    });
-  });
+  readonly filteredConcepts=computed(() => this.concepts());
 
   readonly hasConceptFilters = computed<boolean>(
     () => !!(this.conceptSearch().trim() || this.conceptStatus() || this.conceptCategory() || this.conceptSection())
@@ -656,23 +646,9 @@ export class AcademicSupervisionComponent implements OnInit {
   readonly evalSection = signal<string>('');
   readonly evalWithAttempts = signal<boolean>(false);
 
-  readonly evalSectionOptions = computed<string[]>(() =>
-    this.sectionOptionsFrom(this.evaluations().flatMap((e) => e.sections))
-  );
+  readonly evalSectionOptions=computed(() => (this.options()?.activeEvaluationGroups??[]).map(g=>`${g.grade} ${g.section}`));
 
-  readonly filteredEvaluations = computed<SupervisionEvaluation[]>(() => {
-    const term = this.evalSearch();
-    const status = this.evalStatus();
-    const section = this.evalSection();
-    const withAttempts = this.evalWithAttempts();
-    return this.evaluations().filter((e) => {
-      if (!this.textIncludes(term, e.title, e.createdByTeacher)) return false;
-      if (status && e.status !== status) return false;
-      if (section && !this.activeSectionKeys(e.sections).includes(section)) return false;
-      if (withAttempts && e.submittedAttempts <= 0) return false;
-      return true;
-    });
-  });
+  readonly filteredEvaluations=computed(() => this.evaluations());
 
   readonly hasEvalFilters = computed<boolean>(
     () => !!(this.evalSearch().trim() || this.evalStatus() || this.evalSection() || this.evalWithAttempts())
@@ -685,33 +661,11 @@ export class AcademicSupervisionComponent implements OnInit {
   readonly assignSection = signal<string>('');
   readonly assignActive = signal<string>('');
 
-  readonly assignGradeOptions = computed<string[]>(() => {
-    const set = new Set<string>();
-    this.assignments().forEach((a) => set.add(a.grade));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  });
+  readonly assignGradeOptions=computed(() => [...new Set((this.options()?.groups??[]).map(g=>g.grade))]);
 
-  readonly assignSectionOptions = computed<string[]>(() => {
-    const set = new Set<string>();
-    this.assignments().forEach((a) => set.add(a.section));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  });
+  readonly assignSectionOptions=computed(() => [...new Set((this.options()?.groups??[]).map(g=>g.section))]);
 
-  readonly filteredAssignments = computed<SupervisionAssignment[]>(() => {
-    const term = this.assignSearch();
-    const type = this.assignType();
-    const grade = this.assignGrade();
-    const section = this.assignSection();
-    const active = this.assignActive();
-    return this.assignments().filter((a) => {
-      if (!this.textIncludes(term, a.title, a.createdByTeacher)) return false;
-      if (type && a.type !== type) return false;
-      if (grade && a.grade !== grade) return false;
-      if (section && a.section !== section) return false;
-      if (active && String(a.active) !== active) return false;
-      return true;
-    });
-  });
+  readonly filteredAssignments=computed(() => this.assignments());
 
   readonly hasAssignFilters = computed<boolean>(
     () =>
@@ -762,6 +716,7 @@ export class AcademicSupervisionComponent implements OnInit {
     this.conceptStatus.set('');
     this.conceptCategory.set('');
     this.conceptSection.set('');
+    this.filterConcepts();
   }
 
   clearEvalFilters(): void {
@@ -769,6 +724,7 @@ export class AcademicSupervisionComponent implements OnInit {
     this.evalStatus.set('');
     this.evalSection.set('');
     this.evalWithAttempts.set(false);
+    this.filterEvaluations();
   }
 
   clearAssignFilters(): void {
@@ -777,6 +733,7 @@ export class AcademicSupervisionComponent implements OnInit {
     this.assignGrade.set('');
     this.assignSection.set('');
     this.assignActive.set('');
+    this.filterAssignments();
   }
 
   clearActivityFilters(): void {
@@ -837,48 +794,63 @@ export class AcademicSupervisionComponent implements OnInit {
     });
   }
 
+  filterConcepts():void{this.conceptsPage.set(0);this.loadConcepts();}
+  pageConcepts(page:number):void{this.conceptsPage.set(page);this.loadConcepts();}
   loadConcepts(): void {
     this.conceptsLoading.set(true);
     this.conceptsError.set(null);
-    this.supervisionService.listConcepts().subscribe({
+    const request=++this.conceptsRequest;
+    this.supervisionService.listConcepts(this.conceptsPage(),{search:this.conceptSearch(),status:this.conceptStatus(),category:this.conceptCategory(),section:this.conceptSection()}).subscribe({
       next: (list) => {
-        this.concepts.set(list);
+        if(request!==this.conceptsRequest)return;
+        this.concepts.set(list.content);this.conceptsPages.set(list.totalPages);this.conceptsTotal.set(list.totalElements);
         this.conceptsLoaded = true;
         this.conceptsLoading.set(false);
       },
       error: () => {
+        if(request!==this.conceptsRequest)return;
         this.conceptsError.set('No se pudieron cargar los contenidos. Intenta nuevamente.');
         this.conceptsLoading.set(false);
       },
     });
   }
 
+  filterEvaluations():void{this.evaluationsPage.set(0);this.loadEvaluations();}
+  pageEvaluations(page:number):void{this.evaluationsPage.set(page);this.loadEvaluations();}
   loadEvaluations(): void {
     this.evaluationsLoading.set(true);
     this.evaluationsError.set(null);
-    this.supervisionService.listEvaluations().subscribe({
+    const request=++this.evaluationsRequest;
+    this.supervisionService.listEvaluations(this.evaluationsPage(),{search:this.evalSearch(),status:this.evalStatus(),section:this.evalSection(),withAttempts:this.evalWithAttempts()}).subscribe({
       next: (list) => {
-        this.evaluations.set(list);
+        if(request!==this.evaluationsRequest)return;
+        this.evaluations.set(list.content);this.evaluationsPages.set(list.totalPages);this.evaluationsTotal.set(list.totalElements);
         this.evaluationsLoaded = true;
         this.evaluationsLoading.set(false);
       },
       error: () => {
+        if(request!==this.evaluationsRequest)return;
         this.evaluationsError.set('No se pudieron cargar las evaluaciones. Intenta nuevamente.');
         this.evaluationsLoading.set(false);
       },
     });
   }
 
+  filterAssignments():void{this.assignmentsPage.set(0);this.loadAssignments();}
+  pageAssignments(page:number):void{this.assignmentsPage.set(page);this.loadAssignments();}
   loadAssignments(): void {
     this.assignmentsLoading.set(true);
     this.assignmentsError.set(null);
-    this.supervisionService.listAssignments().subscribe({
+    const request=++this.assignmentsRequest;
+    this.supervisionService.listAssignments(this.assignmentsPage(),{search:this.assignSearch(),type:this.assignType(),grade:this.assignGrade(),section:this.assignSection(),active:this.assignActive()}).subscribe({
       next: (list) => {
-        this.assignments.set(list);
+        if(request!==this.assignmentsRequest)return;
+        this.assignments.set(list.content);this.assignmentsPages.set(list.totalPages);this.assignmentsTotal.set(list.totalElements);
         this.assignmentsLoaded = true;
         this.assignmentsLoading.set(false);
       },
       error: () => {
+        if(request!==this.assignmentsRequest)return;
         this.assignmentsError.set('No se pudieron cargar las asignaciones. Intenta nuevamente.');
         this.assignmentsLoading.set(false);
       },
