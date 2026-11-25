@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, EMPTY, catchError } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { AuthService } from './auth.service';
 import {
   RecordUsageEventRequest,
   UsageCountResponse,
@@ -28,6 +29,7 @@ import {
 @Injectable({ providedIn: 'root' })
 export class UsageMetricsService {
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
   private readonly baseUrl = `${environment.apiUrl}/usage-metrics`;
   private readonly adminUrl = `${environment.apiUrl}/admin/usage-metrics`;
 
@@ -42,6 +44,7 @@ export class UsageMetricsService {
 
   /** Registra un evento de uso. Errores se ignoran para no afectar la navegación. */
   record(request: RecordUsageEventRequest): void {
+    if (this.auth.currentUser()?.institutionalInstallation) return;
     this.http
       .post<void>(`${this.baseUrl}/events`, request)
       .pipe(catchError(() => EMPTY))

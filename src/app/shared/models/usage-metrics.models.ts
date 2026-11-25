@@ -178,6 +178,7 @@ export interface CharterIndicator {
 
 /** Etiquetas de rol para la vista de métricas. */
 export const USAGE_ROLE_LABELS: Record<UserRole, string> = {
+  INSTITUCIONAL: 'Institucional',
   ADMINISTRADOR: 'Administrador',
   DOCENTE: 'Docente',
   ESTUDIANTE: 'Estudiante',

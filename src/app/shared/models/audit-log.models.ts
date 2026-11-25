@@ -145,6 +145,7 @@ export const LOG_EVENT_TYPE_LABELS: Record<LogEventType, string> = {
 
 /** Etiquetas amigables por rol del actor. */
 export const ACTOR_ROLE_LABELS: Record<UserRole, string> = {
+  INSTITUCIONAL: 'Institucional',
   ADMINISTRADOR: 'Administrador',
   DOCENTE: 'Docente',
   ESTUDIANTE: 'Estudiante',

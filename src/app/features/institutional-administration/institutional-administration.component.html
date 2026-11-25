@@ -1,0 +1,223 @@
+<main>
+  <header>
+    <div>
+      <h1>Administración institucional</h1>
+      <nav aria-label="Recorridos académicos">
+        <a routerLink="/evaluaciones-institucionales">Evaluaciones</a>
+        <a routerLink="/contenidos-institucionales">Contenidos</a>
+        <a routerLink="/pizarras-institucionales">Pizarras</a>
+      </nav>
+    </div>
+    @if (access()?.platform) {
+      <label>
+        Ámbito
+        <select [disabled]="writing()" [ngModel]="platform" (ngModelChange)="mode($event)">
+          <option [ngValue]="true">Plataforma</option>
+          <option [ngValue]="false">Mis instituciones</option>
+        </select>
+      </label>
+    }
+  </header>
+
+  @if (error()) { <p class="notice error" role="alert">{{ error() }}</p> }
+  @if (credentials(); as issued) {
+    <aside class="notice" aria-label="Credenciales de alta">
+      <p>Entrega estas credenciales a la persona. Deberá cambiar la contraseña al iniciar sesión.</p>
+      <dl><dt>Usuario</dt><dd>{{ issued.username }}</dd>
+        <dt>Contraseña temporal</dt><dd><code>{{ issued.temporaryPassword }}</code></dd></dl>
+      <button type="button" (click)="credentials.set(null)">Ocultar</button>
+    </aside>
+  }
+
+  @if (access(); as status) {
+    @if (!status.enabled) {
+      <p>La administración institucional está deshabilitada en esta instalación.</p>
+    } @else if (platform) {
+      <section>
+        <div class="toolbar">
+          <h2>Instituciones</h2>
+          <button type="button" [disabled]="writing()" (click)="changeScope(null); showForm()">Crear institución</button>
+        </div>
+        <div class="table"><table>
+          <thead><tr><th scope="col">Institución</th><th scope="col">Estado</th><th scope="col">Acciones</th></tr></thead>
+          <tbody>
+            @for (row of scopes().items; track row.id) {
+              <tr><td>{{ row.name }}</td><td>{{ row['active'] ? 'Activa' : 'Suspendida' }}</td>
+                <td class="actions">
+                  @if (!row['has_administrator']) {
+                    <button type="button" [disabled]="writing()" (click)="selectFirstAdmin(row.id)">Crear primer administrador</button>
+                  }
+                  <button type="button" [disabled]="writing()" (click)="institutionState(row)">
+                    {{ row['active'] ? 'Suspender institución' : 'Reanudar institución' }}
+                  </button>
+                </td></tr>
+            } @empty { <tr><td colspan="3">Todavía no hay instituciones.</td></tr> }
+          </tbody>
+        </table></div>
+        @if (scopes().nextAfter; as cursor) {
+          <button type="button" [disabled]="writing()" (click)="loadScopes(cursor)">Más instituciones</button>
+        }
+      </section>
+    } @else {
+      <section>
+        @if (scopes().items.length) {
+          <div class="toolbar">
+            <label>Institución
+              <select [ngModel]="institution" (ngModelChange)="changeScope($event)" [disabled]="writing()">
+                <option [ngValue]="null">Selecciona una institución</option>
+                @for (scope of scopes().items; track scope.id) {
+                  <option [ngValue]="scope.id">{{ scope.name }}</option>
+                }
+              </select>
+            </label>
+            @if (scopes().nextAfter; as cursor) {
+              <button type="button" [disabled]="writing()" (click)="loadScopes(cursor)">Más instituciones</button>
+            }
+          </div>
+        } @else if (!error()) { <p>No hay instituciones asignadas para administrar.</p> }
+        @if (institution !== null) {
+          <nav aria-label="Secciones administrativas" class="sections">
+            @for (section of sections; track section.key) {
+              <button type="button" [class.selected]="view === section.key" [attr.aria-pressed]="view === section.key"
+                [disabled]="writing()" (click)="changeView(section.key)">{{ section.label }}</button>
+            }
+          </nav>
+          @if (view === 'summary') {
+            <dl class="totals">
+              @for (column of columns.summary; track column[0]) {
+                <div><dt>{{ column[1] }}</dt><dd>{{ display(totals()[column[0]]) }}</dd></div>
+              }
+            </dl>
+          } @else {
+            <div class="toolbar">
+              @if (view === 'FACULTIES') {
+                <label>Biblioteca
+                  <select [ngModel]="library" (ngModelChange)="changeLibrary($event)" [disabled]="writing()">
+                    <option value="EVALUATIONS">Evaluaciones</option><option value="CONTENT">Contenidos</option>
+                  </select>
+                </label>
+              }
+              @if (view === 'MEMBERS') {
+                <label>Rol para gestionar
+                  <select id="membership-role" [(ngModel)]="role" [disabled]="writing()">
+                    @for (item of roles; track item) { <option [value]="item">{{ item }}</option> }
+                  </select>
+                </label>
+              }
+              @if (view === 'activity' || view === 'audit') {
+                <form class="toolbar" (ngSubmit)="resetRecords()">
+                  <label>Filtrar por miembro #
+                    <input type="number" min="1" name="filterMember" [(ngModel)]="filterMember">
+                  </label>
+                  <button type="submit" [disabled]="busy()">Aplicar filtro</button>
+                </form>
+              } @else {
+                <button type="button" [disabled]="writing()" (click)="showForm()">
+                  {{ view === 'FACULTIES' ? 'Conceder facultad' : view === 'TEACHING' ? 'Asignar docente' : 'Añadir' }}
+                </button>
+              }
+            </div>
+            <div class="table"><table>
+              <thead><tr><th scope="col">#</th>
+                @for (column of columns[view]; track column[0]) { <th scope="col">{{ column[1] }}</th> }
+                @if (view !== 'activity' && view !== 'audit') { <th scope="col">Acciones</th> }
+              </tr></thead>
+              <tbody>
+                @for (row of page().items; track row.id) {
+                  <tr><td>{{ row.id }}</td>
+                    @for (column of columns[view]; track column[0]) { <td>{{ display(row[column[0]]) }}</td> }
+                    @if (view !== 'activity' && view !== 'audit') {
+                      <td class="actions">
+                        @if (view === 'MEMBERS' && row['state'] !== 'ENDED') {
+                          @if (row['state'] === 'ACTIVE') {
+                            <button type="button" [disabled]="writing()" (click)="changeRole(row)">
+                              {{ hasRole(row) ? 'Revocar rol' : 'Conceder rol' }}
+                            </button>
+                            <button type="button" [disabled]="writing()" (click)="memberState(row.id, 'SUSPEND')">Suspender</button>
+                          } @else {
+                            <button type="button" [disabled]="writing()" (click)="memberState(row.id, 'RESUME')">Reanudar</button>
+                          }
+                          <button type="button" [disabled]="writing()" (click)="memberState(row.id, 'END')">Dar de baja</button>
+                        }
+                        @if ((view === 'PERIODS' && row['open']) || (view === 'CLASSES' && row['active'])) {
+                          <button type="button" [disabled]="writing()" (click)="close(row.id)">Cerrar</button>
+                        }
+                        @if ((view === 'TEACHING' || view === 'ENROLLMENTS') && !row['ended_at']) {
+                          <button type="button" [disabled]="writing()" (click)="close(row.id)">Finalizar</button>
+                        }
+                        @if (view === 'FACULTIES' && !row['revoked_at']) {
+                          <button type="button" [disabled]="writing()" (click)="close(row.id)">Revocar</button>
+                        }
+                      </td>
+                    }
+                  </tr>
+                } @empty {
+                  @if (!busy()) { <tr><td [attr.colspan]="columns[view].length + 2">Sin registros.</td></tr> }
+                }
+              </tbody>
+            </table></div>
+            @if (page().nextAfter; as cursor) {
+              <button type="button" [disabled]="busy() || writing()" (click)="loadRecords(cursor)">Cargar más</button>
+            }
+          }
+          @if (busy()) { <p role="status">Consultando registros…</p> }
+        }
+      </section>
+    }
+  }
+
+  @if (editing) {
+    <form class="entry" aria-label="Formulario de alta" (submit)="submit($event)">
+      @if (platform && institution !== null) {
+        <h2>Primer administrador de {{ institutionName() }}</h2>
+      }
+      @if ((platform && institution === null) || view === 'PERIODS' || view === 'CLASSES') {
+        <label>Nombre <input name="name" maxlength="200" required></label>
+      }
+      @if ((platform && institution !== null) || view === 'MEMBERS') {
+        <label>Usuario nuevo <input name="username" autocomplete="off" minlength="3" maxlength="64"
+          pattern="[A-Za-z0-9][A-Za-z0-9._\-]*" required></label>
+        <label>Nombre para mostrar <input name="displayName" maxlength="200" required></label>
+      }
+      @if (view === 'CLASSES') { <label>Código <input name="code" maxlength="64" required></label> }
+      @for (lookupName of lookups(); track lookupName) {
+        <div>
+          <label>{{ lookupLabels[lookupName] }}
+            <select [name]="lookupName" required>
+              <option value="">Selecciona</option>
+              @for (item of choices()[lookupName]?.items ?? []; track item.id) {
+                <option [value]="item.id">{{ item.name }} · #{{ item.id }}</option>
+              }
+            </select>
+          </label>
+          @if (choices()[lookupName]?.nextAfter; as cursor) {
+            <button type="button" (click)="lookup(lookupName, cursor)">Más opciones</button>
+          }
+        </div>
+      }
+      @if (view === 'PERIODS') {
+        <label>Inicio (hora local) <input name="from" type="datetime-local" required></label>
+      }
+      @if (view === 'PERIODS' || view === 'ENROLLMENTS' || view === 'TEACHING' || view === 'FACULTIES') {
+        <label>Fin (hora local) <input name="until" type="datetime-local" required></label>
+      }
+      @if (view === 'TEACHING' || view === 'FACULTIES') {
+        <label>{{ view === 'TEACHING' ? 'Función docente' : 'Facultad' }}
+          <select name="faculty" required>
+            @for (item of view === 'TEACHING' ? ['RESPONSABLE', 'CO_DOCENTE'] : faculties; track item) {
+              <option [value]="item">{{ item }}</option>
+            }
+          </select>
+        </label>
+      }
+      <div class="actions">
+        <button type="submit" [disabled]="writing()">Guardar</button>
+        <button type="button" [disabled]="writing()" (click)="editing = false">Cancelar</button>
+      </div>
+    </form>
+  }
+  @if (access()?.adopted) {
+    <p class="footnote">El panel global anterior, la gestión de estudiantes por docente, las métricas de uso,
+      el registro de uso individual y la retención técnica están bloqueados en esta instalación.</p>
+  }
+</main>

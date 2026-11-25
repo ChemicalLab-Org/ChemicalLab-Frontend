@@ -8,6 +8,9 @@ import { AuthService } from '../core/services/auth.service';
   template: `
     @if (auth.isAuthenticated()) {
       <nav aria-label="Seguridad de la cuenta">
+        @if (auth.currentUser()?.institutionalInstallation && !auth.requiresPasswordChange()) {
+          <a routerLink="/administracion-institucional">Administración institucional</a>
+        }
         <a routerLink="/auth/change-password">Cambiar contraseña</a>
         <button type="button" (click)="logout(false)">Cerrar sesión</button>
         <button type="button" (click)="logout(true)">Cerrar todas las sesiones</button>

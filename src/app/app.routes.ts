@@ -239,6 +239,12 @@ export const routes: Routes = [
   },
 
   {
+    path: 'administracion-institucional',
+    loadComponent: () => import('./features/institutional-administration/institutional-administration.component')
+      .then(m => m.InstitutionalAdministrationComponent),
+    canActivate: [authGuard, temporaryPasswordGuard],
+  },
+  {
     path: 'evaluaciones-institucionales',
     loadComponent: () => import('./features/institutional-evaluations/institutional-evaluations.component')
       .then(m => m.InstitutionalEvaluationsComponent),

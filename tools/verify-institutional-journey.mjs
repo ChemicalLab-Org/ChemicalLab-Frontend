@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { contentBrowserJourney } from './content-browser-journey.mjs';
 import { boardBrowserJourney } from './board-browser-journey.mjs';
+import { administrationBrowserJourney } from './administration-browser-journey.mjs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -13,6 +14,7 @@ const [fixtureArgument, browser, distArgument = 'dist/chemical-lab-frontend/brow
 assert(fixtureArgument && browser, 'Pass the disposable fixture directory and the Edge or Chrome executable.');
 const contents = mode === 'contents';
 const boards = mode === 'boards';
+const administration = mode === 'administration';
 const fixture = resolve(fixtureArgument);
 const dist = resolve(distArgument);
 const ready = JSON.parse(readFileSync(join(fixture, 'ready.json'), 'utf8'));
@@ -105,14 +107,14 @@ function observe(message) {
     else reply.resolve(message.result);
     return;
   }
-  if (boards && message.method === 'Runtime.exceptionThrown') {
+  if ((boards || administration) && message.method === 'Runtime.exceptionThrown') {
     const details = message.params.exceptionDetails;
     browserErrors.push({ type: details.exception?.className, description: details.exception?.description ?? details.text });
   }
   if (!message.method?.startsWith('Network.')) return;
   const p = message.params;
   const key = message.sessionId + ':' + p.requestId;
-  if (boards && message.method.startsWith('Network.webSocket')) {
+  if ((boards || administration) && message.method.startsWith('Network.webSocket')) {
     if (message.method === 'Network.webSocketCreated' && new URL(p.url).pathname.startsWith('/ws/')) {
       sockets.set(key, { view: message.sessionId, path: new URL(p.url).pathname, closed: false });
     }
@@ -145,8 +147,8 @@ async function page() {
   const { targetId } = await call('Target.createTarget', { url: 'about:blank', browserContextId });
   const { sessionId } = await call('Target.attachToTarget', { targetId, flatten: true });
   await call('Network.enable', { maxPostDataSize: 1048576 }, sessionId);
-  if (boards) await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1040, deviceScaleFactor: 1, mobile: false }, sessionId);
-  if (boards) await call('Runtime.enable', {}, sessionId);
+  if (boards || administration) await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1040, deviceScaleFactor: 1, mobile: false }, sessionId);
+  if (boards || administration) await call('Runtime.enable', {}, sessionId);
   await call('Network.setBlockedURLs', { urls: ['https://*'] }, sessionId);
   await call('Performance.enable', {}, sessionId);
   const run = async (fn, ...args) => {
@@ -337,6 +339,11 @@ try {
   browserCpuBefore = (await call('SystemInfo.getProcessInfo')).processInfo;
   runnerBefore = process.resourceUsage();
   record('inicio');
+  if (administration) {
+    const liveSockets = view => [...sockets.values()].filter(row => row.view === view.sessionId && !row.closed).length;
+    transferComparison = await administrationBrowserJourney({ platform: teacherA, adminA: teacherB, adminB: pupil,
+      page, ready, record, until, requests: () => [...requests.values()], liveSockets });
+  } else {
   await login(teacherA, ready.teacherA);
   await login(teacherB, ready.teacherB);
   await login(pupil, ready.student);
@@ -425,6 +432,7 @@ try {
   assert.equal(await pupil.has('Criterio privado'), false);
   record('resultado publicado por política académica');
   }
+  }
   browserCpuAfter = (await call('SystemInfo.getProcessInfo')).processInfo;
   rendererHeaps = await Promise.all([teacherA, teacherB, pupil].map(async view =>
     (await view.performance()).metrics.find(metric => metric.name === 'JSHeapUsedSize')?.value));
@@ -441,9 +449,10 @@ try {
       + runnerAfter.systemCPUTime - runnerBefore.systemCPUTime) / 1000,
     nodePeakRssKiB: runnerAfter.maxRSS,
   };
-  const metricsFile = boards ? 'board-browser-metrics.json' : contents ? 'content-browser-metrics.json' : 'browser-metrics.json';
+  const metricsFile = administration ? 'administration-browser-metrics.json'
+    : boards ? 'board-browser-metrics.json' : contents ? 'content-browser-metrics.json' : 'browser-metrics.json';
   writeFileSync(join(fixture, metricsFile), JSON.stringify({ error, steps, resources, requests: rows, transferComparison,
-    ...(boards ? { frames, sockets: [...sockets.values()], browserErrors } : {}) }, null, 2));
+    ...(boards || administration ? { frames, sockets: [...sockets.values()], browserErrors } : {}) }, null, 2));
   if (socket?.readyState === 1) {
     socket.close();
   }

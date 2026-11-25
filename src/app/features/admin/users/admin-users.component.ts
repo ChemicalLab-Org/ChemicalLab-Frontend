@@ -1212,6 +1212,7 @@ export class AdminUsersComponent {
 
   roleLabel(role: UserRole): string {
     const labels: Record<UserRole, string> = {
+      INSTITUCIONAL: 'Institucional',
       ADMINISTRADOR: 'Administrador',
       DOCENTE: 'Docente',
       ESTUDIANTE: 'Estudiante',

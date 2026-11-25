@@ -17,6 +17,12 @@ export const roleGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
 
   const allowedRoles = route.data['roles'] as UserRole[];
 
+  if (authService.currentUser()?.institutionalInstallation &&
+      (route.routeConfig?.path?.startsWith('admin/') || route.routeConfig?.path === 'admin-dashboard' ||
+       route.routeConfig?.path === 'teacher/students' || route.routeConfig?.path === 'teacher/passwords')) {
+    return router.parseUrl('/administracion-institucional');
+  }
+
   if (allowedRoles.includes(currentRole)) {
     return true;
   }
