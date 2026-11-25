@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { institutionalContentGuard } from './core/guards/institutional-content.guard';
 import { authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard } from './core/guards';
 import { LoginComponent } from './features/auth/login/login.component';
 import { ChangePasswordComponent } from './features/auth/change-password/change-password.component';
@@ -70,7 +71,7 @@ export const routes: Routes = [
   {
     path: 'teacher/concepts',
     component: TeacherConceptsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, institutionalContentGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
@@ -185,7 +186,7 @@ export const routes: Routes = [
   {
     path: 'concepts',
     component: ConceptsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard, institutionalContentGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -241,6 +242,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/institutional-evaluations/institutional-evaluations.component')
       .then(m => m.InstitutionalEvaluationsComponent),
     canActivate: [authGuard, temporaryPasswordGuard],
+  },
+  {
+    path: 'contenidos-institucionales',
+    loadComponent: () => import('./features/institutional-evaluations/institutional-evaluations.component')
+      .then(m => m.InstitutionalEvaluationsComponent),
+    canActivate: [authGuard, temporaryPasswordGuard, examActiveGuard],
+    data: { section: 'contents' },
   },
   { path: '**', component: NotFoundComponent },
 ];

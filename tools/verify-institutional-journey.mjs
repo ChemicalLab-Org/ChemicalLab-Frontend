@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { contentBrowserJourney } from './content-browser-journey.mjs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -6,8 +7,9 @@ import { createServer, request } from 'node:http';
 import { extname, join, resolve, sep } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
 
-const [fixtureArgument, browser, distArgument = 'dist/chemical-lab-frontend/browser'] = process.argv.slice(2);
+const [fixtureArgument, browser, distArgument = 'dist/chemical-lab-frontend/browser', mode] = process.argv.slice(2);
 assert(fixtureArgument && browser, 'Pass the disposable fixture directory and the Edge or Chrome executable.');
+const contents = mode === 'contents';
 const fixture = resolve(fixtureArgument);
 const dist = resolve(distArgument);
 const ready = JSON.parse(readFileSync(join(fixture, 'ready.json'), 'utf8'));
@@ -139,14 +141,14 @@ async function page() {
       button.click();
       return true;
     }, label), label),
-    clickIn: (title, label) => until(() => run((cardTitle, text) => {
-      const card = [...document.querySelectorAll('article')]
+    clickIn: (title, label, selector = 'article') => until(() => run((cardTitle, text, tag) => {
+      const card = [...document.querySelectorAll(tag)]
         .find(item => item.querySelector('strong')?.textContent.trim() === cardTitle);
       const button = [...(card?.querySelectorAll('button') ?? [])].find(item => item.textContent.trim() === text);
       if (!button || button.matches(':disabled')) return false;
       button.click();
       return true;
-    }, title, label), label + ' · ' + title),
+    }, title, label, selector), label + ' · ' + title),
     fill: (selector, value) => until(() => run((query, text) => {
       const element = document.querySelector(query);
       if (!element || element.matches(':disabled')) return false;
@@ -177,8 +179,8 @@ async function login(view, username) {
     return true;
   }));
   await until(() => view.run(() => location.pathname.endsWith('-dashboard')), 'dashboard');
-  await view.nav('/evaluaciones-institucionales');
-  await view.see('Evaluaciones institucionales');
+  await view.nav(contents ? (username === ready.student ? '/concepts' : '/teacher/concepts') : '/evaluaciones-institucionales');
+  await view.see(contents ? 'Contenidos institucionales' : 'Evaluaciones institucionales');
 }
 
 async function context(view, school) {
@@ -234,6 +236,7 @@ let browserCpuBefore;
 let browserCpuAfter;
 let rendererHeaps;
 let runnerBefore;
+let transferComparison;
 try {
   const portFile = join(profile, 'DevToolsActivePort');
   const [port, endpoint] = await until(() => existsSync(portFile) && readFileSync(portFile, 'utf8').trim().split(/\r?\n/),
@@ -251,6 +254,10 @@ try {
   await login(teacherA, ready.teacherA);
   await login(teacherB, ready.teacherB);
   await login(pupil, ready.student);
+  if (contents) {
+    transferComparison = await contentBrowserJourney({ teacherA, teacherB, pupil, context, record, until,
+      files: () => [...requests.values()].filter(row => /\/contents\/NEW\/v1\/.*\/files\/\d+$/.test(row.path)) });
+  } else {
   await context(teacherA, 'A');
   await context(teacherB, 'B');
   await context(pupil, 'A');
@@ -326,6 +333,7 @@ try {
   await pupil.see('Evidencia pertinente.');
   assert.equal(await pupil.has('Criterio privado'), false);
   record('resultado publicado por política académica');
+  }
   browserCpuAfter = (await call('SystemInfo.getProcessInfo')).processInfo;
   rendererHeaps = await Promise.all([teacherA, teacherB, pupil].map(async view =>
     (await view.performance()).metrics.find(metric => metric.name === 'JSHeapUsedSize')?.value));
@@ -342,7 +350,8 @@ try {
       + runnerAfter.systemCPUTime - runnerBefore.systemCPUTime) / 1000,
     nodePeakRssKiB: runnerAfter.maxRSS,
   };
-  writeFileSync(join(fixture, 'browser-metrics.json'), JSON.stringify({ error, steps, resources, requests: rows }, null, 2));
+  const metricsFile = contents ? 'content-browser-metrics.json' : 'browser-metrics.json';
+  writeFileSync(join(fixture, metricsFile), JSON.stringify({ error, steps, resources, requests: rows, transferComparison }, null, 2));
   if (socket?.readyState === 1) {
     socket.close();
   }

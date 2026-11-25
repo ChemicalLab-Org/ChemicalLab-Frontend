@@ -64,6 +64,26 @@ fieldset label {
   margin-block: .35rem;
 }
 
+.entry {
+  margin-block: .75rem;
+}
+
+.entry > span {
+  display: block;
+}
+
+.content-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+figure img {
+  display: block;
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+}
+
 [role='alert'] {
   color: #982726;
 }

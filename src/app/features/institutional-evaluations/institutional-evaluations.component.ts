@@ -1,16 +1,18 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ClassChoice, EvaluationView } from './catalog-api';
 import { InstitutionalStudentComponent } from './institutional-student.component';
 import { InstitutionalTeacherComponent } from './institutional-teacher.component';
+import { ContentChoice, InstitutionalContentApi } from './content-api';
+import { InstitutionalContentsScopeComponent } from './institutional-contents-scope.component';
 
 @Component({
   selector: 'app-institutional-evaluations',
-  imports: [RouterLink, InstitutionalStudentComponent, InstitutionalTeacherComponent],
+  imports: [RouterLink, InstitutionalStudentComponent, InstitutionalTeacherComponent, InstitutionalContentsScopeComponent],
   template: `
     <main class="institutional">
       <a routerLink="/dashboard">Volver al inicio</a>
-      <h1>Evaluaciones institucionales</h1>
+      <h1>{{ isContent ? 'Contenidos institucionales' : 'Evaluaciones institucionales' }}</h1>
       <div class="controls">
         <label>Institución
           <select #school [value]="institution() ?? ''" (change)="chooseInstitution(school.value)">
@@ -47,8 +49,10 @@ import { InstitutionalTeacherComponent } from './institutional-teacher.component
       @if (retry(); as repeat) { <button type="button" (click)="repeat()">Reintentar</button> }
       @if (!busy() && !error() && !choices().length) { <p>No hay clases disponibles para esta cuenta.</p> }
 
-      @for (scope of selectedScopes(); track scope.classId) {
-        @if (view() === 'teacher' && scope.teacher) {
+      @for (scope of selectedScopes(); track scope.classId + ':' + view()) {
+        @if (isContent) {
+          <app-institutional-contents-scope [scope]="contentScope(scope)" [teacher]="view() === 'teacher'" />
+        } @else if (view() === 'teacher' && scope.teacher) {
           <app-institutional-teacher [scope]="scope" />
         } @else if (scope.student) {
           <app-institutional-student [scope]="scope" />
@@ -59,6 +63,8 @@ import { InstitutionalTeacherComponent } from './institutional-teacher.component
   styleUrl: './institutional-evaluations.scss',
 })
 export class InstitutionalEvaluationsComponent extends EvaluationView implements OnInit {
+  readonly isContent = inject(ActivatedRoute, { optional: true })?.snapshot.data['section'] === 'contents';
+  private readonly contents = inject(InstitutionalContentApi);
   readonly choices = signal<ClassChoice[]>([]);
   readonly nextAfter = signal<number | null>(null);
   readonly institution = signal<number | null>(null);
@@ -75,11 +81,14 @@ export class InstitutionalEvaluationsComponent extends EvaluationView implements
   ngOnInit(): void { this.loadChoices(0); }
 
   loadChoices(after: number): void {
-    this.run(this.api.choices(after), page => {
+    const request = this.isContent ? this.contents.choices(after) : this.api.choices(after);
+    this.run(request, page => {
       this.choices.update(current => after ? [...current, ...page.items] : page.items);
       this.nextAfter.set(page.nextAfter);
     });
   }
+
+  contentScope(scope: ClassChoice): ContentChoice { return scope as ContentChoice; }
 
   refresh(): void {
     this.clearRestricted();
