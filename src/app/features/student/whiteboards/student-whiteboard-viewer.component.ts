@@ -8,6 +8,8 @@ import {
   computed,
   effect,
   inject,
+  input,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -151,7 +153,7 @@ const UNDO_STACK_LIMIT = 80;
   styleUrls: ['./student-whiteboard-viewer.component.scss'],
   template: `
     <div class="layout" [class.layout--fullscreen]="fullscreen()">
-      @if (!fullscreen()) {
+      @if (!fullscreen() && !embeddedBoardId()) {
         <app-sidebar
           [navItems]="navItems"
           [userName]="userName()"
@@ -196,7 +198,7 @@ const UNDO_STACK_LIMIT = 80;
                     <span class="material-icons">person</span>{{ s.teacherName }}
                   </span>
                   <span class="meta-chip">
-                    <span class="material-icons">school</span>{{ s.grade }}° · {{ s.section }}
+                    <span class="material-icons">school</span>{{ s.grade ? s.grade + '° · ' : '' }}{{ s.section }}
                   </span>
                   @if (!isClosed()) {
                     <span class="conn" [class]="connClass()">
@@ -763,6 +765,9 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
   private readonly textEditorRef = viewChild<ElementRef<HTMLDivElement>>('textEditor');
 
+  readonly embeddedBoardId = input<number>();
+  readonly backToScope = output<void>();
+  readonly openRecord = output<void>();
   private sessionId = 0;
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
@@ -778,6 +783,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
   private remoteQueueOverflow = false;
   /** Temporizador de espera de la conexión en vivo; si expira sin conectar, se marca el fallo. */
+  private bannerTimer: ReturnType<typeof setTimeout> | undefined;
   private connectionTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * `true` cuando la conexión en vivo no se estableció dentro del tiempo de espera. El contenido
@@ -924,7 +930,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const idParam = this.route.snapshot.paramMap.get('id');
-    const id = idParam !== null ? Number(idParam) : NaN;
+    const id = this.embeddedBoardId() ?? (idParam !== null ? Number(idParam) : NaN);
     if (Number.isNaN(id)) {
       this.loadError.set('Sesión no válida.');
       this.loading.set(false);
@@ -952,12 +958,23 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         this.boardStateReady.set(false);
         this.clearUndoHistory();
+        if (this.embeddedBoardId()) {
+          this.session.set(null);
+          this.reconciliation.discardPending();
+          this.queuedRemoteDrawEvents = [];
+        }
         this.refreshDetail();
       });
     this.reload();
   }
 
   ngOnDestroy(): void {
+    clearTimeout(this.bannerTimer);
+    this.drawing = false;
+    this.currentStroke = [];
+    this.cancelShapePreview();
+    this.reconciliation.discardPending();
+    this.queuedRemoteDrawEvents = [];
     this.clearConnectionWatch();
     this.realtime.disconnect();
   }
@@ -966,14 +983,14 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   reload(): void {
     this.loading.set(true);
     this.loadError.set(null);
-    this.whiteboardService.joinSession(this.sessionId).subscribe({
+    this.whiteboardService.joinSession(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (detail) => this.onSessionLoaded(detail),
       error: (err: unknown) => {
         // El join solo falla legítimamente si la sesión está cerrada (no se puede unir): en ese
         // caso se carga el detalle para mostrar el estado real. Cualquier otro fallo del join SÍ
         // se reporta (un join silenciado dejaría al alumno sin participante: ni aparecería en el
         // panel del docente ni podría dibujar aunque tuviera permiso).
-        this.whiteboardService.getSessionDetail(this.sessionId).subscribe({
+        this.whiteboardService.getSessionDetail(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: (detail) => {
             if (detail.status === 'CLOSED') {
               this.onSessionLoaded(detail);
@@ -1007,11 +1024,12 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.realtime.connect(this.sessionId);
     this.startConnectionWatch();
     requestAnimationFrame(() => {
+      if (this.destroyRef.destroyed) return;
       this.ensureCanvas();
       this.centerPan();
       // Reconstruye el estado actual de la pizarra (trazos + textos) para no quedar en blanco al
       // unirse tarde o recargar; a partir de aquí siguen los eventos en vivo.
-      this.loadBoardState();
+      if (!this.embeddedBoardId()) this.loadBoardState();
     });
   }
 
@@ -1052,10 +1070,13 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
     this.queuedRemoteDrawEvents = [];
     this.realtime.reconnect(this.sessionId);
     this.startConnectionWatch();
-    requestAnimationFrame(() => {
-      this.ensureCanvas();
-      this.loadBoardState();
-    });
+    if (!this.embeddedBoardId()) {
+      requestAnimationFrame(() => {
+        if (this.destroyRef.destroyed) return;
+        this.ensureCanvas();
+        this.loadBoardState();
+      });
+    }
   }
 
   /** Carga y reproduce el estado actual del lienzo (trazos + textos) de la sesión en vivo. */
@@ -1075,9 +1096,15 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   private loadBoardState(): void {
     const sequence = ++this.stateLoadSequence;
-    this.whiteboardService.getBoardState(this.sessionId).subscribe({
+    this.whiteboardService.getBoardState(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (state) => {
         if (sequence !== this.stateLoadSequence) return;
+        if (this.embeddedBoardId() && state.interactionEnabled !== undefined) {
+          const enabled = state.interactionEnabled;
+          this.session.update(current => current && {
+            ...current, status: state.status, interactionEnabled: enabled, canInteract: state.canInteract === true,
+          });
+        }
         this.appliedRevision = state.revision ?? 0;
         this.reconciliation.reset({ v: 1, strokes: [], texts: [], shapes: [] });
         this.confirmedOwners.clear();
@@ -1175,7 +1202,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
 
   /** Re-consulta el detalle para recalcular el permiso efectivo tras un cambio de interacción. */
   private refreshDetail(statusOverride: WhiteboardSessionStatus | null = null): void {
-    this.whiteboardService.getSessionDetail(this.sessionId).subscribe({
+    this.whiteboardService.getSessionDetail(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (detail) => {
         this.session.set(this.mergeSessionDetail(detail, statusOverride));
         // Si perdió el permiso o se pausó, vuelve a «Mover» para no dejar una herramienta inválida.
@@ -1186,8 +1213,12 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
           this.tool.set('MOVE');
         }
       },
-      error: () => {
-        /* silencioso: el siguiente evento o el botón de recarga lo resolverán */
+      error: (err: unknown) => {
+        if (this.embeddedBoardId() && err instanceof HttpErrorResponse && err.status === 403) {
+          this.realtime.disconnect();
+          this.session.set(null);
+          this.loadError.set('Ya no tienes permiso para abrir esta pizarra.');
+        }
       },
     });
   }
@@ -2769,6 +2800,7 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   }
 
   private newEventId(prefix = 'evt'): string {
+    if (this.embeddedBoardId()) return crypto.randomUUID();
     const id =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? `${prefix}-${crypto.randomUUID()}`
@@ -2779,11 +2811,13 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   // ─── Navegación ───────────────────────────────────────────────────────────────
 
   goToList(): void {
-    void this.router.navigate(['/student/whiteboards']);
+    if (this.embeddedBoardId()) this.backToScope.emit();
+    else void this.router.navigate(['/student/whiteboards']);
   }
 
   goToRecord(): void {
-    void this.router.navigate(['/student/whiteboards', this.sessionId, 'registro']);
+    if (this.embeddedBoardId()) this.openRecord.emit();
+    else void this.router.navigate(['/student/whiteboards', this.sessionId, 'registro']);
   }
 
   handleLogout(): void {
@@ -2889,7 +2923,8 @@ export class StudentWhiteboardViewerComponent implements OnInit, OnDestroy {
   private showBanner(message: string, tone: 'info' | 'success' | 'warning' | 'danger'): void {
     this.bannerTone.set(tone);
     this.banner.set(message);
-    setTimeout(() => this.banner.set(null), 4500);
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => this.banner.set(null), 4500);
   }
 
   private extractError(err: unknown, fallback: string): string {

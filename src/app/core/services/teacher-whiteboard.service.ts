@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { requireSnapshotImage } from '../../shared/utils/safe-file.util';
 import { environment } from '../../../environments/environment';
+import { WhiteboardViewContext } from './whiteboard-view-context';
 import {
   WhiteboardBoardStateResponse,
   WhiteboardGlobalInteractionRequest,
@@ -24,7 +25,8 @@ import {
 @Injectable({ providedIn: 'root' })
 export class TeacherWhiteboardService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = `${environment.apiUrl}/whiteboards/teacher`;
+  private readonly context = inject(WhiteboardViewContext, { optional: true });
+  private get baseUrl(): string { return `${environment.apiUrl}${this.context?.path ?? '/whiteboards'}/teacher`; }
 
   /** Lista las sesiones de pizarra del docente autenticado (activas, pausadas, cerradas). */
   listSessions(page=0): Observable<QueryPage<WhiteboardSessionResponse>> {
@@ -33,7 +35,8 @@ export class TeacherWhiteboardService {
 
   /** Crea una nueva sesión (nombre, grado, sección, descripción opcional). Nace ACTIVE. */
   createSession(request: WhiteboardSessionCreateRequest): Observable<WhiteboardSessionResponse> {
-    return this.http.post<WhiteboardSessionResponse>(this.baseUrl, request);
+    const body = this.context ? { name: request.name, description: request.description } : request;
+    return this.http.post<WhiteboardSessionResponse>(this.baseUrl, body, this.context?.command());
   }
 
   /** Detalle de una sesión propia: metadata más la lista de participantes. */
@@ -43,22 +46,23 @@ export class TeacherWhiteboardService {
 
   /** Pausa una sesión activa (bloquea el dibujo). */
   pauseSession(sessionId: number): Observable<WhiteboardSessionResponse> {
-    return this.http.post<WhiteboardSessionResponse>(`${this.baseUrl}/${sessionId}/pause`, {});
+    return this.http.post<WhiteboardSessionResponse>(`${this.baseUrl}/${sessionId}/pause`, {}, this.context?.command());
   }
 
   /** Reanuda una sesión pausada. */
   resumeSession(sessionId: number): Observable<WhiteboardSessionResponse> {
-    return this.http.post<WhiteboardSessionResponse>(`${this.baseUrl}/${sessionId}/resume`, {});
+    return this.http.post<WhiteboardSessionResponse>(`${this.baseUrl}/${sessionId}/resume`, {}, this.context?.command());
   }
 
   /**
    * Finaliza la sesión enviando la captura final del lienzo como imagen (PNG/JPG).
    * El backend la recibe en multipart bajo la parte "snapshot". CLOSED es terminal.
    */
-  closeSession(sessionId: number, snapshot: Blob, fileName: string): Observable<WhiteboardSessionResponse> {
+  closeSession(sessionId: number, snapshot: Blob, fileName: string, revision = 0): Observable<WhiteboardSessionResponse> {
     const formData = new FormData();
     formData.append('snapshot', snapshot, fileName);
-    return this.http.post<WhiteboardSessionResponse>(`${this.baseUrl}/${sessionId}/close`, formData);
+    const options = this.context ? { ...this.context.command(), params: { revision } } : undefined;
+    return this.http.post<WhiteboardSessionResponse>(`${this.baseUrl}/${sessionId}/close`, formData, options);
   }
 
   /** Activa/desactiva el permiso global de interacción de la sesión. */
@@ -68,7 +72,7 @@ export class TeacherWhiteboardService {
   ): Observable<WhiteboardSessionResponse> {
     return this.http.patch<WhiteboardSessionResponse>(
       `${this.baseUrl}/${sessionId}/interaction`,
-      request
+      request, this.context?.command()
     );
   }
 
@@ -80,7 +84,7 @@ export class TeacherWhiteboardService {
   ): Observable<WhiteboardParticipantResponse> {
     return this.http.patch<WhiteboardParticipantResponse>(
       `${this.baseUrl}/${sessionId}/participants/${studentId}/interaction`,
-      request
+      request, this.context?.command()
     );
   }
 

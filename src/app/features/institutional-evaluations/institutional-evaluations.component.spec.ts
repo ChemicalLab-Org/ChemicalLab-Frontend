@@ -16,8 +16,12 @@ describe('institutional evaluation context', () => {
   const root = '/api/institutions';
   const suffix = '/evaluation-catalog/NEW/v1/own-deliveries';
 
-  beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])] });
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [InstitutionalEvaluationsComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+    })
+      .compileComponents();
     http = TestBed.inject(HttpTestingController);
   });
   afterEach(() => http.verify());

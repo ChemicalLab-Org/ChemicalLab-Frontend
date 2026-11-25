@@ -6,11 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { InstitutionalEvaluationsComponent } from './institutional-evaluations.component';
 
 describe('institutional content context', () => {
-  it('cancels a binary request and removes the previous institution’s metadata', () => {
-    TestBed.configureTestingModule({
+  it('cancels a binary request and removes the previous institution’s metadata', async () => {
+    await TestBed.configureTestingModule({
+      imports: [InstitutionalEvaluationsComponent],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
         { provide: ActivatedRoute, useValue: { snapshot: { data: { section: 'contents' } } } }],
-    });
+    }).compileComponents();
     const fixture = TestBed.createComponent(InstitutionalEvaluationsComponent);
     const http = TestBed.inject(HttpTestingController);
     const root = '/api/institutions';

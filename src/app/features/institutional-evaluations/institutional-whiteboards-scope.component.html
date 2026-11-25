@@ -1,0 +1,54 @@
+@for (board of selected(); track board.id + ':' + (board.status === 'CLOSED')) {
+  @if (teacher()) {
+    <app-teacher-whiteboard-editor [embeddedBoardId]="board.id" (backToScope)="back()" />
+  } @else if (board.status === 'CLOSED') {
+    <app-student-whiteboard-record [embeddedBoardId]="board.id" (backToScope)="back()" />
+  } @else {
+    <app-student-whiteboard-viewer [embeddedBoardId]="board.id" (backToScope)="back()" (openRecord)="openCapture(board)" />
+  }
+} @empty {
+  <section aria-labelledby="boards-title">
+    <h2 id="boards-title">Pizarras de {{ scope().className }}</h2>
+    <div class="controls">
+      @if (teacher()) {
+        <button type="button" [disabled]="busy()" (click)="creating.set(!creating())">
+          {{ creating() ? 'Cancelar' : 'Crear pizarra' }}
+        </button>
+      } @else {
+        <button type="button" [disabled]="busy() || !history()" (click)="setHistory(false)">En vivo</button>
+        <button type="button" [disabled]="busy() || history()" (click)="setHistory(true)">Historial</button>
+      }
+      <button type="button" [disabled]="busy()" (click)="load()">Actualizar pizarras</button>
+    </div>
+    @if (creating()) {
+      <form class="form" (ngSubmit)="create()">
+        <label>Nombre <input name="title" [(ngModel)]="title" maxlength="120" required /></label>
+        <label>Descripción <textarea name="description" [(ngModel)]="description" maxlength="2000"></textarea></label>
+        <button type="submit" [disabled]="busy() || !title.trim()">Crear y abrir</button>
+      </form>
+    }
+    @if (error()) { <p role="alert">{{ error() }}</p> }
+    @if (retry(); as repeat) { <button type="button" [disabled]="busy()" (click)="repeat()">Reintentar</button> }
+    @if (busy()) { <p role="status">Consultando pizarras…</p> }
+    @if (boards(); as page) {
+      @if (!page.content.length) {
+        <p>No hay pizarras disponibles en esta vista.</p>
+      } @else {
+        <ul>
+          @for (board of page.content; track board.id) {
+            <li>
+              <button type="button" (click)="openBoard.set(board)">{{ board.name }}</button>
+              <span> {{ status[board.status] }}</span>
+            </li>
+          }
+        </ul>
+      }
+      @if (page.number > 0) {
+        <button type="button" [disabled]="busy()" (click)="load(page.number - 1)">Anterior</button>
+      }
+      @if (page.number + 1 < page.totalPages) {
+        <button type="button" [disabled]="busy()" (click)="load(page.number + 1)">Siguiente</button>
+      }
+    }
+  </section>
+}

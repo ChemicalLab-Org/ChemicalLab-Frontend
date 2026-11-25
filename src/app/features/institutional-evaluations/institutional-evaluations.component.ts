@@ -5,14 +5,16 @@ import { InstitutionalStudentComponent } from './institutional-student.component
 import { InstitutionalTeacherComponent } from './institutional-teacher.component';
 import { ContentChoice, InstitutionalContentApi } from './content-api';
 import { InstitutionalContentsScopeComponent } from './institutional-contents-scope.component';
+import { InstitutionalWhiteboardsScopeComponent } from './institutional-whiteboards-scope.component';
 
 @Component({
   selector: 'app-institutional-evaluations',
-  imports: [RouterLink, InstitutionalStudentComponent, InstitutionalTeacherComponent, InstitutionalContentsScopeComponent],
+  imports: [RouterLink, InstitutionalStudentComponent, InstitutionalTeacherComponent, InstitutionalContentsScopeComponent,
+    InstitutionalWhiteboardsScopeComponent],
   template: `
     <main class="institutional">
       <a routerLink="/dashboard">Volver al inicio</a>
-      <h1>{{ isContent ? 'Contenidos institucionales' : 'Evaluaciones institucionales' }}</h1>
+      <h1>{{ isBoard ? 'Pizarras institucionales' : isContent ? 'Contenidos institucionales' : 'Evaluaciones institucionales' }}</h1>
       <div class="controls">
         <label>Institución
           <select #school [value]="institution() ?? ''" (change)="chooseInstitution(school.value)">
@@ -49,8 +51,12 @@ import { InstitutionalContentsScopeComponent } from './institutional-contents-sc
       @if (retry(); as repeat) { <button type="button" (click)="repeat()">Reintentar</button> }
       @if (!busy() && !error() && !choices().length) { <p>No hay clases disponibles para esta cuenta.</p> }
 
-      @for (scope of selectedScopes(); track scope.classId + ':' + view()) {
-        @if (isContent) {
+      @for (scope of selectedScopes(); track scope.institutionId + ':' + scope.classId + ':' + view()) {
+        @if (isBoard) {
+          @defer (when isBoard) {
+            <app-institutional-whiteboards-scope [scope]="scope" [teacher]="view() === 'teacher'" />
+          }
+        } @else if (isContent) {
           <app-institutional-contents-scope [scope]="contentScope(scope)" [teacher]="view() === 'teacher'" />
         } @else if (view() === 'teacher' && scope.teacher) {
           <app-institutional-teacher [scope]="scope" />
@@ -63,7 +69,9 @@ import { InstitutionalContentsScopeComponent } from './institutional-contents-sc
   styleUrl: './institutional-evaluations.scss',
 })
 export class InstitutionalEvaluationsComponent extends EvaluationView implements OnInit {
-  readonly isContent = inject(ActivatedRoute, { optional: true })?.snapshot.data['section'] === 'contents';
+  private readonly section = inject(ActivatedRoute, { optional: true })?.snapshot.data['section'];
+  readonly isContent = this.section === 'contents';
+  readonly isBoard = this.section === 'boards';
   private readonly contents = inject(InstitutionalContentApi);
   readonly choices = signal<ClassChoice[]>([]);
   readonly nextAfter = signal<number | null>(null);

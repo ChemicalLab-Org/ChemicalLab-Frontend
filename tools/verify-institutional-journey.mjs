@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict';
 import { contentBrowserJourney } from './content-browser-journey.mjs';
+import { boardBrowserJourney } from './board-browser-journey.mjs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, request } from 'node:http';
+import { connect } from 'node:net';
 import { extname, join, resolve, sep } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
 
 const [fixtureArgument, browser, distArgument = 'dist/chemical-lab-frontend/browser', mode] = process.argv.slice(2);
 assert(fixtureArgument && browser, 'Pass the disposable fixture directory and the Edge or Chrome executable.');
 const contents = mode === 'contents';
+const boards = mode === 'boards';
 const fixture = resolve(fixtureArgument);
 const dist = resolve(distArgument);
 const ready = JSON.parse(readFileSync(join(fixture, 'ready.json'), 'utf8'));
@@ -18,18 +21,23 @@ const backend = new URL(ready.origin);
 assert.equal(backend.hostname, '127.0.0.1');
 const profile = mkdtempSync(join(fixture, 'chromium-'));
 const requests = new Map();
+const frames = [];
+const sockets = new Map();
+const tunnels = new Set();
+const browserErrors = [];
 const steps = [];
 const media = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
 const app = createServer((req, res) => {
   const path = new URL(req.url, 'http://127.0.0.1').pathname;
-  if (path.startsWith('/api/')) {
+  if (path.startsWith('/api/') || path === '/ws' || path.startsWith('/ws/')) {
     const upstream = request({ hostname: backend.hostname, port: backend.port, path: req.url,
       method: req.method, headers: { ...req.headers, host: new URL(origin).host } }, result => {
       res.writeHead(result.statusCode, result.headers);
       result.pipe(res);
     });
     upstream.on('error', () => { res.writeHead(502); res.end(); });
+    res.on('close', () => { if (!res.writableFinished) upstream.destroy(); });
     req.pipe(upstream);
     return;
   }
@@ -37,6 +45,22 @@ const app = createServer((req, res) => {
   if (!file.startsWith(dist + sep) || !existsSync(file) || !statSync(file).isFile()) file = join(dist, 'index.html');
   res.writeHead(200, { 'Content-Type': media[extname(file)] ?? 'application/octet-stream' });
   res.end(readFileSync(file));
+});
+app.on('upgrade', (req, downstream, head) => {
+  if (!req.url.startsWith('/ws/')) { downstream.destroy(); return; }
+  const upstream = connect(Number(backend.port), backend.hostname);
+  const pair = { downstream, upstream };
+  tunnels.add(pair);
+  const close = () => { tunnels.delete(pair); downstream.destroy(); upstream.destroy(); };
+  downstream.on('error', close).on('close', close);
+  upstream.on('error', close).on('close', close);
+  upstream.on('connect', () => {
+    const headers = [];
+    for (let i = 0; i < req.rawHeaders.length; i += 2) headers.push(req.rawHeaders[i] + ': ' + req.rawHeaders[i + 1]);
+    upstream.write(`GET ${req.url} HTTP/1.1\r\n${headers.join('\r\n')}\r\n\r\n`);
+    if (head.length) upstream.write(head);
+    upstream.pipe(downstream).pipe(upstream);
+  });
 });
 app.listen(0, '127.0.0.1');
 await once(app, 'listening');
@@ -81,9 +105,28 @@ function observe(message) {
     else reply.resolve(message.result);
     return;
   }
+  if (boards && message.method === 'Runtime.exceptionThrown') {
+    const details = message.params.exceptionDetails;
+    browserErrors.push({ type: details.exception?.className, description: details.exception?.description ?? details.text });
+  }
   if (!message.method?.startsWith('Network.')) return;
   const p = message.params;
   const key = message.sessionId + ':' + p.requestId;
+  if (boards && message.method.startsWith('Network.webSocket')) {
+    if (message.method === 'Network.webSocketCreated' && new URL(p.url).pathname.startsWith('/ws/')) {
+      sockets.set(key, { view: message.sessionId, path: new URL(p.url).pathname, closed: false });
+    }
+    if (!sockets.has(key)) return;
+    if (message.method === 'Network.webSocketClosed') sockets.get(key).closed = true;
+    if (/^Network.webSocketFrame(Sent|Received)$/.test(message.method)) {
+      const { payloadData, opcode } = p.response;
+      frames.push({ view: message.sessionId, socket: p.requestId,
+        direction: message.method.endsWith('Sent') ? 'sent' : 'received',
+        bytes: opcode === 2 ? Buffer.from(payloadData, 'base64').length : Buffer.byteLength(payloadData),
+        timestamp: p.timestamp });
+    }
+    return;
+  }
   if (message.method === 'Network.requestWillBeSent' && p.request.url.startsWith(origin + '/')) {
     requests.set(key, { path: new URL(p.request.url).pathname, method: p.request.method,
       requestBodyBytes: Buffer.byteLength(p.request.postData ?? ''), started: p.timestamp });
@@ -102,6 +145,8 @@ async function page() {
   const { targetId } = await call('Target.createTarget', { url: 'about:blank', browserContextId });
   const { sessionId } = await call('Target.attachToTarget', { targetId, flatten: true });
   await call('Network.enable', { maxPostDataSize: 1048576 }, sessionId);
+  if (boards) await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1040, deviceScaleFactor: 1, mobile: false }, sessionId);
+  if (boards) await call('Runtime.enable', {}, sessionId);
   await call('Network.setBlockedURLs', { urls: ['https://*'] }, sessionId);
   await call('Performance.enable', {}, sessionId);
   const run = async (fn, ...args) => {
@@ -112,9 +157,42 @@ async function page() {
     return result.value;
   };
   return {
+    sessionId,
     run,
     performance: () => call('Performance.getMetrics', {}, sessionId),
     nav: path => call('Page.navigate', { url: origin + path }, sessionId),
+    press: selector => until(() => run(query => {
+      const element = document.querySelector(query);
+      if (!element || element.matches(':disabled')) return false;
+      element.click();
+      return true;
+    }, selector), selector),
+    stroke: async (offset = 0, release = true) => {
+      await call('Page.bringToFront', {}, sessionId);
+      const point = await until(() => run(offset => {
+        const viewport = document.querySelector('.board-viewport');
+        const canvas = viewport?.querySelector('canvas');
+        if (!canvas) return null;
+        viewport.scrollIntoView({ block: 'center', inline: 'center' });
+        const box = viewport.getBoundingClientRect();
+        for (let y = Math.max(8, Math.round(box.top + 35 + offset)); y < Math.min(innerHeight - 25, box.bottom - 24); y += 14) {
+          for (let x = Math.max(8, Math.round(box.left + 24)); x < Math.min(innerWidth - 65, box.right - 65); x += 24) {
+            if (document.elementFromPoint(x, y) === canvas && document.elementFromPoint(x + 64, y + 22) === canvas) {
+              return { x, y };
+            }
+          }
+        }
+        return null;
+      }, offset), 'visible canvas hit test', 12000);
+      const x = point.x, y = point.y;
+      const dispatch = (type, at, button, buttons) => call('Input.dispatchMouseEvent', {
+        type, x: x + at, y: y + at / 3, button, buttons, clickCount: 1,
+      }, sessionId);
+      await dispatch('mousePressed', 0, 'left', 1);
+      for (const delta of [16, 35, 64]) await dispatch('mouseMoved', delta, 'left', 1);
+      if (release) await dispatch('mouseReleased', 64, 'left', 0);
+      return () => dispatch('mouseReleased', 64, 'left', 0);
+    },
     see: async text => {
       let retries = 0;
       await until(async () => {
@@ -179,8 +257,9 @@ async function login(view, username) {
     return true;
   }));
   await until(() => view.run(() => location.pathname.endsWith('-dashboard')), 'dashboard');
-  await view.nav(contents ? (username === ready.student ? '/concepts' : '/teacher/concepts') : '/evaluaciones-institucionales');
-  await view.see(contents ? 'Contenidos institucionales' : 'Evaluaciones institucionales');
+  await view.nav(boards ? (username === ready.student ? '/student/whiteboards' : '/teacher/whiteboards') :
+    contents ? (username === ready.student ? '/concepts' : '/teacher/concepts') : '/evaluaciones-institucionales');
+  await view.see(boards ? 'Pizarras institucionales' : contents ? 'Contenidos institucionales' : 'Evaluaciones institucionales');
 }
 
 async function context(view, school) {
@@ -239,8 +318,15 @@ let runnerBefore;
 let transferComparison;
 try {
   const portFile = join(profile, 'DevToolsActivePort');
-  const [port, endpoint] = await until(() => existsSync(portFile) && readFileSync(portFile, 'utf8').trim().split(/\r?\n/),
-    'Chromium DevTools');
+  const [port, endpoint] = await until(() => {
+    try {
+      const lines = readFileSync(portFile, 'utf8').trim().split(/\r?\n/);
+      return lines.length === 2 && lines[1] && lines;
+    } catch (error) {
+      if (error.code !== 'ENOENT' && error.code !== 'EBUSY') throw error;
+      return false;
+    }
+  }, 'Chromium DevTools');
   socket = new WebSocket('ws://127.0.0.1:' + port + endpoint);
   await once(socket, 'open');
   socket.addEventListener('message', message => observe(JSON.parse(message.data)));
@@ -254,7 +340,12 @@ try {
   await login(teacherA, ready.teacherA);
   await login(teacherB, ready.teacherB);
   await login(pupil, ready.student);
-  if (contents) {
+  if (boards) {
+    const liveSockets = view => [...sockets.values()].filter(row => row.view === view.sessionId && !row.closed).length;
+    transferComparison = await boardBrowserJourney({ teacherA, teacherB, pupil, ready, context, record, until,
+      requests: () => [...requests.values()], frames, liveSockets,
+      truncateConnections: () => [...tunnels].forEach(({ downstream }) => downstream.destroy()) });
+  } else if (contents) {
     transferComparison = await contentBrowserJourney({ teacherA, teacherB, pupil, context, record, until,
       files: () => [...requests.values()].filter(row => /\/contents\/NEW\/v1\/.*\/files\/\d+$/.test(row.path)) });
   } else {
@@ -350,12 +441,14 @@ try {
       + runnerAfter.systemCPUTime - runnerBefore.systemCPUTime) / 1000,
     nodePeakRssKiB: runnerAfter.maxRSS,
   };
-  const metricsFile = contents ? 'content-browser-metrics.json' : 'browser-metrics.json';
-  writeFileSync(join(fixture, metricsFile), JSON.stringify({ error, steps, resources, requests: rows, transferComparison }, null, 2));
+  const metricsFile = boards ? 'board-browser-metrics.json' : contents ? 'content-browser-metrics.json' : 'browser-metrics.json';
+  writeFileSync(join(fixture, metricsFile), JSON.stringify({ error, steps, resources, requests: rows, transferComparison,
+    ...(boards ? { frames, sockets: [...sockets.values()], browserErrors } : {}) }, null, 2));
   if (socket?.readyState === 1) {
     socket.close();
   }
   edge.kill();
+  for (const { downstream } of tunnels) downstream.destroy();
   app.closeAllConnections();
   app.close();
 }

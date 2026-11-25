@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { requireSnapshotImage } from '../../shared/utils/safe-file.util';
 import { environment } from '../../../environments/environment';
+import { WhiteboardViewContext } from './whiteboard-view-context';
 import {
   WhiteboardBoardStateResponse,
   WhiteboardHistoryItemResponse,
@@ -24,7 +25,8 @@ import {
 @Injectable({ providedIn: 'root' })
 export class StudentWhiteboardService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = `${environment.apiUrl}/whiteboards/student`;
+  private readonly context = inject(WhiteboardViewContext, { optional: true });
+  private get baseUrl(): string { return `${environment.apiUrl}${this.context?.path ?? '/whiteboards'}/student`; }
 
   /** Lista las sesiones ACTIVE/PAUSED disponibles para el grado/sección del estudiante. */
   listActiveSessions(page=0): Observable<QueryPage<WhiteboardStudentSessionResponse>> {
@@ -36,7 +38,7 @@ export class StudentWhiteboardService {
    * sesión con el permiso efectivo actual del estudiante.
    */
   joinSession(sessionId: number): Observable<WhiteboardStudentSessionResponse> {
-    return this.http.post<WhiteboardStudentSessionResponse>(`${this.baseUrl}/${sessionId}/join`, {});
+    return this.http.post<WhiteboardStudentSessionResponse>(`${this.baseUrl}/${sessionId}/join`, {}, this.context?.command());
   }
 
   /** Obtiene el detalle de una sesión visible para el estudiante (recalcula joined/canInteract). */

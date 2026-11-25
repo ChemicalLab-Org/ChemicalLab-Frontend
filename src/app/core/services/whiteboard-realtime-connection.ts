@@ -1,12 +1,13 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Client, IMessage } from '@stomp/stompjs';
-import { Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import SockJS from 'sockjs-client';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 import { SessionCleanupService } from './session-cleanup.service';
+import { WhiteboardViewContext } from './whiteboard-view-context';
 import { WhiteboardControlEventResponse, WhiteboardDrawEventRequest, WhiteboardDrawEventResponse,
   WhiteboardTopicMessage, isWhiteboardControlEvent } from '../../shared/models';
 
@@ -19,8 +20,11 @@ export class WhiteboardRealtimeConnection {
   private readonly auth = inject(AuthService);
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
+  private readonly view = inject(WhiteboardViewContext, { optional: true });
+  protected readonly role: 'teacher' | 'student' = 'teacher';
   private client: Client | null = null;
   private sessionId: number | null = null;
+  private verification: Subscription | null = null;
   readonly connectionState = signal<WhiteboardConnectionState>('disconnected');
   readonly failure = signal<WhiteboardConnectionFailure | null>(null);
   private readonly drawEvents$ = new Subject<WhiteboardDrawEventResponse>();
@@ -37,7 +41,13 @@ export class WhiteboardRealtimeConnection {
   readonly resyncRequests = this.resync$.asObservable();
   readonly accessLost = this.accessLost$.asObservable();
 
-  constructor() { inject(SessionCleanupService).register(() => this.disconnect()); }
+  constructor() {
+    const unregister = inject(SessionCleanupService).register(() => this.disconnect());
+    inject(DestroyRef).onDestroy(() => {
+      unregister();
+      this.disconnect();
+    });
+  }
 
   connect(sessionId: number): void {
     if (this.client !== null && this.sessionId === sessionId) return;
@@ -46,6 +56,7 @@ export class WhiteboardRealtimeConnection {
     this.sessionId = sessionId;
     this.failure.set(null);
     this.connectionState.set('connecting');
+    const destination = this.destination(sessionId);
     let attemptToken: string | null = null;
     const client = new Client({
       webSocketFactory: () => new SockJS(environment.wsUrl),
@@ -57,19 +68,32 @@ export class WhiteboardRealtimeConnection {
         attemptToken = this.auth.getToken();
         if (!attemptToken) { this.stop('session'); return; }
         client.connectHeaders = { Authorization: `Bearer ${attemptToken}` };
+        if (this.view) client.connectHeaders['board-scope'] = this.view.connectHeader(sessionId, this.role);
       },
       onConnect: () => {
         if (this.client !== client) return;
         this.failure.set(null);
-        this.connectionState.set('connected');
-        client.subscribe('/user/queue/whiteboard-errors', message => this.handleError(message));
-        client.subscribe(`/topic/whiteboards/${sessionId}`, message => this.handleTopic(message));
-        this.sendPresence(); // both roles have an explicit presence contract
-        this.resync$.next('connected');
+        client.subscribe('/user/queue/whiteboard-errors', message => {
+          if (this.client === client) this.handleError(message);
+        });
+        client.subscribe(`/topic${destination}`, message => {
+          if (this.client === client) this.handleTopic(message);
+        });
+        if (this.view) {
+          // The application answers after the broker has registered both subscriptions.
+          client.publish({ destination: `/app${destination}/ready`, body: '' });
+        } else {
+          this.connectionState.set('connected');
+          this.sendPresence();
+          this.resync$.next('connected');
+        }
       },
       onWebSocketClose: (event: CloseEvent) => {
         if (this.client !== client) return;
-        if (this.pending.size) { this.clearPending(); this.resync$.next('rejected'); }
+        if (this.pending.size) {
+          this.clearPending();
+          if (!this.view) this.resync$.next('rejected');
+        }
         if (event.code === 4429) {
           this.failure.set('network'); this.connectionState.set('connecting');
           this.errors$.next('Se alcanzó el límite de conexiones o tráfico. Espera; se reintentará la conexión.'); return;
@@ -89,7 +113,8 @@ export class WhiteboardRealtimeConnection {
         if (this.client !== client) return;
         // Some proxies hide close codes. Ask the persistent HTTP policy before invalidating a session.
         const token = attemptToken;
-        this.http.get(`${environment.apiUrl}/auth/me`, { headers: { Authorization: `Bearer ${token}` } }).subscribe({
+        this.verification?.unsubscribe();
+        this.verification = this.http.get(`${environment.apiUrl}/auth/me`, { headers: { Authorization: `Bearer ${token}` } }).subscribe({
           next: () => {
             if (this.client !== client || this.auth.getToken() !== token) return;
             this.stop('protocol');
@@ -115,7 +140,7 @@ export class WhiteboardRealtimeConnection {
   reconnect(sessionId: number): void { this.disconnect(); this.connect(sessionId); }
   sendDraw(event: WhiteboardDrawEventRequest): void {
     const id = event.clientEventId;
-    if (!this.client?.connected || this.sessionId === null || this.pending.size >= 128) {
+    if (!this.client?.connected || this.connectionState() !== 'connected' || this.sessionId === null || this.pending.size >= 128) {
       this.errors$.next('La acción no se envió. Espera la conexión o la confirmación de las acciones pendientes.');
       if (id) this.rejectedOperations$.next(id);
       return;
@@ -129,7 +154,7 @@ export class WhiteboardRealtimeConnection {
       }, 10000));
     }
     try {
-      this.client.publish({ destination: `/app/whiteboards/${this.sessionId}/draw`,
+      this.client.publish({ destination: `/app${this.destination(this.sessionId)}/draw`,
         headers: id ? { 'client-event-id': id } : {}, body: JSON.stringify(event) });
     } catch {
       if (id) { this.settle(id); this.rejectedOperations$.next(id); }
@@ -137,17 +162,24 @@ export class WhiteboardRealtimeConnection {
     }
   }
   sendPresence(): void {
-    if (!this.client?.connected || this.sessionId === null) return;
+    if (this.view || !this.client?.connected || this.sessionId === null) return;
     this.client.publish({ destination: `/app/whiteboards/${this.sessionId}/presence`, body: '' });
   }
   disconnect(): void {
+    this.verification?.unsubscribe();
+    this.verification = null;
     this.clearPending();
     const previous = this.client;
     this.client = null;
     this.sessionId = null;
     this.connectionState.set('disconnected');
-    if (previous) { previous.reconnectDelay = 0; void previous.deactivate(); }
+    if (previous) {
+      previous.reconnectDelay = 0;
+      if (this.view) void previous.deactivate({ force: true });
+      else void previous.deactivate();
+    }
   }
+  private destination(id: number): string { return `${this.view?.path ?? '/whiteboards'}/${id}`; }
   private stop(reason: WhiteboardConnectionFailure): void { this.disconnect(); this.failure.set(reason); }
   private invalidSession(token: string | null): void {
     this.stop('session');
@@ -159,6 +191,7 @@ export class WhiteboardRealtimeConnection {
   private handleTopic(message: IMessage): void {
     let payload: WhiteboardTopicMessage;
     try { payload = JSON.parse(message.body) as WhiteboardTopicMessage; } catch { return; }
+    if (payload.sessionId !== this.sessionId) return;
     if (isWhiteboardControlEvent(payload)) this.controlEvents$.next(payload);
     else { if (payload.clientEventId) this.settle(payload.clientEventId); this.drawEvents$.next(payload); }
   }
@@ -170,7 +203,12 @@ export class WhiteboardRealtimeConnection {
     let error = 'La pizarra rechazó la última acción. Se recuperará el estado guardado.';
     let id: string | undefined;
     try {
-      const payload = JSON.parse(message.body) as { error?: string; clientEventId?: string };
+      const payload = JSON.parse(message.body) as { error?: string; clientEventId?: string; ready?: boolean };
+      if (this.view && payload.ready) {
+        this.connectionState.set('connected');
+        this.resync$.next('connected');
+        return;
+      }
       error = payload.error ?? error; id = payload.clientEventId;
     } catch { /* generic error */ }
     this.errors$.next(error);
