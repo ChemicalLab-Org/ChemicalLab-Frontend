@@ -44,7 +44,7 @@ const edge = spawn(browser, ['--headless=new', '--disable-gpu', '--no-first-run'
   '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'],
   { windowsHide: true, stdio: 'ignore' });
 
-async function until(probe, label, timeout = 60000) {
+async function until(probe, label, timeout = 135000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
     const result = await probe();
@@ -112,7 +112,25 @@ async function page() {
     run,
     performance: () => call('Performance.getMetrics', {}, sessionId),
     nav: path => call('Page.navigate', { url: origin + path }, sessionId),
-    see: text => until(() => run(line => document.body?.innerText?.includes(line), text), text),
+    see: async text => {
+      let retries = 0;
+      await until(async () => {
+        const state = await run((line, canRetry) => {
+          if (document.body?.innerText?.includes(line)) return 'seen';
+          if (!canRetry) return 'waiting';
+          const retry = [...document.querySelectorAll('button')]
+            .find(button => button.textContent.trim() === 'Reintentar' && !button.matches(':disabled'));
+          if (!retry) return 'waiting';
+          retry.click();
+          return 'retried';
+        }, text, retries < 2);
+        if (state === 'retried') {
+          retries++;
+          record('reintento de la misma solicitud');
+        }
+        return state === 'seen';
+      }, text);
+    },
     has: text => run(line => document.body?.innerText?.includes(line), text),
     click: label => until(() => run(text => {
       const button = [...document.querySelectorAll('button')].find(element => element.textContent.trim() === text);
