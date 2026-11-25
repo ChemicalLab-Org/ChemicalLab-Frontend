@@ -78,7 +78,7 @@ export interface Publication {
 }
 export interface Answer { revisionId: number; questionId: number; selectedOptionId?: number; answerText?: string; }
 export interface AttemptReceipt { attemptId: number; attemptNumber: number; status: string; gradeClosed: boolean; }
-export interface Attempt extends AttemptReceipt {
+export interface Attempt extends Omit<AttemptReceipt, 'gradeClosed'> {
   deadline: string | null;
   currentQuestionIndex: number;
   questionOrder: number[];

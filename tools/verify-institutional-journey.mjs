@@ -11,6 +11,7 @@ assert(fixtureArgument && browser, 'Pass the disposable fixture directory and th
 const fixture = resolve(fixtureArgument);
 const dist = resolve(distArgument);
 const ready = JSON.parse(readFileSync(join(fixture, 'ready.json'), 'utf8'));
+const normal = ready.mode === 'runtime';
 const backend = new URL(ready.origin);
 assert.equal(backend.hostname, '127.0.0.1');
 const profile = mkdtempSync(join(fixture, 'chromium-'));
@@ -123,7 +124,7 @@ async function page() {
           if (!retry) return 'waiting';
           retry.click();
           return 'retried';
-        }, text, retries < 2);
+        }, text, !normal && retries < 2);
         if (state === 'retried') {
           retries++;
           record('reintento de la misma solicitud');
@@ -215,7 +216,7 @@ async function assign(view, name, due) {
     return true;
   }, ready.student), 'student enrollment'));
   await view.click('Confirmar asignación');
-  await view.see('Conciliación F08 pendiente.');
+  await view.see(' creada. Evaluación ');
   return view.run(() => {
     const match = document.body.innerText.match(/Entrega (\d+) creada\. Evaluación (\d+)/);
     return { delivery: Number(match[1]), evaluation: Number(match[2]) };
@@ -258,19 +259,27 @@ try {
   await publish(teacherA, names.a);
   await publish(teacherB, names.b);
   record('dos revisiones creadas, editadas y publicadas');
-  const due = new Date(Date.now() + 6 * 60000);
+  const due = new Date(Date.now() + (normal ? 2 : 6) * 60000);
   const a = await assign(teacherA, names.a, due);
   const b = await assign(teacherB, names.b, due);
-  await pupil.click('Actualizar entregas');
-  assert.equal(await pupil.has(names.a), false);
-  await context(pupil, 'B');
-  await pupil.see('No hay entregas disponibles');
-  assert.equal(await pupil.has(names.b), false);
   writeFileSync(join(fixture, 'assignments.json'), JSON.stringify({ a, b, due: due.toISOString() }));
-  record('dos asignaciones pendientes excluidas');
-  await until(() => existsSync(join(fixture, 'reconciled')), 'explicit F08 approvals and application', 300000);
-  record('conciliación aplicada');
-  await pupil.click('Actualizar entregas');
+  if (normal) {
+    await pupil.click('Actualizar entregas');
+    await pupil.see(names.a);
+    assert.equal(await pupil.has(names.b), false);
+    await context(pupil, 'B');
+    record('dos entregas nativas disponibles');
+  } else {
+    await pupil.click('Actualizar entregas');
+    assert.equal(await pupil.has(names.a), false);
+    await context(pupil, 'B');
+    await pupil.see('No hay entregas disponibles');
+    assert.equal(await pupil.has(names.b), false);
+    record('dos asignaciones pendientes excluidas');
+    await until(() => existsSync(join(fixture, 'reconciled')), 'explicit F08 approvals and application', 300000);
+    record('conciliación aplicada');
+    await pupil.click('Actualizar entregas');
+  }
   await pupil.see(names.b);
   assert.equal(await pupil.has(names.a), false);
   await context(pupil, 'A');

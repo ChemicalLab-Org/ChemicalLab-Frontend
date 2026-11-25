@@ -154,7 +154,7 @@ export class InstitutionalTeacherComponent extends EvaluationView implements OnI
       enrollmentIds: [...this.recipients()],
     }), receipt => {
       this.resetDetails();
-      this.message.set(`Entrega ${receipt.deliveryId} creada. Evaluación ${row.evaluationId}. Conciliación F08 pendiente.`);
+      this.message.set(`Entrega ${receipt.deliveryId} creada. Evaluación ${row.evaluationId}.`);
       this.loadRevisions();
     });
   }
