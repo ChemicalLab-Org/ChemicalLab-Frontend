@@ -100,6 +100,7 @@ async function page() {
   const { sessionId } = await call('Target.attachToTarget', { targetId, flatten: true });
   await call('Network.enable', { maxPostDataSize: 1048576 }, sessionId);
   await call('Network.setBlockedURLs', { urls: ['https://*'] }, sessionId);
+  await call('Performance.enable', {}, sessionId);
   const run = async (fn, ...args) => {
     const { result, exceptionDetails } = await call('Runtime.evaluate', {
       expression: '(' + fn.toString() + ')(...' + JSON.stringify(args) + ')', returnByValue: true, awaitPromise: true,
@@ -109,6 +110,7 @@ async function page() {
   };
   return {
     run,
+    performance: () => call('Performance.getMetrics', {}, sessionId),
     nav: path => call('Page.navigate', { url: origin + path }, sessionId),
     see: text => until(() => run(line => document.body?.innerText?.includes(line), text), text),
     has: text => run(line => document.body?.innerText?.includes(line), text),
@@ -208,6 +210,11 @@ function record(step) {
 }
 
 let error;
+let browserVersion;
+let browserCpuBefore;
+let browserCpuAfter;
+let rendererHeaps;
+let runnerBefore;
 try {
   const portFile = join(profile, 'DevToolsActivePort');
   const [port, endpoint] = await until(() => existsSync(portFile) && readFileSync(portFile, 'utf8').trim().split(/\r?\n/),
@@ -215,9 +222,12 @@ try {
   socket = new WebSocket('ws://127.0.0.1:' + port + endpoint);
   await once(socket, 'open');
   socket.addEventListener('message', message => observe(JSON.parse(message.data)));
+  browserVersion = (await call('Browser.getVersion')).product;
   const teacherA = await page();
   const teacherB = await page();
   const pupil = await page();
+  browserCpuBefore = (await call('SystemInfo.getProcessInfo')).processInfo;
+  runnerBefore = process.resourceUsage();
   record('inicio');
   await login(teacherA, ready.teacherA);
   await login(teacherB, ready.teacherB);
@@ -289,13 +299,23 @@ try {
   await pupil.see('Evidencia pertinente.');
   assert.equal(await pupil.has('Criterio privado'), false);
   record('resultado publicado por política académica');
+  browserCpuAfter = (await call('SystemInfo.getProcessInfo')).processInfo;
+  rendererHeaps = await Promise.all([teacherA, teacherB, pupil].map(async view =>
+    (await view.performance()).metrics.find(metric => metric.name === 'JSHeapUsedSize')?.value));
 } catch (failure) {
   error = String(failure);
   process.exitCode = 1;
   console.error(error);
 } finally {
   const rows = [...requests.values()].map(({ started, ...item }) => item);
-  writeFileSync(join(fixture, 'browser-metrics.json'), JSON.stringify({ error, steps, requests: rows }, null, 2));
+  const runnerAfter = process.resourceUsage();
+  const resources = {
+    browserVersion, browserCpuBefore, browserCpuAfter, rendererHeaps,
+    nodeCpuMs: runnerBefore && (runnerAfter.userCPUTime - runnerBefore.userCPUTime
+      + runnerAfter.systemCPUTime - runnerBefore.systemCPUTime) / 1000,
+    nodePeakRssKiB: runnerAfter.maxRSS,
+  };
+  writeFileSync(join(fixture, 'browser-metrics.json'), JSON.stringify({ error, steps, resources, requests: rows }, null, 2));
   if (socket?.readyState === 1) {
     socket.close();
   }
