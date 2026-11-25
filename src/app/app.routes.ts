@@ -236,5 +236,11 @@ export const routes: Routes = [
     data: { roles: ['ESTUDIANTE'] },
   },
 
+  {
+    path: 'evaluaciones-institucionales',
+    loadComponent: () => import('./features/institutional-evaluations/institutional-evaluations.component')
+      .then(m => m.InstitutionalEvaluationsComponent),
+    canActivate: [authGuard, temporaryPasswordGuard],
+  },
   { path: '**', component: NotFoundComponent },
 ];

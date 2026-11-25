@@ -1,0 +1,69 @@
+:host {
+  display: block;
+}
+
+.institutional {
+  margin: 0 auto;
+  max-width: 64rem;
+  padding: 1.5rem;
+  color: #172936;
+}
+
+.controls, .actions {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: .75rem;
+  margin-block: 1rem;
+}
+
+label {
+  display: grid;
+  gap: .25rem;
+}
+
+input, select, textarea, button {
+  padding: .45rem .65rem;
+  border: 1px solid #81929d;
+  border-radius: .3rem;
+  background: white;
+  color: inherit;
+  font: inherit;
+}
+
+input[type='checkbox'], input[type='radio'] {
+  margin-inline-end: .45rem;
+}
+
+textarea {
+  min-height: 4rem;
+  width: 100%;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: .6;
+}
+
+button[aria-pressed='true'] {
+  background: #173f51;
+  color: white;
+}
+
+fieldset, article {
+  border: 1px solid #becad0;
+  border-radius: .4rem;
+  margin-block: .75rem;
+  padding: .8rem;
+}
+
+fieldset label {
+  margin-block: .35rem;
+}
+
+[role='alert'] {
+  color: #982726;
+}

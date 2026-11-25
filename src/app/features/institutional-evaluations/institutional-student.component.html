@@ -1,0 +1,88 @@
+<h2>{{ scope().className }} · Estudiante</h2>
+<button type="button" [disabled]="busy()" (click)="loadDeliveries()">Actualizar entregas</button>
+@if (busy()) { <p role="status">Procesando…</p> }
+@if (error()) { <p role="alert">{{ error() }}</p> }
+@if (message()) { <p role="status">{{ message() }}</p> }
+@if (retry(); as repeat) { <button type="button" (click)="repeat()">Reintentar</button> }
+@if (deliveries(); as page) {
+  @for (delivery of page.items; track delivery.deliveryId) {
+    <article>
+      <strong>{{ delivery.title }}</strong>
+      @if (delivery.dueAt) { <p>Vence {{ delivery.dueAt | date:'short' }}</p> }
+      <button type="button" [disabled]="busy()" (click)="open(delivery)">Abrir entrega</button>
+    </article>
+  } @empty { <p>No hay entregas disponibles para esta clase.</p> }
+  @if (page.nextAfter !== null) {
+    <button type="button" [disabled]="busy()" (click)="loadDeliveries(page.nextAfter)">Siguiente página</button>
+  }
+}
+@if (selected(); as delivery) {
+  <h3>{{ delivery.title }}</h3>
+  <p>Intentos disponibles: {{ delivery.remainingAttempts }}</p>
+  @if (delivery.windowOpen && delivery.remainingAttempts > 0 && !delivery.activeAttempt) {
+    <button type="button" [disabled]="busy()" (click)="start(delivery)">Iniciar intento</button>
+  }
+  @if (attempts(); as page) {
+    @for (row of page.items; track row.attemptId) {
+      <article>
+        Intento {{ row.attemptNumber }}
+        @if (row.status === 'IN_PROGRESS') {
+          <button type="button" [disabled]="busy()" (click)="recover(delivery, row.attemptId)">Recuperar intento</button>
+        } @else {
+          <button type="button" [disabled]="busy()" (click)="result(delivery, row.attemptId)">Consultar resultado</button>
+        }
+      </article>
+    }
+    @if (page.nextAfter !== null) {
+      <button type="button" [disabled]="busy()" (click)="loadAttempts(delivery, page.nextAfter)">Más intentos</button>
+    }
+  }
+  @if (attempt(); as current) {
+    @if (current.status === 'IN_PROGRESS') {
+      <h4>Intento {{ current.attemptNumber }} en curso</h4>
+      @if (current.deadline) { <p>Plazo del intento: {{ current.deadline | date:'short' }}</p> }
+      @if (publication()?.instructions; as instructions) { <p>{{ instructions }}</p> }
+      <fieldset [disabled]="busy()">
+        <legend>Respuestas</legend>
+        @for (question of questions(); track question.id) {
+          <fieldset>
+            <legend>{{ question.questionText }}</legend>
+            @if (question.questionType === 'OPEN_TEXT') {
+              <label>Respuesta
+                <textarea maxlength="3000" [(ngModel)]="responses[question.id].text"></textarea>
+              </label>
+            } @else {
+              @for (option of question.options; track option.id) {
+                <div>
+                  <input type="radio" [name]="'answer-' + question.id" [id]="'option-' + option.id"
+                         [value]="option.id" [(ngModel)]="responses[question.id].option">
+                  <label style="display:inline" [for]="'option-' + option.id">{{ option.optionText }}</label>
+                </div>
+              }
+            }
+            <button type="button" [disabled]="!responses[question.id].text.trim() && responses[question.id].option === null"
+                    (click)="save(delivery, current, question.id)">Guardar respuesta</button>
+          </fieldset>
+        } @empty {
+          @if (!publication()) { <p>El servidor conservará las respuestas guardadas al enviar el intento.</p> }
+        }
+        <button type="button" (click)="submit(delivery, current)">Enviar intento</button>
+      </fieldset>
+    }
+  }
+}
+@if (correction(); as result) {
+  <h3>Resultado</h3>
+  <p>Nota: {{ result.finalScore }} / 20</p>
+  @if (result.overallFeedback) { <p>{{ result.overallFeedback }}</p> }
+  @for (answer of result.answers; track answer.questionId) {
+    <article>
+      <strong>{{ answer.questionText }}</strong>
+      @if (answer.answerText) { <p>{{ answer.answerText }}</p> }
+      @if (answer.correctOptionText) { <p>Respuesta correcta: {{ answer.correctOptionText }}</p> }
+      @if (answer.explanation) { <p>{{ answer.explanation }}</p> }
+      @if (answer.teacherFeedback) { <p>{{ answer.teacherFeedback }}</p> }
+      @if (answer.pointsAwarded !== null) { <p>Puntos: {{ answer.pointsAwarded }}</p> }
+    </article>
+  }
+}
