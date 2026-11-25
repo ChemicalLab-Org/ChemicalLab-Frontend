@@ -415,7 +415,7 @@ try {
   await teacherB.click('Revisión docente');
   await teacherB.see('No hay intentos enviados');
   await teacherA.click('Revisión docente');
-  await teacherA.click('Abrir revisión');
+  await teacherA.clickIn(names.a, 'Abrir revisión');
   await teacherA.see('Criterio privado de revisión');
   await teacherA.fill('[name=score]', '1');
   await teacherA.fill('[name=feedback]', 'Evidencia pertinente.');
