@@ -18,7 +18,7 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { catchError, EMPTY } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -27,7 +27,7 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
 @Component({
   selector: 'app-change-password',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   styleUrl: './change-password.component.scss',
   template: `
     <div class="reset">
@@ -67,7 +67,6 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
         <footer class="brand-footer">
           <span>© 2026 ChemicalLab</span>
           <span class="brand-footer__links">
-            <a href="#">Soporte</a>
             <a href="#">Privacidad</a>
           </span>
         </footer>
@@ -267,6 +266,7 @@ type PasswordStrength = 'weak' | 'medium' | 'strong' | null;
               }
             </button>
           </form>
+          <p><a routerLink="/soporte">Ayuda y soporte</a></p>
         </div>
       </section>
     </div>
