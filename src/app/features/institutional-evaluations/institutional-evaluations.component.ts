@@ -14,6 +14,7 @@ import { InstitutionalWhiteboardsScopeComponent } from './institutional-whiteboa
   template: `
     <main class="institutional">
       <a routerLink="/dashboard">Volver al inicio</a>
+      <a routerLink="/mi-cuenta/acuerdos">Mis acuerdos y privacidad</a>
       <h1>{{ isBoard ? 'Pizarras institucionales' : isContent ? 'Contenidos institucionales' : 'Evaluaciones institucionales' }}</h1>
       <div class="controls">
         <label>Institución

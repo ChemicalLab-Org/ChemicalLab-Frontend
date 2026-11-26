@@ -108,6 +108,26 @@ describe('T04 password policy and retry flows', () => {
     http.expectOne(`${base}/auth/change-temporary-password`).flush({});
   });
 
+  it('keeps the school selector usable after a refusal confined to one institution', () => {
+    const token = signedIn();
+    const router = TestBed.inject(Router);
+    const schoolA = `${base}/institutions/1/classes/2/evaluation-catalog/NEW/v1/own-deliveries`;
+    const schoolB = `${base}/institutions/3/classes/4/evaluation-catalog/NEW/v1/own-deliveries`;
+    for (const code of ['AGREEMENTS_REQUIRED', 'ACADEMIC_AUTHORIZATION_REQUIRED']) {
+      client.get(schoolA).subscribe({ error: () => {} });
+      http.expectOne(schoolA).flush({ code, institutionId: 1 }, { status: 403, statusText: 'Forbidden' });
+    }
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    client.get(schoolB).subscribe();
+    const allowed = http.expectOne(schoolB);
+    expect(allowed.request.headers.get('Authorization')).toBe(`Bearer ${token}`);
+    allowed.flush({ items: [] });
+
+    client.get(schoolB).subscribe({ error: () => {} });
+    http.expectOne(schoolB).flush({ code: 'AGREEMENTS_REQUIRED' }, { status: 403, statusText: 'Forbidden' });
+    expect(router.navigateByUrl).toHaveBeenCalledExactlyOnceWith('/mi-cuenta/acuerdos');
+  });
+
   it('associates login countdown and messages with the current identifier only', async () => {
     const fixture = TestBed.createComponent(LoginComponent);
     await fixture.whenStable();

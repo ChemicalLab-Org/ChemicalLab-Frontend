@@ -18,7 +18,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const isLogin = path === '/auth/login';
   const isSessionCheck = path === '/auth/me';
   const isLogout = path === '/auth/logout' || path === '/auth/logout-all';
-  const isPublicAgreement = req.method === 'GET' && (path === '/agreements/public' || path.startsWith('/agreements/public/'));
+  const isPublicAgreement = (req.method === 'GET' || req.method === 'HEAD')
+    && (path === '/agreements/public' || path.startsWith('/agreements/public/'));
   const token = auth.getToken();
   const outgoing = !isLogin && !isPublicAgreement && token && !req.headers.has('Authorization')
     ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
@@ -37,7 +38,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         if (auth.requirePasswordChange() && !router.url.startsWith('/auth/change-password')) {
           void router.navigateByUrl('/auth/change-password');
         }
-      } else if (error.status === 403 && ['AGREEMENTS_REQUIRED', 'ACADEMIC_AUTHORIZATION_REQUIRED'].includes(error.error?.code)
+      } else if (error.status === 403 && error.error?.code === 'AGREEMENTS_REQUIRED'
+        && error.error?.institutionId == null
         && !router.url.startsWith('/mi-cuenta/acuerdos')) {
         void router.navigateByUrl('/mi-cuenta/acuerdos');
       }

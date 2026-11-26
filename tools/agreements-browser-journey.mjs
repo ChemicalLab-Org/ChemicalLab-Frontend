@@ -75,7 +75,7 @@ export async function agreementsBrowserJourney({ reviewer, representative, pupil
   await signIn(representative, ready.teacherA, ready.password);
   await representative.see('Hay términos obligatorios pendientes.');
   await representative.nav('/evaluaciones-institucionales');
-  await representative.see('Mis acuerdos y privacidad');
+  await until(() => representative.run(() => location.pathname === '/mi-cuenta/acuerdos'), 'acuerdo personal obligatorio');
   await showDocument(representative, 'Términos de ensayo');
   await confirm(representative, 'Registrar aceptación');
   await representative.see('Ir al panel');
@@ -104,4 +104,25 @@ export async function agreementsBrowserJourney({ reviewer, representative, pupil
   await representative.click('Cerrar sesión');
   await until(() => representative.run(() => location.pathname === '/auth/login'), 'cierre de sesión');
   record('consulta posterior de versión y cierre de sesión');
+
+  await signIn(representative, ready.teacherB, ready.password);
+  await representative.see('Hay términos obligatorios pendientes.');
+  await showDocument(representative, 'Términos de ensayo');
+  await confirm(representative, 'Registrar aceptación');
+  await showDocument(representative, 'Acuerdo institucional de ensayo', 'Fictitious B');
+  await confirm(representative, 'Registrar aceptación');
+  await showDocument(pupil, 'Términos de ensayo');
+  await confirm(pupil, 'Registrar aceptación');
+  await pupil.nav('/evaluaciones-institucionales');
+  const school = '.controls select:first-of-type';
+  const classroom = '.controls label:nth-child(2) select';
+  await pupil.select(school, 'Fictitious A');
+  await pupil.select(classroom, 'Fictitious');
+  await pupil.see('condición pendiente en este colegio');
+  assert(await pupil.run(() => location.pathname === '/evaluaciones-institucionales'));
+  await pupil.select(school, 'Fictitious B');
+  await pupil.select(classroom, 'Fictitious');
+  await pupil.see('No hay entregas disponibles para esta clase.');
+  assert.equal(await pupil.has('condición pendiente en este colegio'), false);
+  record('una autorización pendiente en A no expulsa de Angular ni impide seleccionar y consultar B');
 }

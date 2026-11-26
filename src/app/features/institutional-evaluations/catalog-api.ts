@@ -175,10 +175,14 @@ export abstract class EvaluationView {
         this.busy.set(false);
         accept(value);
       },
-      error: (failure: { status?: number }) => {
+      error: (failure: { status?: number; error?: { code?: string } }) => {
         this.busy.set(false);
         if (failure.status === 403) {
-          this.error.set(forbidden ?? 'El permiso, el estado o la ventana académica ya no permiten esta operación.');
+          if (failure.error?.code === 'ACADEMIC_AUTHORIZATION_REQUIRED' || failure.error?.code === 'AGREEMENTS_REQUIRED') {
+            this.error.set('Consulta Mis acuerdos y privacidad para conocer la condición pendiente en este colegio.');
+          } else {
+            this.error.set(forbidden ?? 'El permiso, el estado o la ventana académica ya no permiten esta operación.');
+          }
           if (!forbidden) this.clearRestricted();
         } else if (failure.status === 404) {
           this.error.set('El recorrido institucional no está habilitado en este entorno.');
