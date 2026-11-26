@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { agreementsGuard } from './core/guards/agreements.guard';
 import { institutionalContentGuard } from './core/guards/institutional-content.guard';
 import { institutionalWhiteboardGuard } from './core/guards/institutional-whiteboard.guard';
 import { authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard } from './core/guards';
@@ -26,10 +27,33 @@ import { CompoundsComponent } from './features/compounds/compounds.component';
 import { ConceptsComponent } from './features/concepts/concepts.component';
 import { NotFoundComponent } from './features/not-found/not-found.component';
 
+const agreementDocuments = () => import('./features/agreements/agreement-documents.component')
+  .then((module) => module.AgreementDocumentsComponent);
+
 export const routes: Routes = [
   { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
 
   { path: 'auth/login', component: LoginComponent },
+  { path: 'acuerdos', loadComponent: agreementDocuments },
+  { path: 'acuerdos/:id', loadComponent: agreementDocuments },
+  {
+    path: 'mi-cuenta/acuerdos',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/agreements/agreement-account.component')
+      .then((module) => module.AgreementAccountComponent),
+  },
+  {
+    path: 'mi-cuenta/acuerdos/revisiones',
+    canActivate: [authGuard, agreementsGuard],
+    loadComponent: () => import('./features/agreements/agreement-reviews.component')
+      .then((module) => module.AgreementReviewsComponent),
+  },
+  {
+    path: 'mi-cuenta/acuerdos/:id',
+    canActivate: [authGuard],
+    loadComponent: agreementDocuments,
+    data: { private: true },
+  },
   {
     path: 'auth/change-password',
     component: ChangePasswordComponent,
@@ -42,49 +66,49 @@ export const routes: Routes = [
   {
     path: 'dashboard',
     component: RoleRedirectComponent,
-    canActivate: [authGuard],
+    canActivate: [authGuard, agreementsGuard],
   },
 
   {
     path: 'student-dashboard',
     component: StudentDashboardComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
     path: 'teacher-dashboard',
     component: TeacherDashboardComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
     path: 'teacher/students',
     component: TeacherStudentsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
     path: 'teacher/passwords',
     component: TeacherPasswordsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
     path: 'teacher/concepts',
     component: TeacherConceptsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, institutionalContentGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, institutionalContentGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
     path: 'teacher/evaluations',
     component: TeacherEvaluationsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
     path: 'teacher/results',
     component: TeacherResultsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
@@ -95,7 +119,7 @@ export const routes: Routes = [
       import('./features/teacher/whiteboards/teacher-whiteboards.component').then(
         (m) => m.TeacherWhiteboardsComponent
       ),
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, institutionalWhiteboardGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, institutionalWhiteboardGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
@@ -104,61 +128,61 @@ export const routes: Routes = [
       import('./features/teacher/whiteboards/teacher-whiteboard-editor.component').then(
         (m) => m.TeacherWhiteboardEditorComponent
       ),
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, institutionalWhiteboardGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, institutionalWhiteboardGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
     path: 'teacher/results/:evaluationId',
     component: TeacherEvaluationResultsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
     path: 'teacher/evaluations/:evaluationId/results',
     component: TeacherEvaluationResultsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['DOCENTE'] },
   },
   {
     path: 'admin-dashboard',
     component: AdminDashboardComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
     path: 'admin/teachers',
     component: TeacherManagementComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
     path: 'admin/users',
     component: AdminUsersComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
     path: 'admin/academic-supervision',
     component: AcademicSupervisionComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
     path: 'admin/system-status',
     component: SystemStatusComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
     path: 'admin/logs',
     component: AdminLogsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
     path: 'admin/usage-metrics',
     component: UsageMetricsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
@@ -169,31 +193,31 @@ export const routes: Routes = [
       import('./features/admin/student-usage/student-usage-records.component').then(
         (m) => m.StudentUsageRecordsComponent
       ),
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ADMINISTRADOR'] },
   },
   {
     path: 'periodic-table',
     component: PeriodicTableComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
   },
   {
     path: 'compounds',
     component: CompoundsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE', 'DOCENTE', 'ADMINISTRADOR'] },
   },
   {
     path: 'concepts',
     component: ConceptsComponent,
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard, institutionalContentGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard, institutionalContentGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
     path: 'evaluations',
     loadComponent: () => import('./features/student/evaluations/student-evaluations.component').then(m => m.StudentEvaluationsComponent),
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -204,7 +228,7 @@ export const routes: Routes = [
       import('./features/student/evaluations/student-results.component').then(
         (m) => m.StudentResultsComponent
       ),
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -216,7 +240,7 @@ export const routes: Routes = [
       import('./features/student/whiteboards/student-whiteboards.component').then(
         (m) => m.StudentWhiteboardsComponent
       ),
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard, institutionalWhiteboardGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard, institutionalWhiteboardGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -225,7 +249,7 @@ export const routes: Routes = [
       import('./features/student/whiteboards/student-whiteboard-viewer.component').then(
         (m) => m.StudentWhiteboardViewerComponent
       ),
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard, institutionalWhiteboardGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard, institutionalWhiteboardGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {
@@ -234,7 +258,7 @@ export const routes: Routes = [
       import('./features/student/whiteboards/student-whiteboard-record.component').then(
         (m) => m.StudentWhiteboardRecordComponent
       ),
-    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard, institutionalWhiteboardGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard, institutionalWhiteboardGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
 
@@ -242,26 +266,26 @@ export const routes: Routes = [
     path: 'administracion-institucional',
     loadComponent: () => import('./features/institutional-administration/institutional-administration.component')
       .then(m => m.InstitutionalAdministrationComponent),
-    canActivate: [authGuard, temporaryPasswordGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard],
   },
   {
     path: 'evaluaciones-institucionales',
     loadComponent: () => import('./features/institutional-evaluations/institutional-evaluations.component')
       .then(m => m.InstitutionalEvaluationsComponent),
-    canActivate: [authGuard, temporaryPasswordGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard],
   },
   {
     path: 'contenidos-institucionales',
     loadComponent: () => import('./features/institutional-evaluations/institutional-evaluations.component')
       .then(m => m.InstitutionalEvaluationsComponent),
-    canActivate: [authGuard, temporaryPasswordGuard, examActiveGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, examActiveGuard],
     data: { section: 'contents' },
   },
   {
     path: 'pizarras-institucionales',
     loadComponent: () => import('./features/institutional-evaluations/institutional-evaluations.component')
       .then(m => m.InstitutionalEvaluationsComponent),
-    canActivate: [authGuard, temporaryPasswordGuard, examActiveGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, examActiveGuard],
     data: { section: 'boards' },
   },
   { path: '**', component: NotFoundComponent },
