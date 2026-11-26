@@ -24,7 +24,8 @@ describe('Ayuda y soporte', () => {
   it('muestra la ayuda pública y conserva el intento activo al navegar a ella', async () => {
     const harness = await RouterTestingHarness.create('/soporte');
     expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toContain('Ayuda y soporte');
-    expect(harness.routeNativeElement?.textContent).toContain('que te indicó tu colegio');
+    expect(harness.routeNativeElement?.querySelector('a[href="mailto:carlosjun.45@gmail.com"]')?.textContent)
+      .toContain('carlosjun.45@gmail.com');
     TestBed.inject(ExamSessionService).start({
       attemptId: 1, evaluationId: 1, allowChemicalCalculator: false, allowPeriodicTable: false,
     });

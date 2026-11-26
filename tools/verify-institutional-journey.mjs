@@ -344,7 +344,10 @@ async function reviewSupport(guest, teacher) {
     return heading?.textContent.trim() === 'Ayuda y soporte' && document.activeElement === heading;
   }), 'support heading receives keyboard focus');
   const headingMs = performance.now() - start;
-  await guest.see('canal de soporte que te indicó tu colegio');
+  assert(await guest.run(() => {
+    const contact = document.querySelector('main a[href="mailto:carlosjun.45@gmail.com"]');
+    return contact?.textContent.trim() === 'carlosjun.45@gmail.com';
+  }));
   assert(await guest.run(() => document.documentElement.scrollWidth <= innerWidth && innerWidth === 375));
   assert.deepEqual(await storage(guest), before);
   const helpRequests = [...requests.values()].slice(requestStart);

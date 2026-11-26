@@ -15,10 +15,11 @@ import { RouterLink } from '@angular/router';
       </ul>
       <h2>Comparte un comentario</h2>
       <p>
-        Si quieres ayudarnos a mejorar el rendimiento y evitar descargas, escribe por el canal
-        de soporte que te indicó tu colegio. Cuéntanos qué estabas haciendo, qué se puso lento
+        Si quieres ayudarnos a mejorar el rendimiento y evitar descargas, escribe a
+        <a href="mailto:carlosjun.45@gmail.com">carlosjun.45@gmail.com</a>.
+        Cuéntanos qué estabas haciendo, qué se puso lento
         o qué archivo tuviste que descargar otra vez. Omite contraseñas, nombres y
-        contenido de alumnos. Si desconoces el canal, consulta a tu docente o administrador.
+        contenido de alumnos.
       </p>
       <a routerLink="/dashboard">Volver al laboratorio</a>
     </main>
