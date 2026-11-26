@@ -18,8 +18,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const isLogin = path === '/auth/login';
   const isSessionCheck = path === '/auth/me';
   const isLogout = path === '/auth/logout' || path === '/auth/logout-all';
+  const isPublicAgreement = (req.method === 'GET' || req.method === 'HEAD')
+    && (path === '/agreements/public' || path.startsWith('/agreements/public/'));
   const token = auth.getToken();
-  const outgoing = !isLogin && token && !req.headers.has('Authorization')
+  const outgoing = !isLogin && !isPublicAgreement && token && !req.headers.has('Authorization')
     ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
   return next(outgoing).pipe(catchError((error: unknown) => {
     if (retryKey && error instanceof HttpErrorResponse
@@ -27,7 +29,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       return throwError(() => retry.start(retryKey, error, context));
     }
     // Login/logout own their errors. Ignore late errors from replaced/revoked tokens.
-    if (!isLogin && !isLogout && !isSessionCheck && token && token === auth.getToken()
+    if (!isLogin && !isLogout && !isSessionCheck && !isPublicAgreement && token && token === auth.getToken()
       && error instanceof HttpErrorResponse) {
       if (error.status === 401) {
         auth.clearLocalSession();
@@ -36,6 +38,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         if (auth.requirePasswordChange() && !router.url.startsWith('/auth/change-password')) {
           void router.navigateByUrl('/auth/change-password');
         }
+      } else if (error.status === 403 && error.error?.code === 'AGREEMENTS_REQUIRED'
+        && error.error?.institutionId == null
+        && !router.url.startsWith('/mi-cuenta/acuerdos')) {
+        void router.navigateByUrl('/mi-cuenta/acuerdos');
       }
     }
     return throwError(() => error);

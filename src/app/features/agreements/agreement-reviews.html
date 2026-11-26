@@ -1,0 +1,101 @@
+<main class="agreements-page">
+  <h1>Revisión de representación y autorizaciones</h1>
+  <p><a routerLink="/mi-cuenta/acuerdos">Volver a mis acuerdos</a></p>
+  @if (error()) { <p role="alert">{{ error() }}</p> }
+  <p role="status">{{ status() }}</p>
+
+  @if (permissions(); as access) {
+    @if (access.platform || access.schools.length) {
+      <form #reviewForm="ngForm" (ngSubmit)="save()" class="review-form">
+        <fieldset [disabled]="busy()">
+          <legend>Ámbito de la revisión</legend>
+          @if (access.platform) {
+            <label>Tipo de revisión
+              <select name="type" [(ngModel)]="type" (ngModelChange)="changeType()">
+                <option value="families">Autorización para participación académica</option>
+                <option value="directors">Facultad del director para contratar</option>
+              </select>
+            </label>
+            <label>Identificador del colegio
+              <input name="institution" type="number" min="1" step="1" required [(ngModel)]="institution" (ngModelChange)="changeScope()" />
+            </label>
+          } @else {
+            <label>Colegio
+              <select name="institution" required [(ngModel)]="institution" (ngModelChange)="changeScope()">
+                @for (school of access.schools; track school.id) { <option [ngValue]="school.id">{{ school.name }}</option> }
+              </select>
+            </label>
+          }
+          <label>Identificador de pertenencia en el colegio
+            <input name="membership" type="number" min="1" step="1" required [(ngModel)]="membership" (ngModelChange)="changeScope()" />
+          </label>
+          @if (type === 'directors') {
+            <label>Identificador de la versión del acuerdo
+              <input name="document" type="number" min="1" step="1" required [(ngModel)]="documentId" (ngModelChange)="changeScope()" />
+            </label>
+          }
+          <button type="button" [disabled]="!institution || !membership || (type === 'directors' && !documentId)" (click)="load()">Consultar revisiones</button>
+        </fieldset>
+
+        <fieldset [disabled]="busy()">
+          <legend>Resultado de la verificación</legend>
+          @if (type === 'families') {
+            <p>Registra el resultado de verificar la autorización de la persona facultada para esta finalidad. Si se requiere autorización y sigue pendiente, la participación académica en ese colegio queda limitada.</p>
+          } @else {
+            <p>Verifica la identidad del director y su facultad para contratar por el colegio. Una revisión favorable permite al director aceptar el acuerdo desde su cuenta.</p>
+          }
+          <label>Resultado
+            <select name="result" required [(ngModel)]="result">
+              <option value="">Selecciona el resultado</option>
+              @if (type === 'families') { <option value="PENDING">Pendiente</option> }
+              <option value="VERIFIED">Verificada</option>
+              <option value="DENIED">Rechazada</option>
+              @if (type === 'directors') { <option value="REVOKED">Revocada</option> }
+              @if (type === 'families') { <option value="WITHDRAWN">Retirada</option> }
+              @if (type === 'families' && access.platform) { <option value="NOT_REQUIRED">No exigible con el fundamento verificado</option> }
+            </select>
+          </label>
+          @if (result === 'VERIFIED') {
+            @if (type === 'families') {
+              <label>Quién autorizó
+                <select name="basis" required [(ngModel)]="basis">
+                  <option value="">Selecciona quién autorizó</option>
+                  <option value="PARENT_OR_GUARDIAN">Persona con patria potestad o tutela</option>
+                  <option value="CAPABLE_ADOLESCENT">Adolescente con capacidad verificada</option>
+                </select>
+              </label>
+            }
+            <label>Vigente hasta (hora local)
+              <input name="until" type="datetime-local" required [(ngModel)]="until" />
+            </label>
+          }
+          <label>Referencia interna de evidencia
+            <input name="reference" required pattern="[A-Z0-9][A-Z0-9_\-]{5,63}" maxlength="64" [(ngModel)]="reference" aria-describedby="reference-help" />
+          </label>
+          <p id="reference-help">Usa el código del expediente. Los documentos y datos de identidad se gestionan en el expediente autorizado.</p>
+          <button type="submit" [disabled]="reviewForm.invalid || busy()">Registrar revisión</button>
+        </fieldset>
+      </form>
+      @if (entries(); as rows) {
+        <section aria-labelledby="reviews-history">
+          <h2 id="reviews-history">Historial de revisiones</h2>
+          @if (!rows.length) { <p>Aún no hay revisiones en este ámbito.</p> }
+          <ul>
+            @for (entry of rows; track entry.id) {
+              <li>
+                {{ entry.recordedAt | date:'dd/MM/yyyy HH:mm:ss' }} · {{ results[entry.result] }} · {{ entry.evidenceReference }}
+                @if (entry.basis) { <span> · {{ bases[entry.basis] }}</span> }
+                @if (entry.validUntil) { <span> · Vigente hasta {{ entry.validUntil | date:'dd/MM/yyyy HH:mm' }}</span> }
+              </li>
+            }
+          </ul>
+          @if (rows.length && hasMore()) {
+            <button type="button" [disabled]="busy()" (click)="load(rows[rows.length - 1].id)">Ver revisiones anteriores</button>
+          }
+        </section>
+      }
+    } @else {
+      <p>Tu cuenta carece de facultades de revisión.</p>
+    }
+  }
+</main>

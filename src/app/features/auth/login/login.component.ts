@@ -8,7 +8,7 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { catchError, EMPTY } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
 import { AuthResponse } from '../../../shared/models';
@@ -16,7 +16,7 @@ import { AuthResponse } from '../../../shared/models';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   styleUrl: './login.component.scss',
   template: `
     <div class="login">
@@ -174,6 +174,7 @@ import { AuthResponse } from '../../../shared/models';
               }
             </button>
           </form>
+          <p><a routerLink="/acuerdos">Documentos de uso y privacidad</a></p>
 
           <div class="hint">
             <span class="hint__icon" aria-hidden="true">

@@ -1,0 +1,121 @@
+<main class="agreements-page">
+  <h1>Mis acuerdos y privacidad</h1>
+  <p><a routerLink="/acuerdos">Consultar los documentos públicos</a></p>
+  <p role="status">{{ status() }}</p>
+  @if (error()) { <p role="alert">{{ error() }}</p> }
+
+  @if (overview(); as state) {
+    @if (auth.requiresPasswordChange()) {
+      <p><a routerLink="/auth/change-password">Cambiar la contraseña temporal</a></p>
+    } @else if (!state.globalBlocked) {
+      <p><a routerLink="/dashboard">Ir al panel</a></p>
+    }
+    @if (state.globalBlocked) {
+      <p>Hay términos obligatorios pendientes. Puedes consultar los documentos y gestionar tu cuenta.</p>
+    }
+    @if (showReviews()) { <p><a routerLink="/mi-cuenta/acuerdos/revisiones">Revisar representación y autorizaciones</a></p> }
+    @if (familyStatus().length) {
+      <section aria-labelledby="school-authorization">
+        <h2 id="school-authorization">Autorizaciones para participar en el colegio</h2>
+        <ul>
+          @for (entry of familyStatus(); track entry.institutionId) {
+            <li>
+              {{ entry.institutionName }} · {{ familyLabels[entry.status] }}
+              @if (entry.validUntil) { <span> · Vigencia hasta {{ entry.validUntil | date:'dd/MM/yyyy HH:mm' }}</span> }
+            </li>
+          }
+        </ul>
+        <p>Si necesitas información, corregir una decisión o retirar una autorización, puedes acudir al colegio o usar el canal directo indicado en el aviso de privacidad.</p>
+      </section>
+    }
+    <section aria-labelledby="current-agreements">
+      <h2 id="current-agreements">Documentos aplicables</h2>
+      @if (!state.items.length) { <p>Por ahora no hay documentos aplicables publicados.</p> }
+      @for (item of state.items; track item.document.id + ':' + item.subjectId) {
+        <article>
+          <h3>{{ item.document.title }}</h3>
+          <p>{{ kinds[item.document.kind] }} · {{ item.document.institutionName ?? 'Cuenta de ChemicalLab' }} · Versión {{ item.document.version }}</p>
+          @if (item.decisionAuthority === 'GUARDIAN') {
+            <p>Representas a la cuenta {{ item.subjectId }} en este documento.</p>
+          } @else if (item.decisionAuthority === 'INSTITUTION') {
+            <p>Actúas en nombre de {{ item.document.institutionName }} para este documento.</p>
+          }
+          @if (item.currentAction; as action) {
+            <p>Decisión registrada · {{ actions[action] }}</p>
+          } @else if (item.document.required) {
+            <p>Aceptación obligatoria pendiente.</p>
+          }
+          @if (!item.decisionAuthority && !item.currentAction) {
+            @if (item.document.kind === 'INSTITUTIONAL') {
+              <p>Debe actuar una persona autorizada por este colegio.</p>
+            } @else {
+              <p>La decisión requiere verificar quién puede actuar por esta cuenta. En el caso de menores, el procedimiento depende de su capacidad y de la representación aplicable.</p>
+            }
+          }
+          <button type="button" [disabled]="saving()" [attr.aria-expanded]="selected() === item" (click)="open(item)">
+            {{ selected() === item ? 'Cerrar documento' : 'Leer documento' }}
+          </button>
+          @if (selected() === item) {
+            @if (text(); as loaded) {
+              <app-agreement-reading [text]="loaded" />
+              @if (item.decisionAuthority && (!item.currentAction || item.document.kind === 'CONSENT')) {
+                <fieldset [disabled]="saving()">
+                  <legend>Tu decisión</legend>
+                  @if (item.document.kind === 'CONSENT') {
+                    <p>Esta decisión es opcional y se aplica solamente a la finalidad descrita.</p>
+                    @if (item.currentAction === 'GRANT') {
+                      <button type="button" (click)="submit(item, 'WITHDRAW')">Retirar autorización</button>
+                    } @else {
+                      <label><input type="checkbox" [checked]="checked()" (change)="checked.set($any($event.target).checked)"> Autorizo el tratamiento para esta finalidad.</label>
+                      <div class="actions">
+                        <button type="button" [disabled]="!checked()" (click)="submit(item, 'GRANT')">Registrar autorización</button>
+                        @if (!item.currentAction) { <button type="button" (click)="submit(item, 'DECLINE')">Rechazar autorización</button> }
+                      </div>
+                    }
+                  } @else if (!item.currentAction && item.document.kind === 'NOTICE') {
+                    <label><input type="checkbox" [checked]="checked()" (change)="checked.set($any($event.target).checked)"> Dejo constancia de que recibí este aviso.</label>
+                    <div class="actions"><button type="button" [disabled]="!checked()" (click)="submit(item, 'ACKNOWLEDGE')">Registrar constancia</button></div>
+                  } @else if (!item.currentAction) {
+                    <label><input type="checkbox" [checked]="checked()" (change)="checked.set($any($event.target).checked)"> Acepto esta versión de {{ item.document.title }}.</label>
+                    <div class="actions"><button type="button" [disabled]="!checked()" (click)="submit(item, 'ACCEPT')">Registrar aceptación</button></div>
+                  }
+                </fieldset>
+              }
+            } @else {
+              <p role="status">Cargando el texto…</p>
+            }
+          }
+        </article>
+      }
+    </section>
+  } @else if (error()) {
+    <button type="button" (click)="loadOverview()">Volver a consultar</button>
+  } @else {
+    <p role="status">Cargando acuerdos…</p>
+  }
+
+  <section aria-labelledby="agreement-history">
+    <h2 id="agreement-history">Historial de decisiones</h2>
+    @if (historyError()) {
+      <p role="alert">No se pudo consultar el historial.</p>
+      <button type="button" (click)="loadHistory()">Volver a consultar el historial</button>
+    } @else if (!historyLoading() && !history().length) {
+      <p>Aún no hay decisiones registradas.</p>
+    }
+    @if (history().length) {
+      <ul>
+        @for (decision of history(); track decision.id) {
+          <li>
+            {{ decision.recordedAt | date:'dd/MM/yyyy HH:mm:ss' }} · {{ actions[decision.action] }} ·
+            {{ decision.document.institutionName ?? 'Cuenta de ChemicalLab' }} ·
+            <a [routerLink]="['/mi-cuenta/acuerdos', decision.document.id]">{{ decision.document.title }} (versión {{ decision.document.version }})</a>
+            @if (decision.subjectId !== null) { <span> · Cuenta {{ decision.subjectId }}</span> }
+          </li>
+        }
+      </ul>
+    }
+    @if (nextBefore(); as before) {
+      <button type="button" [disabled]="historyLoading()" (click)="loadHistory(before)">Ver decisiones anteriores</button>
+    }
+  </section>
+</main>
