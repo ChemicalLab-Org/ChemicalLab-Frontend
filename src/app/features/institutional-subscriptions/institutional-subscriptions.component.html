@@ -1,0 +1,95 @@
+<main>
+  <header>
+    <div>
+      <h1>Suscripción institucional</h1>
+      <a routerLink="/administracion-institucional">Administración institucional</a>
+    </div>
+    <app-session-controls />
+  </header>
+
+  @if (issue()) { <p role="alert" class="notice">{{ issue() }}</p> }
+  @if (!options() && !issue()) { <p role="status">Consultando instituciones…</p> }
+  @if (options(); as data) {
+    @if (!data.enabled) {
+      <p>La gestión de suscripciones está deshabilitada en esta instalación.</p>
+    } @else {
+      <p class="notice"><strong>Modo de pruebas.</strong> Usa únicamente cuentas y medios de pago de prueba.</p>
+      @if (data.schools.length) {
+        <label>Institución
+          <select [ngModel]="school" [disabled]="writing()" (ngModelChange)="select($event)">
+            <option [ngValue]="null">Selecciona una institución</option>
+            @for (item of data.schools; track item.id) { <option [ngValue]="item.id">{{ item.name }}</option> }
+          </select>
+        </label>
+        @if (data.nextAfter; as cursor) {
+          <button type="button" (click)="loadSchools(cursor)">Más instituciones</button>
+        }
+      } @else {
+        <p>Tu cuenta no tiene suscripciones institucionales disponibles.</p>
+      }
+    }
+  }
+  @if (loading()) { <p role="status">Consultando suscripción…</p> }
+  @if (overview(); as data) {
+    <section>
+      <h2>{{ data.name }}</h2>
+      <p>{{ data.plan.name }} · {{ data.plan.monthlyAmount | currency:data.plan.currency:'symbol':'1.2-2' }} al mes</p>
+      <dl>
+        <dt>Estado comercial</dt><dd>{{ labels[data.status] || data.status }}</dd>
+        <dt>Estado administrativo</dt><dd>{{ data.administrativeActive ? 'Habilitada' : 'Suspendida' }}</dd>
+        <dt>Usuarios activos</dt><dd>{{ data.activeUsers }} de {{ data.plan.activeUsers }}</dd>
+        <dt>Almacenamiento lógico</dt>
+        <dd>{{ data.usedBytes / 1000000 | number:'1.0-2' }} de {{ data.plan.storageBytes / 1000000 | number:'1.0-2' }} MB</dd>
+        <dt>Inicio de prueba</dt><dd>{{ (data.trialStart | date:'dd/MM/yyyy HH:mm':'-0500') || '—' }}</dd>
+        <dt>Vencimiento de prueba</dt><dd>{{ (data.trialEnd | date:'dd/MM/yyyy HH:mm':'-0500') || '—' }}</dd>
+        <dt>Inicio de vigencia pagada</dt><dd>{{ (data.paidFrom | date:'dd/MM/yyyy HH:mm':'-0500') || '—' }}</dd>
+        <dt>Fin de vigencia pagada</dt><dd>{{ (data.paidUntil | date:'dd/MM/yyyy HH:mm':'-0500') || '—' }}</dd>
+        <dt>Próximo cobro conocido</dt><dd>{{ (data.nextCharge | date:'dd/MM/yyyy HH:mm':'-0500') || '—' }}</dd>
+      </dl>
+      <div class="actions">
+        <button type="button" [disabled]="loading() || writing()" (click)="reload()">Actualizar estado</button>
+        @if (checkoutAddress(data); as checkout) {
+          <a [href]="checkout" referrerpolicy="no-referrer">Abrir checkout de prueba</a>
+        } @else if (data.canContract && data.status !== 'VERIFYING') {
+          <button type="button" [disabled]="writing()" (click)="confirmation = 'checkout'">Contratar</button>
+        }
+        @if (data.canCancel) {
+          <button type="button" [disabled]="writing()" (click)="confirmation = 'cancel'">Cancelar renovación</button>
+        }
+      </div>
+
+      @if (confirmation) {
+        <div class="notice" role="group" aria-label="Confirmación">
+          @if (confirmation === 'checkout') {
+            <p>Vas a preparar un checkout recurrente de prueba por
+              {{ data.plan.monthlyAmount | currency:data.plan.currency:'symbol':'1.2-2' }} al mes.
+              La autorización se completa en el checkout.</p>
+          } @else {
+            <p>Vas a solicitar el fin de la renovación. El período ya pagado conserva su vigencia.</p>
+          }
+          <div class="actions">
+            <button type="button" (click)="submit()">Confirmar</button>
+            <button type="button" (click)="confirmation = null">Volver</button>
+          </div>
+        </div>
+      }
+      @if (message()) { <p role="status">{{ message() }}</p> }
+    </section>
+
+    <section>
+      <h2>Operaciones</h2>
+      @if (operations().length) {
+        <ul>
+          @for (operation of operations(); track operation.id) {
+            <li>{{ operation.recordedAt | date:'dd/MM/yyyy HH:mm':'-0500' }} · {{ labels[operation.event] || operation.event }}
+              @if (operation.outcome) { · {{ labels[operation.outcome] || operation.outcome }} }
+            </li>
+          }
+        </ul>
+        @if (moreOperations()) { <button type="button" (click)="nextOperations()">Operaciones anteriores</button> }
+      } @else {
+        <p>Sin operaciones registradas.</p>
+      }
+    </section>
+  }
+</main>

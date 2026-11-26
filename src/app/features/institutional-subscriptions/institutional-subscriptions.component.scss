@@ -1,0 +1,13 @@
+main { max-width: 66rem; margin: 0 auto; padding: 1.5rem clamp(1rem, 4vw, 2.5rem); }
+header, .actions { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+header { justify-content: space-between; }
+h1 { margin: 0 0 .4rem; }
+section { border: 1px solid #bccace; border-radius: .75rem; padding: 1rem 1.25rem; margin-top: 1.25rem; }
+section h2 { margin-top: 0; }
+dl { display: grid; grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr); gap: .55rem 1rem; }
+dt { font-weight: 600; }
+dd { margin: 0; }
+label { display: inline-flex; align-items: center; gap: .65rem; margin-right: .75rem; }
+select, button { font: inherit; padding: .45rem .65rem; }
+.notice { border-left: .25rem solid #43717d; padding: .65rem .9rem; background: #ecf5f6; color: #12323d; margin-top: 1rem; }
+li + li { margin-top: .45rem; }

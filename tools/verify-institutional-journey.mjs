@@ -3,6 +3,7 @@ import { contentBrowserJourney } from './content-browser-journey.mjs';
 import { boardBrowserJourney } from './board-browser-journey.mjs';
 import { administrationBrowserJourney } from './administration-browser-journey.mjs';
 import { agreementsBrowserJourney } from './agreements-browser-journey.mjs';
+import { subscriptionsBrowserJourney } from './subscriptions-browser-journey.mjs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -11,12 +12,13 @@ import { connect } from 'node:net';
 import { extname, join, resolve, sep } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
 
-const [fixtureArgument, browser, distArgument = 'dist/chemical-lab-frontend/browser', mode] = process.argv.slice(2);
+const [fixtureArgument, browser, distArgument = 'dist/chemical-lab-frontend/browser', mode, psql, databasePort, mockPort] = process.argv.slice(2);
 assert(fixtureArgument && browser, 'Pass the disposable fixture directory and the Edge or Chrome executable.');
 const contents = mode === 'contents';
 const boards = mode === 'boards';
 const administration = mode === 'administration';
 const agreements = mode === 'agreements';
+const subscriptions = mode === 'subscriptions';
 const fixture = resolve(fixtureArgument);
 const dist = resolve(distArgument);
 const ready = JSON.parse(readFileSync(join(fixture, 'ready.json'), 'utf8'));
@@ -66,7 +68,7 @@ app.on('upgrade', (req, downstream, head) => {
     upstream.pipe(downstream).pipe(upstream);
   });
 });
-app.listen(0, '127.0.0.1');
+app.listen(subscriptions ? 4200 : 0, '127.0.0.1');
 await once(app, 'listening');
 const origin = 'http://127.0.0.1:' + app.address().port;
 const edge = spawn(browser, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
@@ -109,7 +111,7 @@ function observe(message) {
     else reply.resolve(message.result);
     return;
   }
-  if ((boards || administration) && message.method === 'Runtime.exceptionThrown') {
+  if ((boards || administration || subscriptions) && message.method === 'Runtime.exceptionThrown') {
     const details = message.params.exceptionDetails;
     browserErrors.push({ type: details.exception?.className, description: details.exception?.description ?? details.text });
   }
@@ -150,7 +152,7 @@ async function page() {
   const { sessionId } = await call('Target.attachToTarget', { targetId, flatten: true });
   await call('Network.enable', { maxPostDataSize: 1048576 }, sessionId);
   if (boards || administration) await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1040, deviceScaleFactor: 1, mobile: false }, sessionId);
-  if (boards || administration || agreements) await call('Runtime.enable', {}, sessionId);
+  if (boards || administration || agreements || subscriptions) await call('Runtime.enable', {}, sessionId);
   await call('Network.setBlockedURLs', { urls: ['https://*'] }, sessionId);
   await call('Performance.enable', {}, sessionId);
   const run = async (fn, ...args) => {
@@ -341,7 +343,11 @@ try {
   browserCpuBefore = (await call('SystemInfo.getProcessInfo')).processInfo;
   runnerBefore = process.resourceUsage();
   record('inicio');
-  if (agreements) {
+  if (subscriptions) {
+    transferComparison = await subscriptionsBrowserJourney({
+      representative: teacherA, ready, record, until, login, psql, databasePort, mockPort, origin,
+    });
+  } else if (agreements) {
     await agreementsBrowserJourney({ reviewer: teacherA, representative: teacherB, pupil, ready, record, until });
   } else if (administration) {
     const liveSockets = view => [...sockets.values()].filter(row => row.view === view.sessionId && !row.closed).length;
@@ -453,10 +459,10 @@ try {
       + runnerAfter.systemCPUTime - runnerBefore.systemCPUTime) / 1000,
     nodePeakRssKiB: runnerAfter.maxRSS,
   };
-  const metricsFile = agreements ? 'agreements-browser-metrics.json' : administration ? 'administration-browser-metrics.json'
+  const metricsFile = subscriptions ? 'subscriptions-browser-metrics.json' : agreements ? 'agreements-browser-metrics.json' : administration ? 'administration-browser-metrics.json'
     : boards ? 'board-browser-metrics.json' : contents ? 'content-browser-metrics.json' : 'browser-metrics.json';
   writeFileSync(join(fixture, metricsFile), JSON.stringify({ error, steps, resources, requests: rows, transferComparison,
-    ...(boards || administration || agreements ? { frames, sockets: [...sockets.values()], browserErrors } : {}) }, null, 2));
+    ...(boards || administration || agreements || subscriptions ? { frames, sockets: [...sockets.values()], browserErrors } : {}) }, null, 2));
   if (socket?.readyState === 1) {
     socket.close();
   }
