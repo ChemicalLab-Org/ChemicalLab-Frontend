@@ -6,6 +6,7 @@
         <a routerLink="/evaluaciones-institucionales">Evaluaciones</a>
         <a routerLink="/contenidos-institucionales">Contenidos</a>
         <a routerLink="/pizarras-institucionales">Pizarras</a>
+        <a routerLink="/suscripcion-institucional" [queryParams]="{ institucion: institution }">Suscripción</a>
       </nav>
     </div>
     @if (access()?.platform) {

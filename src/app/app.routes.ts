@@ -263,6 +263,12 @@ export const routes: Routes = [
   },
 
   {
+    path: 'suscripcion-institucional',
+    loadComponent: () => import('./features/institutional-subscriptions/institutional-subscriptions.component')
+      .then(m => m.InstitutionalSubscriptionsComponent),
+    canActivate: [authGuard, temporaryPasswordGuard],
+  },
+  {
     path: 'administracion-institucional',
     loadComponent: () => import('./features/institutional-administration/institutional-administration.component')
       .then(m => m.InstitutionalAdministrationComponent),
