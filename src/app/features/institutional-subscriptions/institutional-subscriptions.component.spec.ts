@@ -51,7 +51,10 @@ describe('institutional subscriptions', () => {
     });
     http.expectOne(second + '/operations').flush([]);
     fixture.detectChanges();
-    expect(page.querySelector('a[href*="mercadopago.com.pe"]')).not.toBeNull();
+    const checkoutLink = page.querySelector('a[href*="mercadopago.com.pe"]');
+    expect(checkoutLink).not.toBeNull();
+    expect(checkoutLink!.hasAttribute('target')).toBe(false);
+    expect(checkoutLink!.getAttribute('referrerpolicy')).toBe('no-referrer');
     view.confirmation = 'cancel';
     view.submit();
     const cancellation = http.expectOne(second + '/cancel-renewal');

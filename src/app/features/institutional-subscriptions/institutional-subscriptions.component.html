@@ -49,7 +49,7 @@
       <div class="actions">
         <button type="button" [disabled]="loading() || writing()" (click)="reload()">Actualizar estado</button>
         @if (checkoutAddress(data); as checkout) {
-          <a [href]="checkout" target="_blank" rel="noopener noreferrer">Abrir checkout de prueba ↗</a>
+          <a [href]="checkout" referrerpolicy="no-referrer">Abrir checkout de prueba</a>
         } @else if (data.canContract && data.status !== 'VERIFYING') {
           <button type="button" [disabled]="writing()" (click)="confirmation = 'checkout'">Contratar</button>
         }
