@@ -117,11 +117,11 @@ export async function agreementsBrowserJourney({ reviewer, representative, pupil
   const school = '.controls select:first-of-type';
   const classroom = '.controls label:nth-child(2) select';
   await pupil.select(school, 'Fictitious A');
-  await pupil.select(classroom, 'Fictitious');
+  await pupil.select(classroom, 'Fictitious · CHEM');
   await pupil.see('condición pendiente en este colegio');
   assert(await pupil.run(() => location.pathname === '/evaluaciones-institucionales'));
   await pupil.select(school, 'Fictitious B');
-  await pupil.select(classroom, 'Fictitious');
+  await pupil.select(classroom, 'Fictitious · CHEM');
   await pupil.see('No hay entregas disponibles para esta clase.');
   assert.equal(await pupil.has('condición pendiente en este colegio'), false);
   record('una autorización pendiente en A no expulsa de Angular ni impide seleccionar y consultar B');
