@@ -9,6 +9,9 @@ import { AuthService } from '../core/services/auth.service';
     @if (auth.isAuthenticated()) {
       <nav aria-label="Seguridad de la cuenta">
         <a routerLink="/mi-cuenta/acuerdos">Mis acuerdos y privacidad</a>
+        @if (auth.currentUser()?.role === 'ESTUDIANTE' && !auth.currentUser()?.institutionalInstallation && !auth.requiresPasswordChange()) {
+          <a routerLink="/evaluations/results">Mis resultados</a>
+        }
         @if (auth.currentUser()?.institutionalInstallation && !auth.requiresPasswordChange()) {
           <a routerLink="/administracion-institucional">Administración institucional</a>
         }

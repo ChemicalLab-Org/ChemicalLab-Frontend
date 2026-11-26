@@ -228,7 +228,7 @@ export const routes: Routes = [
       import('./features/student/evaluations/student-results.component').then(
         (m) => m.StudentResultsComponent
       ),
-    canActivate: [authGuard, temporaryPasswordGuard, agreementsGuard, roleGuard, examActiveGuard],
+    canActivate: [authGuard, temporaryPasswordGuard, roleGuard, examActiveGuard],
     data: { roles: ['ESTUDIANTE'] },
   },
   {

@@ -4,6 +4,8 @@
 
 El backend verifica el acceso. Angular consulta el estado al abrir rutas protegidas y vuelve al panel de acuerdos ante una condición pendiente en HTTP. Un colegio con una autorización familiar pendiente queda identificado en la cuenta. Cuando el servidor reconoce facultades de revisión, **Revisar representación y autorizaciones** muestra el historial y el formulario correspondiente.
 
+Las cuentas de estudiante que usan los resultados individuales previos a la instalación institucional pueden abrir **Mis resultados** desde los controles de sesión. Se aplican las reglas existentes de visibilidad académica y contraseña temporal.
+
 En una copia local, ejecuta `npm ci` y `npm run build:colegio`. Usa el iniciador de PostgreSQL desechable del backend con `-Administration -Agreements`. El recorrido de navegador requiere un conjunto ficticio recién iniciado.
 
 ```text
