@@ -19,6 +19,7 @@ const boards = mode === 'boards';
 const administration = mode === 'administration';
 const agreements = mode === 'agreements';
 const subscriptions = mode === 'subscriptions';
+const support = mode === 'support';
 const fixture = resolve(fixtureArgument);
 const dist = resolve(distArgument);
 const ready = JSON.parse(readFileSync(join(fixture, 'ready.json'), 'utf8'));
@@ -111,7 +112,7 @@ function observe(message) {
     else reply.resolve(message.result);
     return;
   }
-  if ((boards || administration || subscriptions) && message.method === 'Runtime.exceptionThrown') {
+  if ((boards || administration || subscriptions || support) && message.method === 'Runtime.exceptionThrown') {
     const details = message.params.exceptionDetails;
     browserErrors.push({ type: details.exception?.className, description: details.exception?.description ?? details.text });
   }
@@ -152,7 +153,7 @@ async function page() {
   const { sessionId } = await call('Target.attachToTarget', { targetId, flatten: true });
   await call('Network.enable', { maxPostDataSize: 1048576 }, sessionId);
   if (boards || administration) await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1040, deviceScaleFactor: 1, mobile: false }, sessionId);
-  if (boards || administration || agreements || subscriptions) await call('Runtime.enable', {}, sessionId);
+  if (boards || administration || agreements || subscriptions || support) await call('Runtime.enable', {}, sessionId);
   await call('Network.setBlockedURLs', { urls: ['https://*'] }, sessionId);
   await call('Performance.enable', {}, sessionId);
   const run = async (fn, ...args) => {
@@ -263,6 +264,7 @@ async function login(view, username) {
     return true;
   }));
   await until(() => view.run(() => location.pathname.endsWith('-dashboard')), 'dashboard');
+  if (support) return;
   await view.nav(boards ? (username === ready.student ? '/student/whiteboards' : '/teacher/whiteboards') :
     contents ? (username === ready.student ? '/concepts' : '/teacher/concepts') : '/evaluaciones-institucionales');
   await view.see(boards ? 'Pizarras institucionales' : contents ? 'Contenidos institucionales' : 'Evaluaciones institucionales');
@@ -315,6 +317,53 @@ function record(step) {
   console.log(step);
 }
 
+async function reviewSupport(guest, teacher) {
+  await call('Emulation.setDeviceMetricsOverride', {
+    width: 375, height: 812, deviceScaleFactor: 1, mobile: false,
+  }, guest.sessionId);
+  await call('Emulation.setCPUThrottlingRate', { rate: 4 }, guest.sessionId);
+  await guest.nav('/auth/login');
+  const storage = view => view.run(() => ({
+    local: Object.keys(localStorage).sort(), session: Object.keys(sessionStorage).sort(), cookies: document.cookie,
+  }));
+  const selector = 'a[href="/soporte"]';
+  assert(await until(() => guest.run(selector => {
+    const link = document.querySelector(selector);
+    if (!link?.getClientRects().length) return false;
+    link.focus();
+    return document.activeElement === link;
+  }, selector), 'visible support link accepts focus'));
+  const before = await storage(guest);
+  const start = performance.now();
+  const requestStart = requests.size;
+  for (const type of ['keyDown', 'keyUp']) {
+    await call('Input.dispatchKeyEvent', { type, key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 }, guest.sessionId);
+  }
+  await until(() => guest.run(() => {
+    const heading = document.querySelector('main h1');
+    return heading?.textContent.trim() === 'Ayuda y soporte' && document.activeElement === heading;
+  }), 'support heading receives keyboard focus');
+  const headingMs = performance.now() - start;
+  assert(await guest.run(() => {
+    const contact = document.querySelector('main a[href="mailto:carlosjun.45@gmail.com"]');
+    return contact?.textContent.trim() === 'carlosjun.45@gmail.com';
+  }));
+  assert(await guest.run(() => document.documentElement.scrollWidth <= innerWidth && innerWidth === 375));
+  assert.deepEqual(await storage(guest), before);
+  const helpRequests = [...requests.values()].slice(requestStart);
+  assert(!helpRequests.some(row => row.path.startsWith('/api/')));
+  assert(helpRequests.some(row => row.path.endsWith('.js') && row.status === 200));
+  record('soporte por teclado a 375 px y CPU emulada 4×, sin llamadas API ni cambios de almacenamiento');
+  const guestHeapBytes = (await guest.performance()).metrics.find(row => row.name === 'JSHeapUsedSize').value;
+  await login(teacher, ready.teacherA);
+  await teacher.press('.sidebar ' + selector);
+  await teacher.see('Usa el laboratorio con menos descargas');
+  await teacher.press('main a[href="/dashboard"]');
+  await until(() => teacher.run(() => location.pathname.endsWith('-dashboard')), 'return to dashboard');
+  record('soporte desde la barra lateral y regreso al laboratorio con una sesión ficticia');
+  return { headingMs, guestHeapBytes, cssViewportWidth: 375, cpuThrottlingRate: 4, helpRequests };
+}
+
 let error;
 let browserVersion;
 let browserCpuBefore;
@@ -343,7 +392,9 @@ try {
   browserCpuBefore = (await call('SystemInfo.getProcessInfo')).processInfo;
   runnerBefore = process.resourceUsage();
   record('inicio');
-  if (subscriptions) {
+  if (support) {
+    transferComparison = await reviewSupport(teacherA, teacherB);
+  } else if (subscriptions) {
     transferComparison = await subscriptionsBrowserJourney({
       representative: teacherA, ready, record, until, login, psql, databasePort, mockPort, origin,
     });
@@ -459,10 +510,10 @@ try {
       + runnerAfter.systemCPUTime - runnerBefore.systemCPUTime) / 1000,
     nodePeakRssKiB: runnerAfter.maxRSS,
   };
-  const metricsFile = subscriptions ? 'subscriptions-browser-metrics.json' : agreements ? 'agreements-browser-metrics.json' : administration ? 'administration-browser-metrics.json'
+  const metricsFile = support ? 'support-browser-metrics.json' : subscriptions ? 'subscriptions-browser-metrics.json' : agreements ? 'agreements-browser-metrics.json' : administration ? 'administration-browser-metrics.json'
     : boards ? 'board-browser-metrics.json' : contents ? 'content-browser-metrics.json' : 'browser-metrics.json';
   writeFileSync(join(fixture, metricsFile), JSON.stringify({ error, steps, resources, requests: rows, transferComparison,
-    ...(boards || administration || agreements || subscriptions ? { frames, sockets: [...sockets.values()], browserErrors } : {}) }, null, 2));
+    ...(boards || administration || agreements || subscriptions || support ? { frames, sockets: [...sockets.values()], browserErrors } : {}) }, null, 2));
   if (socket?.readyState === 1) {
     socket.close();
   }

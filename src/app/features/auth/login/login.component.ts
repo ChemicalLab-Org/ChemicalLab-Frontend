@@ -69,7 +69,6 @@ import { AuthResponse } from '../../../shared/models';
         <footer class="brand-footer">
           <span>© 2026 ChemicalLab</span>
           <span class="brand-footer__links">
-            <a href="#">Soporte</a>
             <a href="#">Privacidad</a>
           </span>
         </footer>
@@ -174,6 +173,7 @@ import { AuthResponse } from '../../../shared/models';
               }
             </button>
           </form>
+          <p><a routerLink="/soporte">Ayuda y soporte</a></p>
           <p><a routerLink="/acuerdos">Documentos de uso y privacidad</a></p>
 
           <div class="hint">

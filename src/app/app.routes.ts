@@ -34,6 +34,13 @@ export const routes: Routes = [
   { path: '', redirectTo: 'auth/login', pathMatch: 'full' },
 
   { path: 'auth/login', component: LoginComponent },
+  {
+    path: 'soporte',
+    title: 'Ayuda y soporte | ChemicalLab',
+    canActivate: [examActiveGuard],
+    loadComponent: () => import('./features/support/support.component')
+      .then((module) => module.SupportComponent),
+  },
   { path: 'acuerdos', loadComponent: agreementDocuments },
   { path: 'acuerdos/:id', loadComponent: agreementDocuments },
   {

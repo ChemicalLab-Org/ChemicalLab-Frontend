@@ -1,6 +1,8 @@
 import { Component, EventEmitter, Input, Output, computed, inject, signal } from '@angular/core';
-import { NavigationEnd, Router } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs/operators';
+import { ExamSessionService } from '../../../core/services/exam-session.service';
 
 export interface SidebarNavItem {
   readonly label: string;
@@ -18,6 +20,7 @@ export interface SidebarNavItem {
 @Component({
   selector: 'app-sidebar',
   standalone: true,
+  imports: [RouterLink],
   styleUrls: ['./sidebar.component.scss'],
   template: `
     <aside class="sidebar">
@@ -54,6 +57,12 @@ export interface SidebarNavItem {
 
       <div class="sidebar__footer">
         <div class="sidebar__divider"></div>
+        @if (!examActive()) {
+          <a class="sidebar__nav-item" routerLink="/soporte">
+            <span class="material-icons sidebar__nav-icon" aria-hidden="true">help_outline</span>
+            <span class="sidebar__nav-label">Ayuda y soporte</span>
+          </a>
+        }
 
         <div class="sidebar__user">
           <div class="sidebar__avatar">{{ userInitials }}</div>
@@ -83,12 +92,13 @@ export class SidebarComponent {
 
   private readonly router = inject(Router);
   private readonly currentUrl = signal<string>(this.router.url);
+  protected readonly examActive = inject(ExamSessionService).active;
 
   readonly activeUrl = computed(() => this.currentUrl());
 
   constructor() {
     this.router.events
-      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+      .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd), takeUntilDestroyed())
       .subscribe((event) => this.currentUrl.set(event.urlAfterRedirects));
   }
 
