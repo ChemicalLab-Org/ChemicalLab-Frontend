@@ -14,8 +14,9 @@ export class SessionCleanupService {
   private readonly tasks = new Set<() => void>();
 
   /** Registra una tarea de limpieza (idempotente por identidad de la función). */
-  register(task: () => void): void {
+  register(task: () => void): () => void {
     this.tasks.add(task);
+    return () => this.tasks.delete(task);
   }
 
   /** Ejecuta todas las tareas registradas. Un fallo aislado no impide las demás. */

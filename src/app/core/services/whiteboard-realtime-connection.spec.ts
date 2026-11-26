@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { TeacherWhiteboardRealtimeService } from './teacher-whiteboard-realtime.service';
 import { StudentWhiteboardRealtimeService } from './student-whiteboard-realtime.service';
 import { environment } from '../../../environments/environment';
+import { WhiteboardViewContext } from './whiteboard-view-context';
 
 const transport = vi.hoisted(() => ({ clients: [] as any[] }));
 vi.mock('@stomp/stompjs', () => ({
@@ -115,5 +116,50 @@ describe.each([TeacherWhiteboardRealtimeService, StudentWhiteboardRealtimeServic
     const client = await connect(); client.onStompError({});
     http.expectOne(`${environment.apiUrl}/auth/me`).flush({}, { status: 503, statusText: 'Unavailable' });
     expect(auth.getToken()).toBe('first-token'); expect(service.failure()).toBe('network');
+  });
+});
+
+describe('Transporte institucional de pizarras', () => {
+  it('fija el destino y cancela operaciones y callbacks de la pizarra anterior', async () => {
+    transport.clients.length = 0;
+    sessionStorage.setItem('auth_token', 'token-ficticio');
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), WhiteboardViewContext],
+    });
+    const context = TestBed.inject(WhiteboardViewContext);
+    context.select({ institutionId: 2, classId: 9 });
+    const service = TestBed.inject(StudentWhiteboardRealtimeService);
+    const resync = vi.fn(), draws = vi.fn(), rejected = vi.fn();
+    service.resyncRequests.subscribe(resync);
+    service.drawEvents.subscribe(draws);
+    service.rejectedOperations.subscribe(rejected);
+    vi.useFakeTimers();
+    try {
+      service.connect(19);
+      const client = transport.clients.at(-1);
+      const base = '/institutions/2/classes/9/whiteboards/v1/19';
+      const queue = '/user/queue/whiteboard-errors';
+      await client.beforeConnect();
+      expect(client.connectHeaders['board-scope']).toBe('2/9/19/student');
+      client.onConnect();
+      expect([...client.callbacks.keys()]).toEqual([queue, '/topic' + base]);
+      expect(client.publish).toHaveBeenCalledExactlyOnceWith({ destination: '/app' + base + '/ready', body: '' });
+      expect(resync).not.toHaveBeenCalled();
+      client.callbacks.get(queue)({ body: '{"ready":true}' });
+      expect(resync).toHaveBeenCalledExactlyOnceWith('connected');
+      service.sendDraw({ clientEventId: 'local', eventType: 'SHAPE', tool: 'RECTANGLE' });
+      expect(client.publish.mock.lastCall[0].destination).toBe('/app' + base + '/draw');
+      service.disconnect();
+      expect(client.deactivate).toHaveBeenCalledExactlyOnceWith({ force: true });
+      client.callbacks.get('/topic' + base)({ body: '{"sessionId":19,"eventType":"SHAPE","clientEventId":"local"}' });
+      vi.advanceTimersByTime(12000);
+      expect(draws).not.toHaveBeenCalled();
+      expect(rejected).not.toHaveBeenCalled();
+      expect(service.connectionState()).toBe('disconnected');
+    } finally {
+      service.disconnect();
+      vi.useRealTimers();
+      sessionStorage.clear();
+    }
   });
 });

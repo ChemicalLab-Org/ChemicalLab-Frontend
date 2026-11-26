@@ -3,4 +3,6 @@ import { WhiteboardRealtimeConnection } from './whiteboard-realtime-connection';
 export type { WhiteboardConnectionState } from './whiteboard-realtime-connection';
 
 @Injectable({ providedIn: 'root' })
-export class StudentWhiteboardRealtimeService extends WhiteboardRealtimeConnection {}
+export class StudentWhiteboardRealtimeService extends WhiteboardRealtimeConnection {
+  protected override readonly role = 'student';
+}

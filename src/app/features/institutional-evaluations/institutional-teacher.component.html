@@ -1,0 +1,156 @@
+<h2>{{ scope().className }} · Docente</h2>
+<div class="actions">
+  <button type="button" [aria-pressed]="tab() === 'revisions'" [disabled]="busy()"
+          (click)="switchTab('revisions')">Evaluaciones</button>
+  <button type="button" [aria-pressed]="tab() === 'attempts'" [disabled]="busy()"
+          (click)="switchTab('attempts')">Revisión docente</button>
+</div>
+@if (error()) { <p role="alert">{{ error() }}</p> }
+@if (message()) { <p role="status">{{ message() }}</p> }
+@if (busy()) { <p role="status">Procesando…</p> }
+@if (retry(); as repeat) { <button type="button" (click)="repeat()">Reintentar</button> }
+
+@if (tab() === 'revisions') {
+  <form #createForm="ngForm" class="controls" (ngSubmit)="create()">
+    <label>Título de la evaluación
+      <input name="newTitle" [(ngModel)]="newTitle" required maxlength="150">
+    </label>
+    <label>Intentos máximos
+      <input name="newMaximum" type="number" [(ngModel)]="newMaximum" required min="1" max="10" step="1">
+    </label>
+    <button type="submit" [disabled]="busy() || createForm.invalid || !newTitle.trim()">Crear borrador</button>
+  </form>
+  @if (revisions(); as page) {
+    @for (row of page.items; track row.revisionId) {
+      <article>
+        <strong>{{ row.title }}</strong> · Revisión {{ row.revisionNumber }}
+        · {{ row.status === 'DRAFT' ? 'Borrador' : 'Publicada' }}
+        <div class="actions">
+          @if (row.canEdit) { <button type="button" [disabled]="busy()" (click)="openDraft(row)">Editar</button> }
+          @if (row.canPublish) { <button type="button" [disabled]="busy()" (click)="publish(row)">Publicar</button> }
+          @if (row.canAssign) { <button type="button" [disabled]="busy()" (click)="openAssignment(row)">Asignar</button> }
+        </div>
+      </article>
+    } @empty { <p>No hay revisiones disponibles para esta clase.</p> }
+    @if (page.nextAfter !== null) {
+      <button type="button" [disabled]="busy()" (click)="loadRevisions(page.nextAfter)">Siguiente página</button>
+    }
+  }
+  @if (draft(); as current) {
+    <form #draftForm="ngForm" (ngSubmit)="saveDraft(current)">
+      <fieldset [disabled]="busy()">
+        <legend>Editar borrador</legend>
+        <label>Título del borrador
+          <input name="title" [(ngModel)]="current.payload.resource.title" required maxlength="150">
+        </label>
+        @for (question of current.payload.questions; track question.id) {
+          <fieldset>
+            <legend>Pregunta {{ $index + 1 }}</legend>
+            <label>Enunciado
+              <textarea [name]="'question' + question.id" [(ngModel)]="question.question_text" required maxlength="5000"></textarea>
+            </label>
+            <label>Puntos
+              <input type="number" [name]="'points' + question.id" [(ngModel)]="question.points" required min="1" max="100000" step="1">
+            </label>
+            @if (question.question_type === 'OPEN_TEXT') {
+              <label>Criterio de corrección
+                <textarea [name]="'criterion' + question.id" [(ngModel)]="question.expected_answer" maxlength="3000"></textarea>
+              </label>
+            } @else {
+              @for (option of options(current, question.id); track option.id) {
+                <div class="controls">
+                  <label>Alternativa {{ $index + 1 }}
+                    <input [name]="'option' + option.id" [(ngModel)]="option.option_text" required maxlength="2000">
+                  </label>
+                  <label>Correcta
+                    <input type="radio" [name]="'correct' + question.id" [checked]="option.correct"
+                           (change)="markCorrect(current, question.id, option.id)">
+                  </label>
+                  <button type="button" [disabled]="options(current, question.id).length <= 2"
+                          (click)="removeOption(current, question.id, option.id)">Quitar alternativa</button>
+                </div>
+              }
+              <button type="button" [disabled]="options(current, question.id).length >= 10"
+                      (click)="addOption(current, question.id)">Añadir alternativa</button>
+            }
+            <button type="button" (click)="removeQuestion(current, question.id)">Quitar pregunta</button>
+          </fieldset>
+        }
+        <div class="actions">
+          <button type="button" [disabled]="current.payload.questions.length >= 200"
+                  (click)="addQuestion(current, 'OPEN_TEXT')">Añadir pregunta abierta</button>
+          <button type="button" [disabled]="current.payload.questions.length >= 200"
+                  (click)="addQuestion(current, 'MULTIPLE_CHOICE')">Añadir pregunta de alternativas</button>
+          <button type="submit" [disabled]="draftForm.invalid">Guardar borrador</button>
+        </div>
+      </fieldset>
+    </form>
+  }
+  @if (assignment(); as current) {
+    <form #assignmentForm="ngForm" (ngSubmit)="assign(current)">
+      <fieldset [disabled]="busy()">
+        <legend>Asignar {{ current.title }}</legend>
+        <div class="controls">
+          <label>Inicio (hora local)<input type="datetime-local" name="startsAt" [(ngModel)]="startsAt" required></label>
+          <label>Vencimiento (hora local)<input type="datetime-local" name="dueAt" [(ngModel)]="dueAt" required></label>
+        </div>
+        @if (enrollments(); as page) {
+          @for (entry of page.items; track entry.enrollmentId) {
+            <div>
+              <input type="checkbox" [id]="'enrollment-' + entry.enrollmentId"
+                     [disabled]="recipients().size >= 100 && !recipients().has(entry.enrollmentId)"
+                     [checked]="recipients().has(entry.enrollmentId)" #recipient
+                     (change)="selectRecipient(entry.enrollmentId, recipient.checked)">
+              <label style="display:inline" [for]="'enrollment-' + entry.enrollmentId">{{ entry.student }}</label>
+            </div>
+          } @empty { <p>No hay matrículas vigentes en esta clase.</p> }
+          @if (page.nextAfter !== null) {
+            <button type="button" (click)="loadEnrollments(page.nextAfter)">Más matrículas</button>
+          }
+        }
+        <p>{{ recipients().size }} matrículas seleccionadas.</p>
+        <button type="submit" [disabled]="assignmentForm.invalid || !recipients().size">Confirmar asignación</button>
+      </fieldset>
+    </form>
+  }
+} @else {
+  @if (attempts(); as page) {
+    @for (row of page.items; track row.attemptId) {
+      <article>
+        <strong>{{ row.title }}</strong> · {{ row.student }} · Intento {{ row.attemptNumber }}
+        <button type="button" [disabled]="busy()" (click)="openReview(row)">Abrir revisión</button>
+      </article>
+    } @empty { <p>No hay intentos enviados para esta clase.</p> }
+    @if (page.nextAfter !== null) {
+      <button type="button" [disabled]="busy()" (click)="loadAttempts(page.nextAfter)">Siguiente página</button>
+    }
+  }
+  @if (selectedAttempt(); as row) {
+    @if (review(); as detail) {
+      <h3>Revisión de {{ row.student }}</h3>
+      @for (answer of detail.openAnswers; track answer.answerId) {
+        <form #gradeForm="ngForm" (ngSubmit)="grade(row, answer.answerId)">
+          <fieldset [disabled]="busy() || detail.gradeClosed">
+            <legend>{{ answer.questionText }}</legend>
+            @if (answer.expectedAnswer) { <p>Criterio: {{ answer.expectedAnswer }}</p> }
+            <p>Respuesta: {{ answer.answerText ?? 'Sin respuesta' }}</p>
+            <label>Puntos de 0 a {{ answer.maxPoints }}
+              <input type="number" name="score" required min="0" [max]="answer.maxPoints" step="1"
+                     [(ngModel)]="gradeFields[answer.answerId].score">
+            </label>
+            <label>Comentario
+              <textarea name="feedback" maxlength="2000" [(ngModel)]="gradeFields[answer.answerId].feedback"></textarea>
+            </label>
+            <button type="submit" [disabled]="gradeForm.invalid">Guardar calificación</button>
+          </fieldset>
+        </form>
+      }
+      @if (detail.finalScore !== null) { <p>Nota: {{ detail.finalScore }} / 20</p> }
+      @if (detail.gradeClosed) {
+        <p role="status">Calificación cerrada.</p>
+      } @else if (detail.status === 'GRADED') {
+        <button type="button" [disabled]="busy()" (click)="closeGrade(row)">Cerrar calificación</button>
+      }
+    }
+  }
+}

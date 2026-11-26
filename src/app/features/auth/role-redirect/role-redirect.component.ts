@@ -13,6 +13,14 @@ export class RoleRedirectComponent implements OnInit {
 
   ngOnInit(): void {
     const role = this.authService.currentRole();
+    if (this.authService.requiresPasswordChange()) {
+      void this.router.navigateByUrl('/auth/change-password');
+      return;
+    }
+    if (role === 'INSTITUCIONAL' || (role === 'ADMINISTRADOR' && this.authService.currentUser()?.institutionalInstallation)) {
+      void this.router.navigateByUrl('/administracion-institucional');
+      return;
+    }
     switch (role) {
       case 'ESTUDIANTE':
         this.router.navigate(['/student-dashboard']);

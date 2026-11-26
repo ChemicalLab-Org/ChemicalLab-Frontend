@@ -1,12 +1,16 @@
 import { fileDownloadName } from '../../../shared/utils/safe-file.util';
 import {
   Component,
+  DestroyRef,
   OnDestroy,
   OnInit,
   computed,
   inject,
+  input,
+  output,
   signal,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -33,6 +37,7 @@ import { ApiError, WhiteboardStudentSessionResponse } from '../../../shared/mode
   styleUrls: ['./student-whiteboard-record.component.scss'],
   template: `
     <div class="layout">
+      @if (!embeddedBoardId()) {
       <app-sidebar
         [navItems]="navItems"
         [userName]="userName()"
@@ -40,6 +45,7 @@ import { ApiError, WhiteboardStudentSessionResponse } from '../../../shared/mode
         [userInitials]="userInitials()"
         (onLogout)="handleLogout()"
       />
+      }
 
       <main class="main">
         <button type="button" class="back-link" (click)="goToList()">
@@ -86,7 +92,7 @@ import { ApiError, WhiteboardStudentSessionResponse } from '../../../shared/mode
                 <h2 class="card-title">Datos de la sesión</h2>
                 <dl class="record-meta__list">
                   <div><dt>Docente</dt><dd>{{ s.teacherName }}</dd></div>
-                  <div><dt>Grado / sección</dt><dd>{{ s.grade }}° · {{ s.section }}</dd></div>
+                  <div><dt>Grado / sección</dt><dd>{{ s.grade ? s.grade + '° · ' : '' }}{{ s.section }}</dd></div>
                   <div><dt>Estado</dt><dd>Finalizada</dd></div>
                   <div><dt>Fecha de cierre</dt><dd>{{ formatDate(s.closedAt) }}</dd></div>
                   @if (s.description) {
@@ -133,10 +139,14 @@ export class StudentWhiteboardRecordComponent implements OnInit, OnDestroy {
   private readonly whiteboardService = inject(StudentWhiteboardService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly navItems: readonly SidebarNavItem[] = STUDENT_NAV_ITEMS;
   readonly userRole = 'Estudiante';
 
+  readonly embeddedBoardId = input<number>();
+  readonly backToScope = output<void>();
+  readonly openLive = output<void>();
   private sessionId = 0;
   private snapshotType = 'image/png';
   private snapshotObjectUrl: string | null = null;
@@ -154,7 +164,7 @@ export class StudentWhiteboardRecordComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const idParam = this.route.snapshot.paramMap.get('id');
-    const id = idParam !== null ? Number(idParam) : NaN;
+    const id = this.embeddedBoardId() ?? (idParam !== null ? Number(idParam) : NaN);
     if (Number.isNaN(id)) {
       this.loadError.set('Sesión no válida.');
       this.loading.set(false);
@@ -171,7 +181,7 @@ export class StudentWhiteboardRecordComponent implements OnInit, OnDestroy {
   reload(): void {
     this.loading.set(true);
     this.loadError.set(null);
-    this.whiteboardService.getSessionDetail(this.sessionId).subscribe({
+    this.whiteboardService.getSessionDetail(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (detail) => {
         this.session.set(detail);
         this.loading.set(false);
@@ -189,7 +199,7 @@ export class StudentWhiteboardRecordComponent implements OnInit, OnDestroy {
   private loadSnapshot(): void {
     this.snapshotLoading.set(true);
     this.snapshotError.set(null);
-    this.whiteboardService.getSnapshot(this.sessionId).subscribe({
+    this.whiteboardService.getSnapshot(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (blob) => {
         this.revokeSnapshotUrl();
         this.snapshotType = blob.type;
@@ -225,11 +235,13 @@ export class StudentWhiteboardRecordComponent implements OnInit, OnDestroy {
   }
 
   goToList(): void {
-    void this.router.navigate(['/student/whiteboards']);
+    if (this.embeddedBoardId()) this.backToScope.emit();
+    else void this.router.navigate(['/student/whiteboards']);
   }
 
   goToLive(): void {
-    void this.router.navigate(['/student/whiteboards', this.sessionId]);
+    if (this.embeddedBoardId()) this.openLive.emit();
+    else void this.router.navigate(['/student/whiteboards', this.sessionId]);
   }
 
   handleLogout(): void {

@@ -8,6 +8,8 @@ import {
   computed,
   effect,
   inject,
+  input,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -138,7 +140,7 @@ const UNDO_STACK_LIMIT = 80;
   styleUrls: ['./teacher-whiteboard-editor.component.scss'],
   template: `
     <div class="layout" [class.layout--fullscreen]="fullscreen()">
-      @if (!fullscreen()) {
+      @if (!fullscreen() && !embeddedBoardId()) {
         <app-sidebar
           [navItems]="navItems"
           [userName]="userName()"
@@ -177,7 +179,7 @@ const UNDO_STACK_LIMIT = 80;
                     <span class="status-dot"></span>{{ statusLabel(s.status) }}
                   </span>
                   <span class="meta-chip">
-                    <span class="material-icons">school</span>{{ s.grade }}° · {{ s.section }}
+                    <span class="material-icons">school</span>{{ s.grade ? s.grade + '° · ' : '' }}{{ s.section }}
                   </span>
                   @if (!isClosed()) {
                     <span class="conn" [class]="connClass()">
@@ -203,7 +205,7 @@ const UNDO_STACK_LIMIT = 80;
                 <h2 class="card-title">Registro de la sesión</h2>
                 <dl class="closed-meta__list">
                   <div><dt>Estado</dt><dd>Finalizada</dd></div>
-                  <div><dt>Grado / sección</dt><dd>{{ s.grade }}° · {{ s.section }}</dd></div>
+                  <div><dt>Grado / sección</dt><dd>{{ s.grade ? s.grade + '° · ' : '' }}{{ s.section }}</dd></div>
                   <div><dt>Docente</dt><dd>{{ s.teacherName }}</dd></div>
                   <div><dt>Creada</dt><dd>{{ formatDate(s.createdAt) }}</dd></div>
                   <div><dt>Finalizada</dt><dd>{{ formatDate(s.closedAt) }}</dd></div>
@@ -891,6 +893,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private readonly wrapRef = viewChild<ElementRef<HTMLDivElement>>('canvasWrap');
   private readonly textEditorRef = viewChild<ElementRef<HTMLDivElement>>('textEditor');
 
+  readonly embeddedBoardId = input<number>();
+  readonly backToScope = output<void>();
   private sessionId = 0;
   private ctx: CanvasRenderingContext2D | null = null;
   private drawing = false;
@@ -914,6 +918,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private queuedRemoteDrawEvents: WhiteboardDrawEventResponse[] = [];
   private remoteQueueOverflow = false;
   /** Temporizador de espera de la conexión en vivo; si expira sin conectar, se marca el fallo. */
+  private bannerTimer: ReturnType<typeof setTimeout> | undefined;
   private connectionTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * `true` cuando la conexión en vivo no se estableció dentro del tiempo de espera. El contenido
@@ -1070,7 +1075,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const idParam = this.route.snapshot.paramMap.get('id');
-    const id = idParam !== null ? Number(idParam) : NaN;
+    const id = this.embeddedBoardId() ?? (idParam !== null ? Number(idParam) : NaN);
     if (Number.isNaN(id)) {
       this.loadError.set('Sesión no válida.');
       this.loading.set(false);
@@ -1098,12 +1103,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         this.boardStateReady.set(false);
         this.clearUndoHistory();
+        if (this.embeddedBoardId()) {
+          this.session.set(null);
+          this.reconciliation.discardPending();
+          this.queuedRemoteDrawEvents = [];
+        }
         this.reload();
       });
     this.reload();
   }
 
   ngOnDestroy(): void {
+    clearTimeout(this.bannerTimer);
+    this.drawing = false;
+    this.currentStroke = [];
+    this.cancelShapePreview();
+    this.reconciliation.discardPending();
+    this.queuedRemoteDrawEvents = [];
     this.clearConnectionWatch();
     this.realtime.disconnect();
     this.revokeSnapshotUrl();
@@ -1112,7 +1128,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   reload(): void {
     this.loading.set(true);
     this.loadError.set(null);
-    this.whiteboardService.getSessionDetail(this.sessionId).subscribe({
+    this.whiteboardService.getSessionDetail(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (detail) => {
         this.session.set(detail.session);
         this.participants.set([...detail.participants]);
@@ -1132,9 +1148,10 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
           // Tras renderizar el lienzo, centra la vista del workspace en el visor y restaura el
           // estado guardado (trazos + textos) para no perder la pizarra al recargar.
           requestAnimationFrame(() => {
+            if (this.destroyRef.destroyed) return;
             this.ensureCanvas();
             this.centerPan();
-            this.loadBoardState();
+            if (!this.embeddedBoardId()) this.loadBoardState();
           });
         }
       },
@@ -2333,7 +2350,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   pause(): void {
     this.busy.set(true);
-    this.whiteboardService.pauseSession(this.sessionId).subscribe({
+    this.whiteboardService.pauseSession(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (updated) => {
         this.session.set(updated);
         this.cancelText();
@@ -2348,7 +2365,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   resume(): void {
     this.busy.set(true);
-    this.whiteboardService.resumeSession(this.sessionId).subscribe({
+    this.whiteboardService.resumeSession(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (updated) => {
         this.session.set(updated);
         this.busy.set(false);
@@ -2366,17 +2383,23 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   confirmFinalize(): void {
+    if (this.embeddedBoardId() && (!this.boardStateReady() || this.reconciliation.pendingCount !== 0)) {
+      this.finalizeError.set('Espera a que se confirme el estado del lienzo.');
+      return;
+    }
+    const revision = this.appliedRevision;
     this.busy.set(true);
     this.finalizeError.set(null);
     this.exportSnapshot((blob) => {
+      if (this.destroyRef.destroyed) return;
       if (blob === null) {
         this.busy.set(false);
         this.finalizeError.set('No se pudo generar la captura del lienzo.');
         return;
       }
       this.whiteboardService
-        .closeSession(this.sessionId, blob, `pizarra-${this.sessionId}.png`)
-        .subscribe({
+        .closeSession(this.sessionId, blob, `pizarra-${this.sessionId}.png`, revision)
+        .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
           next: (updated) => {
             this.busy.set(false);
             this.finalizeOpen.set(false);
@@ -2397,11 +2420,12 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
             // La sesión ya está finalizada en el backend: el docente vuelve al listado, donde la
             // sesión aparece en el historial con su captura final. Así no queda dentro del editor
             // con la barra de herramientas ni un estado visual «Activa/En vivo» contradictorio.
-            void this.router.navigate(['/teacher/whiteboards']);
+            this.goToList();
           },
           error: (err: unknown) => {
             this.busy.set(false);
             this.finalizeError.set(this.extractError(err, 'No se pudo finalizar la sesión.'));
+            if (this.embeddedBoardId() && err instanceof HttpErrorResponse && err.status === 409) this.resynchronize('operation');
           },
         });
     });
@@ -2414,11 +2438,12 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.busy.set(true);
     this.whiteboardService
       .updateGlobalInteraction(this.sessionId, { interactionEnabled: enabled })
-      .subscribe({
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (updated) => {
           this.session.set(updated);
           this.busy.set(false);
-          this.refreshParticipants();
+          if (this.embeddedBoardId()) this.applyGlobalInteraction(updated.interactionEnabled);
+          else this.refreshParticipants();
         },
         error: (err: unknown) => this.onActionError(err, 'No se pudo cambiar la interacción global.'),
       });
@@ -2431,7 +2456,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       .updateParticipantInteraction(this.sessionId, participant.studentId, {
         interactionOverride: value,
       })
-      .subscribe({
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (updated) => {
           this.participants.update((list) =>
             list.map((p) => (p.studentId === updated.studentId ? updated : p))
@@ -2444,7 +2469,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   refreshParticipants(): void {
-    this.whiteboardService.listParticipants(this.sessionId).subscribe({
+    this.whiteboardService.listParticipants(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (list) => this.participants.set(list),
       error: (err: unknown) =>
         this.showBanner(
@@ -2506,7 +2531,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     }
   }
 
-  private onControlEvent(event: { eventType: string; status: WhiteboardSessionStatus | null }): void {
+  private onControlEvent(event: { eventType: string; status: WhiteboardSessionStatus | null; interactionEnabled?: boolean | null }): void {
     const current = this.session();
     if (current === null) {
       return;
@@ -2531,12 +2556,26 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
         this.reload();
         break;
       case 'INTERACTION_UPDATED':
+        if (this.embeddedBoardId() && typeof event.interactionEnabled === 'boolean') {
+          this.applyGlobalInteraction(event.interactionEnabled);
+          break;
+        }
+        this.refreshParticipants();
+        break;
       case 'PARTICIPANT_PERMISSION_UPDATED':
       case 'PARTICIPANT_JOINED':
         // Un alumno se unió o cambió un permiso: refresca el panel de participantes en vivo.
         this.refreshParticipants();
         break;
     }
+  }
+
+  private applyGlobalInteraction(enabled: boolean): void {
+    this.session.update(current => current && { ...current, interactionEnabled: enabled });
+    this.participants.update(rows => rows.map(row => ({
+      ...row,
+      effectiveInteraction: row.interactionOverride === 'ALLOWED' || (row.interactionOverride === 'FOLLOW_GLOBAL' && enabled),
+    })));
   }
 
   // ─── Render del lienzo ────────────────────────────────────────────────────────
@@ -2810,6 +2849,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   }
 
   private newEventId(prefix = 'evt'): string {
+    if (this.embeddedBoardId()) return crypto.randomUUID();
     const id =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? `${prefix}-${crypto.randomUUID()}`
@@ -2872,7 +2912,7 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
       return;
     }
     this.snapshotLoading.set(true);
-    this.whiteboardService.getSnapshot(this.sessionId).subscribe({
+    this.whiteboardService.getSnapshot(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (blob) => {
         this.revokeSnapshotUrl();
         this.snapshotObjectUrl = URL.createObjectURL(blob);
@@ -2976,10 +3016,13 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
     this.queuedRemoteDrawEvents = [];
     this.realtime.reconnect(this.sessionId);
     this.startConnectionWatch();
-    requestAnimationFrame(() => {
-      this.ensureCanvas();
-      this.loadBoardState();
-    });
+    if (!this.embeddedBoardId()) {
+      requestAnimationFrame(() => {
+        if (this.destroyRef.destroyed) return;
+        this.ensureCanvas();
+        this.loadBoardState();
+      });
+    }
   }
 
   private resynchronize(reason: 'connected' | 'rejected' | 'gap' | 'operation' = 'connected', queued: WhiteboardDrawEventResponse[] = []): void {
@@ -2998,9 +3041,19 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
 
   private loadBoardState(): void {
     const sequence = ++this.stateLoadSequence;
-    this.whiteboardService.getBoardState(this.sessionId).subscribe({
+    this.whiteboardService.getBoardState(this.sessionId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (state) => {
         if (sequence !== this.stateLoadSequence) return;
+        if (this.embeddedBoardId() && state.interactionEnabled !== undefined) {
+          const enabled = state.interactionEnabled;
+          this.session.update(current => current && { ...current, status: state.status });
+          this.applyGlobalInteraction(enabled);
+          if (state.status === 'CLOSED') {
+            this.realtime.disconnect();
+            this.loadSnapshot();
+            return;
+          }
+        }
         this.appliedRevision = state.revision ?? 0;
         this.reconciliation.reset({ v: 1, strokes: [], texts: [], shapes: [] });
         this.confirmedOwners.clear();
@@ -3099,7 +3152,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   // ─── UI helpers ───────────────────────────────────────────────────────────────
 
   goToList(): void {
-    void this.router.navigate(['/teacher/whiteboards']);
+    if (this.embeddedBoardId()) this.backToScope.emit();
+    else void this.router.navigate(['/teacher/whiteboards']);
   }
 
   handleLogout(): void {
@@ -3215,7 +3269,8 @@ export class TeacherWhiteboardEditorComponent implements OnInit, OnDestroy {
   private showBanner(message: string, tone: 'info' | 'success' | 'warning' | 'danger'): void {
     this.bannerTone.set(tone);
     this.banner.set(message);
-    setTimeout(() => this.banner.set(null), 4500);
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => this.banner.set(null), 4500);
   }
 
   private onActionError(err: unknown, fallback: string): void {

@@ -5,7 +5,7 @@ export interface LoginRequest {
 }
 
 /** Roles posibles de un usuario en el sistema. */
-export type UserRole = 'ADMINISTRADOR' | 'DOCENTE' | 'ESTUDIANTE';
+export type UserRole = 'ADMINISTRADOR' | 'DOCENTE' | 'ESTUDIANTE' | 'INSTITUCIONAL';
 
 /** Respuesta del backend tras un login exitoso. Contiene el JWT y los datos del usuario. */
 export interface AuthResponse {
@@ -19,6 +19,7 @@ export interface AuthResponse {
   readonly role: UserRole;
   readonly active: boolean;
   readonly temporaryPassword: boolean;
+  readonly institutionalInstallation?: boolean;
 }
 
 /**
@@ -35,6 +36,7 @@ export interface CurrentUser {
   readonly role: UserRole;
   readonly active: boolean;
   readonly temporaryPassword: boolean;
+  readonly institutionalInstallation?: boolean;
 }
 
 /** Payload para cambiar la contraseña del usuario autenticado. */

@@ -254,6 +254,8 @@ export type WhiteboardTopicMessage =
  */
 export interface WhiteboardBoardStateResponse {
   readonly revision?: number;
+  readonly interactionEnabled?: boolean;
+  readonly canInteract?: boolean | null;
   readonly sessionId: number;
   readonly status: WhiteboardSessionStatus;
   readonly stateJson: string | null;

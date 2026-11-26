@@ -1,0 +1,156 @@
+<section aria-label="Contenidos de la clase">
+  @if (teacher()) {
+    <h2>Biblioteca de contenidos</h2>
+    @if (scope().canCreate) {
+      <button type="button" [disabled]="busy()" (click)="newDraft()">Nuevo borrador</button>
+    }
+    @if (!busy() && !error() && !library().length) { <p>No hay revisiones disponibles.</p> }
+    <ul>
+      @for (row of library(); track row.revisionId) {
+        <li class="entry">
+          <strong>{{ row.title }}</strong>
+          <span>{{ row.category }} · Revisión {{ row.number }} · {{ row.status === 'DRAFT' ? 'Borrador' : 'Publicada' }}</span>
+          <div class="controls">
+            @if (row.canEdit || row.status === 'PUBLISHED') {
+              <button type="button" [disabled]="busy()" (click)="open(row)">Consultar revisión</button>
+            }
+            @if (row.status === 'DRAFT' && row.canPublish) {
+              <button type="button" [disabled]="busy() || hasUnsavedChanges(row)" (click)="transition(row, 'publish')">Publicar</button>
+            }
+            @if (row.status === 'PUBLISHED' && row.canEdit) {
+              <button type="button" [disabled]="busy() || hasSuccessor(row)" (click)="transition(row, 'successor')">Crear revisión siguiente</button>
+            }
+            @if (row.status === 'PUBLISHED' && row.canAssign) {
+              @if (row.assigned) {
+                <span>Asignada a esta clase</span>
+              } @else {
+                <button type="button" [disabled]="busy()" (click)="transition(row, 'assign')">Asignar a esta clase</button>
+              }
+            }
+          </div>
+        </li>
+      }
+    </ul>
+  } @else {
+    <h2>Contenidos asignados</h2>
+    @if (!busy() && !error() && !assigned().length) { <p>No hay contenidos asignados a tu matrícula.</p> }
+    <ul>
+      @for (row of assigned(); track row.deliveryId) {
+        <li class="entry">
+          <strong>{{ row.title }}</strong>
+          <span>{{ row.category }} · Revisión {{ row.number }}</span>
+          <button type="button" [disabled]="busy()" (click)="open(row)">Consultar contenido</button>
+        </li>
+      }
+    </ul>
+  }
+  @if (cursor() !== null) {
+    <button type="button" [disabled]="busy()" (click)="load(cursor()!)">Más contenidos</button>
+  }
+  @if (busy()) { <p role="status">Procesando solicitud…</p> }
+  @if (error()) { <p role="alert">{{ error() }}</p> }
+  @if (retry(); as repeat) { <button type="button" [disabled]="busy()" (click)="repeat()">Reintentar</button> }
+  @if (status()) { <p role="status">{{ status() }}</p> }
+</section>
+
+@if (editor(); as draft) {
+  <section aria-label="Editor de borrador">
+    <h2>{{ detail() ? 'Editar borrador' : 'Nuevo borrador' }}</h2>
+    <form (ngSubmit)="save()">
+      <div class="controls">
+        <label>Título <input required maxlength="150" name="title" [(ngModel)]="draft.title" /></label>
+        <label>Categoría <input required maxlength="100" name="category" [(ngModel)]="draft.category" /></label>
+      </div>
+      <label>Resumen <textarea maxlength="500" name="summary" [(ngModel)]="draft.summary"></textarea></label>
+      <label>Explicación <textarea maxlength="20000" name="explanation" [(ngModel)]="draft.explanation"></textarea></label>
+      <label>Pasos de formación, uno por línea <textarea name="formationSteps" [(ngModel)]="draft.formationSteps"></textarea></label>
+      <label>Puntos clave, uno por línea <textarea name="keyPoints" [(ngModel)]="draft.keyPoints"></textarea></label>
+      <label>Ejemplos, uno por línea <textarea name="examples" [(ngModel)]="draft.examples"></textarea></label>
+      <label>Actividad sugerida <textarea maxlength="2000" name="suggestedActivity" [(ngModel)]="draft.suggestedActivity"></textarea></label>
+      <fieldset>
+        <legend>Enlaces de apoyo</legend>
+        @for (link of draft.links; track link; let index = $index) {
+          <div class="controls">
+            <label>Título del enlace <input maxlength="150" [attr.name]="'link-title-' + index" [ngModelOptions]="{ standalone: true }" [(ngModel)]="link.title" /></label>
+            <label>URL del enlace <input type="url" required maxlength="2048" [attr.name]="'link-url-' + index" [ngModelOptions]="{ standalone: true }" [(ngModel)]="link.url" /></label>
+            <button type="button" [disabled]="busy()" (click)="draft.links.splice(index, 1)">Quitar enlace</button>
+          </div>
+        }
+        <button type="button" [disabled]="busy() || draft.links.length >= 10" (click)="draft.links.push({ title: '', url: '' })">Añadir enlace</button>
+      </fieldset>
+      <div class="controls">
+        <button type="submit" [disabled]="busy()">Guardar borrador</button>
+        <button type="button" [disabled]="busy()" (click)="closeDetail()">Cerrar borrador</button>
+      </div>
+    </form>
+  </section>
+}
+
+@if (detail(); as item) {
+  @if (item.status === 'PUBLISHED') {
+    <article>
+      <h2>{{ item.text.title }}</h2>
+      <p>{{ item.text.category }} · Revisión {{ item.number }}</p>
+      @if (item.text.summary) { <p class="content-text">{{ item.text.summary }}</p> }
+      @if (item.text.explanation) { <p class="content-text">{{ item.text.explanation }}</p> }
+      @if (item.text.formationSteps.length) {
+        <h3>Pasos de formación</h3>
+        <ol>@for (step of item.text.formationSteps; track $index) { <li>{{ step }}</li> }</ol>
+      }
+      @if (item.text.keyPoints.length) {
+        <h3>Puntos clave</h3>
+        <ul>@for (point of item.text.keyPoints; track $index) { <li>{{ point }}</li> }</ul>
+      }
+      @if (item.text.examples.length) {
+        <h3>Ejemplos</h3>
+        <ul>@for (example of item.text.examples; track $index) { <li>{{ example }}</li> }</ul>
+      }
+      @if (item.text.suggestedActivity) {
+        <h3>Actividad sugerida</h3><p class="content-text">{{ item.text.suggestedActivity }}</p>
+      }
+    </article>
+  }
+  <section aria-label="Materiales de apoyo">
+    <h3>Materiales de apoyo ({{ item.materialCount }})</h3>
+    @if (item.status === 'PUBLISHED' && item.text.links.length) {
+      <ul>
+        @for (link of item.text.links; track $index) {
+          <li><a [href]="link.url" target="_blank" rel="noopener noreferrer">{{ link.title || link.url }}</a></li>
+        }
+      </ul>
+    }
+    @if (item.file; as file) {
+      <p>{{ file.title || file.name }} · {{ file.size }} bytes</p>
+      <div class="controls">
+        @if (file.preview && !preview()) {
+          <button type="button" [disabled]="busy()" (click)="openFile(file, true)">Vista previa</button>
+        }
+        <button type="button" [disabled]="busy()" (click)="openFile(file, false)">Descargar archivo</button>
+        @if (item.status === 'DRAFT' && teacher()) {
+          <button type="button" [disabled]="busy()" (click)="removeFile()">Retirar archivo</button>
+        }
+      </div>
+      @if (preview(); as image) {
+        <figure>
+          <img [src]="image.url" [alt]="file.title || file.name" />
+          <button type="button" (click)="closePreview()">Cerrar vista previa</button>
+        </figure>
+      }
+    }
+    @if (item.status === 'DRAFT' && teacher()) {
+      <div class="controls">
+        <label>Archivo de apoyo <input type="file" [disabled]="busy()"
+          accept=".png,.jpg,.jpeg,.pdf,.ppt,.pptx" (change)="chooseFile($event)" /></label>
+        <label>Título del archivo <input maxlength="150" [value]="attachmentTitle()"
+          (input)="attachmentTitle.set($any($event.target).value)" /></label>
+        @if (attachment(); as pending) { <span>{{ pending.name }}</span> }
+        <button type="button" [disabled]="busy() || !attachment()" (click)="upload()">
+          {{ item.file ? 'Reemplazar archivo' : 'Subir archivo' }}
+        </button>
+      </div>
+      <p>PNG, JPG, PDF, PPT y PPTX de hasta 10 MiB.</p>
+    } @else {
+      <button type="button" [disabled]="busy()" (click)="closeDetail()">Cerrar contenido</button>
+    }
+  </section>
+}

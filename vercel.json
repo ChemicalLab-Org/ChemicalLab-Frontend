@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "feature/t12-piloto-institucional": false
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",

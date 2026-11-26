@@ -170,6 +170,7 @@ export class AuthService {
           role: me.role,
           active: me.active,
           temporaryPassword: me.temporaryPassword,
+          institutionalInstallation: me.institutionalInstallation,
         };
         this._currentUser.set(merged);
         this.persistSession(merged);
